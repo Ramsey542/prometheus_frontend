@@ -141,7 +141,7 @@ export default function SubscriptionSection() {
                 className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 bg-neural-emerald/10 border border-neural-emerald px-6 py-2 rounded"
               >
                 <p className="text-neural-emerald font-orbitron font-bold whitespace-nowrap">
-                  You've unlocked the flame 🔥
+                  You&apos;ve unlocked the flame 🔥
                 </p>
               </motion.div>
             )}
@@ -193,7 +193,7 @@ export default function SubscriptionSection() {
           className="mt-20 text-center"
         >
           <p className="text-molten-gold/50 font-space-grotesk text-sm">
-            "I stole fire from the gods and gave it to humanity" — Prometheus
+            &ldquo;I stole fire from the gods and gave it to humanity&rdquo; — Prometheus
           </p>
         </motion.div>
       </div>
