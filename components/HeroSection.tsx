@@ -35,7 +35,7 @@ export default function HeroSection() {
       </div>
 
       {/* Header (positioned within hero top) */}
-      <header className="absolute top-0 left-0 right-0 border-b border-molten-gold/20 bg-black/50 backdrop-blur-sm">
+      <header className="absolute top-0 left-0 right-0 border-b border-molten-gold/20 bg-black/50 backdrop-blur-sm z-[60]">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Flame className="w-7 h-7 text-molten-gold animate-pulse" />
@@ -64,6 +64,45 @@ export default function HeroSection() {
             {menuOpen ? <X /> : <Menu />}
           </button>
         </div>
+        
+        {/* Mobile Menu */}
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="md:hidden bg-black/90 backdrop-blur-sm border-t border-molten-gold/20 relative z-[60]"
+          >
+            <div className="px-6 py-4 space-y-4">
+              {['Telemetry', 'Wards', 'How it Works', 'Covenant', 'Guild'].map((item) => (
+                <a
+                  key={item}
+                  href="#"
+                  onClick={() => setMenuOpen(false)}
+                  className="block text-sm tracking-widest text-white hover:text-molten-gold transition duration-300 py-2"
+                >
+                  {item}
+                </a>
+              ))}
+              <div className="pt-4 space-y-3">
+                <button 
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full px-4 py-2 border border-white text-white text-sm tracking-widest hover:bg-white/10 transition duration-300 rounded-lg"
+                >
+                  Temple
+                </button>
+                <Link 
+                  href="/signup" 
+                  onClick={() => setMenuOpen(false)}
+                  className="block w-full px-6 py-2 bg-molten-gold text-void-black font-bold text-sm tracking-widest hover:brightness-110 transition duration-300 rounded-lg text-center"
+                >
+                  Enter the Forge
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </header>
 
       {/* Main Content */}
