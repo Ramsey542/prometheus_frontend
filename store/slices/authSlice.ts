@@ -17,9 +17,7 @@ export const signup = createAsyncThunk(
   'auth/signup',
   async (payload: SignupRequest, { rejectWithValue }) => {
     try {
-      console.log('payload', payload)
       const response = await authApi.signup(payload);
-      console.log('response', response)
       return response;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Signup failed');
@@ -91,7 +89,6 @@ export const updateProfileForCoin = createAsyncThunk(
     try {
       const profileResult = await dispatch(getProfile(coin));
       if (getProfile.fulfilled.match(profileResult)) {
-        console.log('profileResult', profileResult.payload)
         return { coin, profile: profileResult.payload };
       } else {
         return rejectWithValue(profileResult.payload || 'Failed to fetch profile for coin');

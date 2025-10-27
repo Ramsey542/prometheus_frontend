@@ -21,6 +21,7 @@ const handleResponse = async (response: Response) => {
 
 export const authApi = {
   async signup(payload: SignupRequest): Promise<TokenPair> {
+    console.log(config.apiBaseUrl);
     const response = await fetch(`${config.apiBaseUrl}/auth/signup`, {
       method: 'POST',
       headers: {

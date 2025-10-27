@@ -71,7 +71,6 @@ function ProfilePageContent() {
   const [statsError, setStatsError] = useState<string | null>(null)
   
   const currentSection = searchParams.get('section') || 'overview'
-  console.log('walletSettings', walletSettings)
   useEffect(() => {
     if (user) {
       dispatch(getProfile(selectedCoin))
@@ -292,7 +291,6 @@ function ProfilePageContent() {
       setWalletTrackerError(null)
       
       const response = await walletTrackerApi.getAllLogs(page, 10, selectedCoin)
-      console.log('API Response:', response)
       
       if (response && typeof response === 'object' && 'logs' in response) {
         setTrackerLogs(response.logs || [])
