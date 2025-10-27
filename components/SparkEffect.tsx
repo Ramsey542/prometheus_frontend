@@ -36,7 +36,6 @@ export default function SparkEffect() {
 
   useEffect(() => {
     if (isMoving) {
-      // Create new sparks on mouse movement
       const newSpark: Spark = {
         id: Date.now() + Math.random(),
         x: mousePosition.x,
@@ -46,7 +45,6 @@ export default function SparkEffect() {
 
       setSparks(prev => [...prev, newSpark])
 
-      // Remove spark after animation
       setTimeout(() => {
         setSparks(prev => prev.filter(s => s.id !== newSpark.id))
       }, 1500)

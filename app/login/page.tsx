@@ -1,22 +1,54 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
-import { Flame, ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Flame, ArrowLeft, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useAppDispatch, useAppSelector } from '../../store/hooks'
+import { loginWithProfile, clearError } from '../../store/slices/authSlice'
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
-    email: '',
     username: '',
     password: ''
   })
   const [showPassword, setShowPassword] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const dispatch = useAppDispatch()
+  const router = useRouter()
+  const { isLoading, error, isAuthenticated, user } = useAppSelector((state: any) => state.auth)
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      router.push('/')
+    }
+  }, [isAuthenticated, user, router])
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        dispatch(clearError())
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error, dispatch])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle login logic here
-    console.log('Login data:', formData)
+
+    const result = await dispatch(loginWithProfile({
+      username: formData.username,
+      password: formData.password
+    }))
+
+    if (loginWithProfile.fulfilled.match(result)) {
+      setShowSuccess(true)
+      setTimeout(() => {
+        router.push('/')
+      }, 1500)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,23 +104,35 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Field */}
-              <div>
-                <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
-                  EMAIL
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  className="w-full bg-transparent border-b-2 border-molten-gold/30 focus:border-molten-gold outline-none text-lg font-space-grotesk text-white py-3 px-2 transition-all duration-300 placeholder-gray-400"
-                  placeholder="your@email.com"
-                />
-              </div>
+            {/* Success Message */}
+            {showSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 p-4 bg-neural-emerald/20 border border-neural-emerald/50 rounded-lg"
+              >
+                <div className="flex items-center gap-2 text-neural-emerald">
+                  <CheckCircle size={20} />
+                  <span className="font-orbitron font-bold">Login successful! Redirecting...</span>
+                </div>
+              </motion.div>
+            )}
 
+            {/* Error Message */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg"
+              >
+                <div className="flex items-center gap-2 text-red-400">
+                  <XCircle size={20} />
+                  <span className="font-orbitron font-bold">{error}</span>
+                </div>
+              </motion.div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Username Field */}
               <div>
                 <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
@@ -133,11 +177,21 @@ export default function LoginPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-4 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 shadow-lg hover:shadow-molten-gold/50 hover:shadow-2xl relative group"
+                disabled={isLoading || showSuccess}
+                className="w-full py-4 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 shadow-lg hover:shadow-molten-gold/50 hover:shadow-2xl relative group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
-                  <Flame className="w-5 h-5" />
-                  IGNITE THE FLAME
+                  {isLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-void-black border-t-transparent rounded-full animate-spin" />
+                      IGNITING...
+                    </>
+                  ) : (
+                    <>
+                      <Flame className="w-5 h-5" />
+                      IGNITE THE FLAME
+                    </>
+                  )}
                 </span>
               </button>
             </form>

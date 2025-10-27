@@ -17,7 +17,6 @@ export default function GreekRuneOverlay() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
-    // Generate random runes across the screen
     const generatedRunes: Rune[] = Array.from({ length: 30 }, (_, i) => ({
       id: i,
       symbol: greekSymbols[Math.floor(Math.random() * greekSymbols.length)],
@@ -36,7 +35,6 @@ export default function GreekRuneOverlay() {
   }, [])
 
   useEffect(() => {
-    // Calculate distance from mouse and update opacity
     setRunes(prevRunes =>
       prevRunes.map(rune => {
         const runeX = (rune.x / 100) * window.innerWidth
@@ -45,7 +43,6 @@ export default function GreekRuneOverlay() {
           Math.pow(mousePosition.x - runeX, 2) + Math.pow(mousePosition.y - runeY, 2)
         )
         
-        // Runes glow when mouse is within 200px
         const maxDistance = 200
         const newOpacity = distance < maxDistance ? (1 - distance / maxDistance) * 0.6 : 0
         

@@ -2,12 +2,10 @@
 
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { Flame, Menu, X, Zap, Code2 } from 'lucide-react'
+import Navbar from './Navbar'
 import Link from 'next/link'
-
 export default function HeroSection() {
   const [binaryText, setBinaryText] = useState<string[]>([])
-  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     const binary = Array.from({ length: 100 }, () => (Math.random() > 0.5 ? '1' : '0'))
@@ -34,76 +32,8 @@ export default function HeroSection() {
         ))}
       </div>
 
-      {/* Header (positioned within hero top) */}
-      <header className="absolute top-0 left-0 right-0 border-b border-molten-gold/20 bg-black/50 backdrop-blur-sm z-[60]">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Flame className="w-7 h-7 text-molten-gold animate-pulse" />
-            <h1 className="text-2xl md:text-3xl font-orbitron font-black tracking-wider text-molten-gold">
-              PROMETHEUS
-            </h1>
-          </div>
-          <nav className="hidden md:flex gap-8 items-center">
-            {['Telemetry', 'Wards', 'How it Works', 'Covenant', 'Guild'].map((item) => (
-              <a
-                key={item}
-                href="#"
-                className="text-sm tracking-widest text-white hover:text-molten-gold transition duration-300"
-              >
-                {item}
-              </a>
-            ))}
-            <button className="px-4 py-2 border border-white text-white text-sm tracking-widest hover:bg-white/10 transition duration-300 rounded-lg">
-              Temple
-            </button>
-            <Link href="/signup" className="px-6 py-2 bg-molten-gold text-void-black font-bold text-sm tracking-widest hover:brightness-110 transition duration-300 rounded-lg">
-              Enter the Forge
-            </Link>
-          </nav>
-          <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden text-molten-gold">
-            {menuOpen ? <X /> : <Menu />}
-          </button>
-        </div>
-        
-        {/* Mobile Menu */}
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="md:hidden bg-black/90 backdrop-blur-sm border-t border-molten-gold/20 relative z-[60]"
-          >
-            <div className="px-6 py-4 space-y-4">
-              {['Telemetry', 'Wards', 'How it Works', 'Covenant', 'Guild'].map((item) => (
-                <a
-                  key={item}
-                  href="#"
-                  onClick={() => setMenuOpen(false)}
-                  className="block text-sm tracking-widest text-white hover:text-molten-gold transition duration-300 py-2"
-                >
-                  {item}
-                </a>
-              ))}
-              <div className="pt-4 space-y-3">
-                <button 
-                  onClick={() => setMenuOpen(false)}
-                  className="w-full px-4 py-2 border border-white text-white text-sm tracking-widest hover:bg-white/10 transition duration-300 rounded-lg"
-                >
-                  Temple
-                </button>
-                <Link 
-                  href="/signup" 
-                  onClick={() => setMenuOpen(false)}
-                  className="block w-full px-6 py-2 bg-molten-gold text-void-black font-bold text-sm tracking-widest hover:brightness-110 transition duration-300 rounded-lg text-center"
-                >
-                  Enter the Forge
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </header>
+      {/* Navbar */}
+      <Navbar />
 
       {/* Main Content */}
       <div className="left-20 z-10 text-left max-w-4xl pt-24 ">

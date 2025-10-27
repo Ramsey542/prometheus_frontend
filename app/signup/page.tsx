@@ -1,9 +1,12 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
-import { Flame, ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Flame, ArrowLeft, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useAppDispatch, useAppSelector } from '../../store/hooks'
+import { signup, clearError } from '../../store/slices/authSlice'
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -14,11 +17,46 @@ export default function SignupPage() {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const dispatch = useAppDispatch()
+  const router = useRouter()
+  const { isLoading, error, isAuthenticated } = useAppSelector((state: any) => state.auth)
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, router])
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        dispatch(clearError())
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error, dispatch])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle signup logic here
-    console.log('Signup data:', formData)
+    
+    if (formData.password !== formData.confirmPassword) {
+      return
+    }
+
+    const result = await dispatch(signup({
+      username: formData.username,
+      email: formData.email,
+      password: formData.password
+    }))
+
+    if (signup.fulfilled.match(result)) {
+      setShowSuccess(true)
+      setTimeout(() => {
+        router.push('/login')
+      }, 2000)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,6 +110,34 @@ export default function SignupPage() {
                 Forge your account and join the flame
               </p>
             </div>
+
+            {/* Success Message */}
+            {showSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 p-4 bg-neural-emerald/20 border border-neural-emerald/50 rounded-lg"
+              >
+                <div className="flex items-center gap-2 text-neural-emerald">
+                  <CheckCircle size={20} />
+                  <span className="font-orbitron font-bold">Account created successfully! Redirecting to login...</span>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg"
+              >
+                <div className="flex items-center gap-2 text-red-400">
+                  <XCircle size={20} />
+                  <span className="font-orbitron font-bold">{error}</span>
+                </div>
+              </motion.div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email Field */}
@@ -159,11 +225,21 @@ export default function SignupPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-4 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 shadow-lg hover:shadow-molten-gold/50 hover:shadow-2xl relative group"
+                disabled={isLoading || showSuccess}
+                className="w-full py-4 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 shadow-lg hover:shadow-molten-gold/50 hover:shadow-2xl relative group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
-                  <Flame className="w-5 h-5" />
-                  FORGE ACCOUNT
+                  {isLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-void-black border-t-transparent rounded-full animate-spin" />
+                      FORGING...
+                    </>
+                  ) : (
+                    <>
+                      <Flame className="w-5 h-5" />
+                      FORGE ACCOUNT
+                    </>
+                  )}
                 </span>
               </button>
             </form>

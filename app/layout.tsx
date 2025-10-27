@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Orbitron, Space_Grotesk } from 'next/font/google'
 import './globals.css'
+import { Providers } from './providers'
+import AuthInitializer from '../components/AuthInitializer'
 
 const orbitron = Orbitron({ 
   subsets: ['latin'],
@@ -27,7 +29,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${orbitron.variable} ${spaceGrotesk.variable} antialiased`}>
-        {children}
+        <Providers>
+          <AuthInitializer />
+          {children}
+        </Providers>
       </body>
     </html>
   )
