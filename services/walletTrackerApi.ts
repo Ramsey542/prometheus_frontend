@@ -49,26 +49,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async startTrackingMultipleWallets(walletData: TrackedWalletListCreate): Promise<TrackedWallet[]> {
-    return tokenInterceptor.makeAuthenticatedRequest(async () => {
-      const accessToken = localStorage.getItem('access_token');
-      
-      if (!accessToken) {
-        throw new WalletTrackerApiError('No access token found', 401);
-      }
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/track`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(walletData),
-      });
-
-      return await handleResponse(response);
-    });
-  },
 
   async stopTrackingWallet(walletAddress: string, coin: string = 'sol'): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
@@ -153,7 +134,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async getTrackedWalletSettings(walletAddress: string): Promise<any> {
+  async getTrackedWalletSettings(walletAddress: string, coin: string = 'sol'): Promise<any> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       
@@ -161,7 +142,7 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${walletAddress}/settings`, {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${coin}/${walletAddress}/settings`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -172,7 +153,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async updateTrackedWalletSettings(walletAddress: string, settings: any): Promise<any> {
+  async updateTrackedWalletSettings(walletAddress: string, settings: any, coin: string = 'sol'): Promise<any> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       
@@ -180,7 +161,7 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${walletAddress}/settings`, {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${coin}/${walletAddress}/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -189,6 +170,61 @@ export const walletTrackerApi = {
         body: JSON.stringify(settings),
       });
 
+      return await handleResponse(response);
+    });
+  },
+
+  async withdraw(coin: string, destination: string, amount: number): Promise<{ message: string }> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      
+      if (!accessToken) {
+        throw new WalletTrackerApiError('No access token found', 401);
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/wallet/withdraw/${coin}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ destination, amount }),
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async customBuy(coin: string, tokenAddress: string, amount: number, slippage: number): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/custom/buy/${coin}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token_address: tokenAddress, amount, slippage }),
+      });
+      return await handleResponse(response);
+    });
+  },
+
+  async customSell(coin: string, tokenAddress: string, amount: number, slippage: number): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/custom/sell/${coin}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token_address: tokenAddress, amount, slippage }),
+      });
       return await handleResponse(response);
     });
   },

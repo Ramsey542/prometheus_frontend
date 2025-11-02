@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { usePathname, useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import { 
   Wallet, 
   Zap, 
@@ -19,7 +20,7 @@ import {
   MessageCircle,
   ChevronDown,
   Coins,
-  Circle
+  Banknote
 } from 'lucide-react'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { setCoin, updateProfileForCoin } from '../store/slices/authSlice'
@@ -46,15 +47,17 @@ const navigationSections: NavigationSection[] = [
       { id: 'wallet-tracker', label: 'Wallet Tracker', icon: Zap },
       { id: 'tracker-logs', label: 'Tracker Logs', icon: MessageCircle },
       { id: 'controls', label: 'Controls', icon: BarChart3, isActive: true },
-      { id: 'trades', label: 'Trades', icon: List },
-      { id: 'holdings', label: 'Holdings', icon: TrendingUp },
-      { id: 'auto-sell', label: 'Auto-Sell Profiles', icon: LineChart },
+      { id: 'custom-buys', label: 'Custom Swaps', icon: Banknote, isActive: true },
     ]
   },
 
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void
+}
+
+export default function Sidebar({ onNavigate }: SidebarProps) {
   const [activeItem, setActiveItem] = useState('account-overview')
   const dispatch = useAppDispatch()
   const pathname = usePathname()
@@ -68,11 +71,15 @@ export default function Sidebar() {
         setActiveItem('wallet-tracker')
       } else if (section === 'tracker-logs') {
         setActiveItem('tracker-logs')
+      } else if (section === 'custom-buys') {
+        setActiveItem('custom-buys')
       } else {
         setActiveItem('account-overview')
       }
     } else if (pathname === '/dashboard') {
       setActiveItem('controls')
+    } else if (pathname === '/custom-buys') {
+      setActiveItem('custom-buys')
     } else {
       setActiveItem('account-overview')
     }
@@ -90,7 +97,7 @@ export default function Sidebar() {
   }
 
   return (
-    <div className="fixed left-0 top-20 h-[calc(100vh-5rem)] w-64 bg-gradient-to-b from-void-black/95 to-black/90 backdrop-blur-md border-r border-molten-gold/30 z-50 shadow-2xl shadow-molten-gold/10">
+    <div className="w-full h-full bg-gradient-to-b from-void-black/95 to-black/90 backdrop-blur-md border-r border-molten-gold/30 overflow-y-auto">
       {/* Logo Section */}
       <div className="p-6 border-b border-molten-gold/30 bg-gradient-to-r from-molten-gold/5 to-transparent">
         <div className="flex items-center gap-3">
@@ -134,7 +141,7 @@ export default function Sidebar() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Circle size={12} className="text-purple-400" />
+            <Image src="/assets/sol.png" alt="SOL" width={16} height={16} className="w-4 h-4" />
             SOL
           </motion.button>
           <motion.button
@@ -147,7 +154,7 @@ export default function Sidebar() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <Circle size={12} className="text-yellow-400" />
+            <Image src="/assets/bnb.png" alt="BNB" width={16} height={16} className="w-4 h-4" />
             BNB
           </motion.button>
         </div>
@@ -175,6 +182,8 @@ export default function Sidebar() {
                       return '/profile?section=tracker-logs'
                     case 'controls':
                       return '/dashboard'
+                    case 'custom-buys':
+                      return '/custom-buys'
                     default:
                       return '#'
                   }
@@ -183,9 +192,12 @@ export default function Sidebar() {
                 const route = getRoute(item.id)
 
                 return (
-                  <Link key={item.id} href={route}>
+                  <Link key={item.id} href={route} onClick={() => onNavigate?.()}>
                     <motion.div
-                      onClick={() => handleItemClick(item.id)}
+                      onClick={() => {
+                        handleItemClick(item.id)
+                        onNavigate?.()
+                      }}
                       className={`w-full flex items-center gap-3 px-6 py-3 text-left transition-all duration-300 group relative cursor-pointer ${
                         isActive 
                           ? 'bg-gradient-to-r from-molten-gold/20 to-yellow-500/10 text-molten-gold border-r-2 border-molten-gold backdrop-blur-sm' 
@@ -228,7 +240,7 @@ export default function Sidebar() {
       {/* User Profile Section */}
       <div className="p-6 border-t border-molten-gold/20">
         {isAuthenticated && user ? (
-          <Link href="/profile">
+          <Link href="/profile" onClick={() => onNavigate?.()}>
             <motion.div
               className="w-full flex items-center gap-3 p-3 bg-molten-gold/10 border border-molten-gold/20 rounded-lg hover:bg-molten-gold/20 transition-all duration-300 group cursor-pointer"
               whileHover={{ scale: 1.02 }}

@@ -18,7 +18,7 @@ interface WalletSettings {
   dip_recovery: boolean
   dip_recovery_percentage: number
   dip_recovery_timeout: number
-  slippage: number
+  slippage: number | ''
 }
 
 export default function DashboardPage() {
@@ -83,13 +83,18 @@ export default function DashboardPage() {
       setError(null)
       setSuccess(null)
 
+      const payload = {
+        ...settings,
+        slippage: settings.slippage === '' ? 0 : settings.slippage,
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
       })
 
       if (response.ok) {
@@ -122,9 +127,9 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-8 shadow-2xl shadow-molten-gold/10">
-          <h1 className="text-3xl font-orbitron font-bold text-molten-gold mb-8">
+      <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
+        <div className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-4 md:p-8 shadow-2xl shadow-molten-gold/10">
+          <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold mb-4 md:mb-8">
             Wallet Settings
           </h1>
 
@@ -154,9 +159,9 @@ export default function DashboardPage() {
             </motion.div>
           )}
 
-          <div className="space-y-6">
-            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-6">
-              <h3 className="text-lg font-orbitron font-semibold text-white mb-4">Swap Strategy</h3>
+          <div className="space-y-4 md:space-y-6">
+            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Swap Strategy</h3>
               <div className="relative">
                 <button
                   onClick={() => setShowDropdown(!showDropdown)}
@@ -176,13 +181,13 @@ export default function DashboardPage() {
                       <button
                         key={strategy.value}
                         onClick={() => {
+                          if (strategy.value === 'percentage_buys' || strategy.value === 'custom') return
                           setSettings(prev => ({ ...prev, swap_strategy: strategy.value }))
                           setShowDropdown(false)
                         }}
                         className={`w-full px-4 py-3 text-left hover:bg-molten-gold/10 transition-colors duration-300 ${
                           settings.swap_strategy === strategy.value ? 'text-molten-gold bg-molten-gold/10' : 'text-white'
                         } ${strategy.value === 'percentage_buys' || strategy.value === 'custom' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={strategy.value === 'percentage_buys' || strategy.value === 'custom'}
                       >
                         {strategy.label}
                       </button>
@@ -192,11 +197,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-6">
-              <div className="flex items-center justify-between">
+            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-0">
                 <div>
-                  <h3 className="text-lg font-orbitron font-semibold text-white mb-2">Buy the Dip</h3>
-                  <p className="text-white/60 font-space-grotesk text-sm">Enable automatic dip buying strategy</p>
+                  <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-1 md:mb-2">Buy the Dip</h3>
+                  <p className="text-white/60 font-space-grotesk text-xs md:text-sm">Enable automatic dip buying strategy</p>
                 </div>
                 <motion.button
                   onClick={() => setSettings(prev => ({ ...prev, buy_the_dip: !prev.buy_the_dip }))}
@@ -220,10 +225,10 @@ export default function DashboardPage() {
                   exit={{ opacity: 0, height: 0 }}
                   className="mt-6 space-y-4"
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <label className="block text-sm font-orbitron text-molten-gold font-semibold">Buy Dip %</label>
+                        <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Buy Dip %</label>
                         <div className="group relative">
                           <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                             <span className="text-xs text-molten-gold">?</span>
@@ -247,7 +252,7 @@ export default function DashboardPage() {
 
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <label className="block text-sm font-orbitron text-molten-gold font-semibold">Max Dip %</label>
+                        <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Max Dip %</label>
                         <div className="group relative">
                           <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                             <span className="text-xs text-molten-gold">?</span>
@@ -271,7 +276,7 @@ export default function DashboardPage() {
 
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <label className="block text-sm font-orbitron text-molten-gold font-semibold">Buy Dip Timeout (seconds)</label>
+                        <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Buy Dip Timeout (seconds)</label>
                         <div className="group relative">
                           <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                             <span className="text-xs text-molten-gold">?</span>
@@ -295,7 +300,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery</label>
+                          <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery</label>
                           <div className="group relative">
                             <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                               <span className="text-xs text-molten-gold">?</span>
@@ -330,7 +335,7 @@ export default function DashboardPage() {
                       >
                         <div>
                           <div className="flex items-center gap-2 mb-2">
-                            <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery %</label>
+                            <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery %</label>
                             <div className="group relative">
                               <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                                 <span className="text-xs text-molten-gold">?</span>
@@ -354,7 +359,7 @@ export default function DashboardPage() {
 
                         <div>
                           <div className="flex items-center gap-2 mb-2">
-                            <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery Timeout (seconds)</label>
+                            <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery Timeout (seconds)</label>
                             <div className="group relative">
                               <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                                 <span className="text-xs text-molten-gold">?</span>
@@ -381,27 +386,35 @@ export default function DashboardPage() {
               )}
             </div>
 
+
             {/* Slippage Settings */}
-            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-6">
-              <h3 className="text-lg font-orbitron font-semibold text-white mb-4">Slippage Settings</h3>
+            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Slippage Settings</h3>
               <div>
                 <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Slippage (%)</label>
                 <input
                   type="number"
                   value={settings.slippage}
-                  onChange={(e) => setSettings(prev => ({ ...prev, slippage: parseFloat(e.target.value) || 1 }))}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === '') {
+                      setSettings(prev => ({ ...prev, slippage: '' }))
+                    } else {
+                      setSettings(prev => ({ ...prev, slippage: parseFloat(v) }))
+                    }
+                  }}
                   className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
                   placeholder="1"
-                  min="0.1"
-                  max="50"
+                  min="0"
+                  max="100"
                   step="0.1"
                 />
               </div>
             </div>
 
-            <div className="bg-void-black/30 border border-gray-600/20 rounded-lg p-6 opacity-50">
-              <h3 className="text-lg font-orbitron font-semibold text-gray-400 mb-4">Advanced Filters</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-void-black/30 border border-gray-600/20 rounded-lg p-4 md:p-6 opacity-50">
+              <h3 className="text-base md:text-lg font-orbitron font-semibold text-gray-400 mb-3 md:mb-4">Advanced Filters</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                 <div>
                   <label className="block text-sm font-orbitron text-gray-500 mb-2">Max Buys Per Minute</label>
                   <input
@@ -444,7 +457,7 @@ export default function DashboardPage() {
             <motion.button
               onClick={handleSave}
               disabled={loading}
-              className="w-full py-4 bg-gradient-to-r from-molten-gold to-yellow-500 text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3 md:py-4 bg-gradient-to-r from-molten-gold to-yellow-500 text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm md:text-base"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >

@@ -22,7 +22,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      router.push('/')
+      router.push('/profile')
     }
   }, [isAuthenticated, user, router])
 
@@ -46,7 +46,7 @@ export default function LoginPage() {
     if (loginWithProfile.fulfilled.match(result)) {
       setShowSuccess(true)
       setTimeout(() => {
-        router.push('/')
+        router.push('/profile')
       }, 1500)
     }
   }

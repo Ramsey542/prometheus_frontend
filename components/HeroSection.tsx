@@ -13,74 +13,78 @@ export default function HeroSection() {
   }, [])
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center px-6 md:px-8 greek-container">
-      {/* Background Binary Fire (kept, toned down) */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10">
-        {binaryText.map((char, i) => (
-          <span
-            key={i}
-            className="binary-char absolute"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              // @ts-ignore
-              '--i': i % 10,
-            }}
-          >
-            {char}
-          </span>
-        ))}
+    <section className="relative min-h-screen flex flex-col px-6 md:px-8 greek-container w-full">
+      {/* Navbar */}
+      <div className="w-full">
+        <Navbar />
       </div>
 
-      {/* Navbar */}
-      <Navbar />
+      {/* Main Content Container */}
+      <div className="flex-1 flex items-center justify-center w-full">
+        {/* Background Binary Fire (kept, toned down) */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-10">
+          {binaryText.map((char, i) => (
+            <span
+              key={i}
+              className="binary-char absolute"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                // @ts-ignore
+                '--i': i % 10,
+              }}
+            >
+              {char}
+            </span>
+          ))}
+        </div>
 
-      {/* Main Content */}
-      <div className="left-20 z-10 text-left max-w-4xl pt-24 ">
+        {/* Main Content */}
+        <div className="relative z-10 text-left max-w-4xl w-full">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.1 }}
+            className="text-6xl md:text-8xl font-orbitron font-black mb-6 tracking-tight leading-tight text-white"
+          >
+            Trade by <span className="text-molten-gold">Fire</span>.<br />
+            Mirror the <span className="text-molten-gold">Titans</span>.
+          </motion.h2>
 
-        <motion.h2
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: 0.1 }}
-          className="text-6xl md:text-8xl font-orbitron font-black mb-6 tracking-tight leading-tight text-white"
-        >
-          Trade by <span className="text-molten-gold">Fire</span>.<br />
-          Mirror the <span className="text-molten-gold">Titans</span>.
-        </motion.h2>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 0.25 }}
+            className="text-lg md:text-xl font-space-grotesk text-white mb-10 leading-relaxed"
+          >
+            Lightning-grade Solana copy trading with price-impact shields, MEV wards, and public speed telemetry. Bind to Oracles and let the flame follow the whales.
+          </motion.p>
 
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 0.25 }}
-          className="text-lg md:text-xl font-space-grotesk text-white mb-10 leading-relaxed"
-        >
-          Lightning-grade Solana copy trading with price-impact shields, MEV wards, and public speed telemetry. Bind to Oracles and let the flame follow the whales.
-        </motion.p>
+          {/* CTA Buttons */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.35 }}
+            className="flex flex-col md:flex-row gap-6 justify-start mb-8"
+          >
+            <Link href="/signup" className="px-8 py-4 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 inline-block rounded-lg">
+              Enter the Forge
+            </Link>
+            <button className="px-8 py-4 border border-white text-white font-orbitron font-bold tracking-wider hover:bg-white/10 transition duration-300 rounded-lg">
+              View Live Speed
+            </button>
+          </motion.div>
 
-        {/* CTA Buttons */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.35 }}
-          className="flex flex-col md:flex-row gap-6 justify-start mb-8"
-        >
-          <Link href="/signup" className="px-8 py-4 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 inline-block rounded-lg">
-            Enter the Forge
-          </Link>
-          <button className="px-8 py-4 border border-white text-white font-orbitron font-bold tracking-wider hover:bg-white/10 transition duration-300 rounded-lg">
-            View Live Speed
-          </button>
-        </motion.div>
-
-        {/* Compatibility Text */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 0.5 }}
-          className="text-sm text-gray-400 font-space-grotesk"
-        >
-          Compatible with Pump.fun • Moonshot • Boop.fun
-        </motion.div>
+          {/* Compatibility Text */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 0.5 }}
+            className="text-sm text-gray-400 font-space-grotesk"
+          >
+            Compatible with Pump.fun • Moonshot • Boop.fun
+          </motion.div>
+        </div>
       </div>
 
       {/* Decorative Greek Symbols (kept subtle) */}

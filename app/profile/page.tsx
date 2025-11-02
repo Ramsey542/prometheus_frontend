@@ -31,6 +31,42 @@ import { walletTrackerApi } from '../../services/walletTrackerApi'
 import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats } from '../../store/types/auth'
 import { config } from '../../lib/config'
 
+const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boolean = false, tokenDecimals?: number | null): string => {
+  if (!amount) return 'N/A'
+  try {
+    const numAmount = BigInt(amount)
+    let decimals: number
+    
+    if (isToken && tokenDecimals !== null && tokenDecimals !== undefined) {
+      decimals = tokenDecimals
+    } else {
+      decimals = coin === 'sol' ? 9 : 18
+    }
+    
+    const divisor = BigInt(10 ** decimals)
+    const wholePart = numAmount / divisor
+    const fractionalPart = numAmount % divisor
+    
+    const wholeStr = wholePart.toString()
+    let fractionalStr = fractionalPart.toString().padStart(decimals, '0')
+    
+    while (fractionalStr.endsWith('0') && fractionalStr.length > 0) {
+      fractionalStr = fractionalStr.slice(0, -1)
+    }
+    
+    if (fractionalStr === '') {
+      return wholeStr
+    }
+    
+    const maxDisplayDecimals = decimals === 18 ? 8 : decimals === 9 ? 6 : 4
+    const trimmedFractional = fractionalStr.slice(0, maxDisplayDecimals)
+    
+    return `${wholeStr}.${trimmedFractional}`
+  } catch {
+    return amount
+  }
+}
+
 function ProfilePageContent() {
   const dispatch = useAppDispatch()
   const router = useRouter()
@@ -65,7 +101,14 @@ function ProfilePageContent() {
   const [showWalletSettings, setShowWalletSettings] = useState<string | null>(null)
   const [walletSettingsLoading, setWalletSettingsLoading] = useState(false)
   const [walletSettingsSuccess, setWalletSettingsSuccess] = useState<string | null>(null)
-  
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [showWithdraw, setShowWithdraw] = useState(false)
+  const [withdrawDestination, setWithdrawDestination] = useState('')
+  const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawSuccess, setWithdrawSuccess] = useState<any>(null)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
+  console.log('profile', profile)
   const [copyTradingStats, setCopyTradingStats] = useState<CopyTradingStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
@@ -291,7 +334,7 @@ function ProfilePageContent() {
       setWalletTrackerError(null)
       
       const response = await walletTrackerApi.getAllLogs(page, 10, selectedCoin)
-      
+      console.log('response', response)
       if (response && typeof response === 'object' && 'logs' in response) {
         setTrackerLogs(response.logs || [])
         setLogsTotalPages(response.total_pages || 1)
@@ -404,7 +447,7 @@ function ProfilePageContent() {
 
   const fetchWalletSettings = async (walletAddress: string) => {
     try {
-      const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress)
+      const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
       setWalletSettings(prev => ({ ...prev, [walletAddress]: settings }))
     } catch (err) {
       console.error('Failed to fetch wallet settings:', err)
@@ -425,7 +468,11 @@ function ProfilePageContent() {
       setWalletSettingsSuccess(null)
 
       const settings = walletSettings[walletAddress]
-      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, settings)
+      const normalized = {
+        ...settings,
+        slippage: settings.slippage === '' ? 0 : settings.slippage
+      }
+      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
       
       setWalletSettingsSuccess('Wallet settings updated successfully!')
       setTimeout(() => setWalletSettingsSuccess(null), 5000)
@@ -472,8 +519,42 @@ function ProfilePageContent() {
     router.push('/')
   }
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string, key: string) => {
+    if (!text) return
     navigator.clipboard.writeText(text)
+    setCopiedKey(key)
+    setTimeout(() => setCopiedKey(null), 1200)
+  }
+
+  const handleWithdraw = async () => {
+    if (!withdrawDestination || !withdrawAmount) return
+    try {
+      setWithdrawing(true)
+      setWithdrawSuccess(null)
+      setWithdrawError(null)
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet/withdraw/${selectedCoin}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ destination: withdrawDestination, amount: parseFloat(withdrawAmount) })
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const message = errorData.detail || `HTTP error! status: ${response.status}`
+        setWithdrawError(message)
+        throw new Error(message)
+      }
+      const data = await response.json()
+      console.log('data', data)
+      setWithdrawSuccess(data)
+      await dispatch(getProfile(selectedCoin))
+    } catch (err: any) {
+      setWithdrawError(err.message || 'Withdraw failed')
+    } finally {
+      setWithdrawing(false)
+    }
   }
 
   const formatWalletAddress = (address: string) => {
@@ -481,17 +562,17 @@ function ProfilePageContent() {
   }
 
   const renderWalletTrackerSection = () => (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-4 md:space-y-8">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <h1 className="text-3xl font-orbitron font-bold text-molten-gold">
+        <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold">
           Wallet Tracker
         </h1>
       </div>
 
       {/* Add Wallet Section */}
-      <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-        <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-6 flex items-center gap-3">
+      <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+        <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
           <Plus size={20} />
           Add Wallet to Track
         </h3>
@@ -501,19 +582,19 @@ function ProfilePageContent() {
             <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
               WALLET ADDRESS
             </label>
-            <div className="flex gap-3">
+            <div className="flex flex-col md:flex-row gap-3">
               <input
                 type="text"
                 value={newWalletAddress}
                 onChange={(e) => setNewWalletAddress(e.target.value)}
                 placeholder={`Enter ${selectedCoin.toUpperCase()} wallet address`}
-                className="flex-1 bg-void-black/50 border border-molten-gold/20 rounded-lg px-4 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                className="flex-1 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
                 required
               />
               <motion.button
                 type="submit"
                 disabled={walletTrackerLoading || !newWalletAddress.trim()}
-                className="px-6 py-3 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 md:px-6 py-2 md:py-3 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -557,8 +638,8 @@ function ProfilePageContent() {
       )}
 
       {/* Tracked Wallets Section */}
-      <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-        <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-6 flex items-center gap-3">
+      <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+        <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
           <Wallet size={20} />
           Tracked Wallets ({walletsTotal})
         </h3>
@@ -585,26 +666,29 @@ function ProfilePageContent() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-0">
+                  <div className="flex-1 w-full">
+                    <div className="flex items-center gap-2 md:gap-3 mb-2">
                       <div className={`w-3 h-3 rounded-full ${wallet.is_active ? 'bg-green-400' : 'bg-red-400'}`} />
-                      <span className="text-sm font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">
+                      <span className="text-xs md:text-sm font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">
                         {wallet.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <p className="text-white font-space-grotesk font-mono">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <p className="text-xs md:text-sm text-white font-space-grotesk font-mono break-all">
                         {formatWalletAddress(wallet.wallet_address)}
                       </p>
                       <button
-                        onClick={() => copyToClipboard(wallet.wallet_address)}
+                        onClick={() => copyToClipboard(wallet.wallet_address, `tracked-${wallet.id}`)}
                         className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                       >
                         <Copy size={14} />
                       </button>
+                      {copiedKey === `tracked-${wallet.id}` && (
+                        <span className="text-xs text-molten-gold">Copied</span>
+                      )}
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 text-xs md:text-sm">
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase">Matches</p>
                         <p className="text-white font-orbitron font-bold">{wallet.total_matches}</p>
@@ -725,10 +809,10 @@ function ProfilePageContent() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto shadow-2xl shadow-molten-gold/10"
+              className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-4 md:p-6 w-full max-w-2xl max-h-[90vh] md:max-h-[80vh] overflow-y-auto shadow-2xl shadow-molten-gold/10"
             >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-orbitron font-bold text-molten-gold">
+              <div className="flex items-center justify-between mb-4 md:mb-6">
+                <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold break-words pr-2">
                   Wallet Settings - {formatWalletAddress(showWalletSettings)}
                 </h3>
                 <button
@@ -934,7 +1018,7 @@ function ProfilePageContent() {
                     )}
                   </div>
 
-                  {/* Slippage Settings */}
+              {/* Slippage Settings */}
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
                     <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Slippage Settings</h4>
                     
@@ -944,17 +1028,17 @@ function ProfilePageContent() {
                       </label>
                       <input
                         type="number"
-                        value={walletSettings[showWalletSettings].slippage || 1}
-                        onChange={(e) => setWalletSettings(prev => ({
-                          ...prev,
-                          [showWalletSettings]: {
-                            ...prev[showWalletSettings],
-                            slippage: parseFloat(e.target.value) || 1
-                          }
-                        }))}
+                    value={walletSettings[showWalletSettings].slippage === 0 || walletSettings[showWalletSettings].slippage ? walletSettings[showWalletSettings].slippage : ''}
+                    onChange={(e) => setWalletSettings(prev => ({
+                      ...prev,
+                      [showWalletSettings]: {
+                        ...prev[showWalletSettings],
+                        slippage: e.target.value === '' ? '' : parseFloat(e.target.value)
+                      }
+                    }))}
                         className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                        min="0.1"
-                        max="50"
+                    min="0"
+                    max="100"
                         step="0.1"
                       />
                     </div>
@@ -985,16 +1069,16 @@ function ProfilePageContent() {
 
   const renderTrackerLogs = () => {
     return (
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-4 md:space-y-8">
         <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-orbitron font-bold text-molten-gold">
+          <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold">
             Tracker Logs
           </h1>
         </div>
 
         {/* Copy Trading Statistics Section */}
-        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-          <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-6 flex items-center gap-3">
+        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+          <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
             <TrendingUp size={20} />
             Copy Trading Statistics
           </h3>
@@ -1012,47 +1096,47 @@ function ProfilePageContent() {
               </div>
             </div>
           ) : copyTradingStats ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               {/* Total Tracked Wallets */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <Wallet size={20} className="text-molten-gold" />
-                  <span className="text-sm font-orbitron text-molten-gold tracking-wide">TOTAL WALLETS</span>
+              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
+                <div className="flex items-center gap-2 md:gap-3 mb-2">
+                  <Wallet size={18} className="md:w-5 md:h-5 text-molten-gold" />
+                  <span className="text-xs md:text-sm font-orbitron text-molten-gold tracking-wide">TOTAL WALLETS</span>
                 </div>
-                <div className="text-2xl font-orbitron font-bold text-white">
+                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
                   {copyTradingStats.total_tracked_wallets}
                 </div>
               </div>
 
               {/* Active Wallets */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <Activity size={20} className="text-green-400" />
-                  <span className="text-sm font-orbitron text-green-400 tracking-wide">ACTIVE WALLETS</span>
+              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
+                <div className="flex items-center gap-2 md:gap-3 mb-2">
+                  <Activity size={18} className="md:w-5 md:h-5 text-green-400" />
+                  <span className="text-xs md:text-sm font-orbitron text-green-400 tracking-wide">ACTIVE WALLETS</span>
                 </div>
-                <div className="text-2xl font-orbitron font-bold text-white">
+                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
                   {copyTradingStats.active_wallets}
                 </div>
               </div>
 
               {/* Success Rate */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <CheckCircle size={20} className="text-blue-400" />
-                  <span className="text-sm font-orbitron text-blue-400 tracking-wide">SUCCESS RATE</span>
+              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
+                <div className="flex items-center gap-2 md:gap-3 mb-2">
+                  <CheckCircle size={18} className="md:w-5 md:h-5 text-blue-400" />
+                  <span className="text-xs md:text-sm font-orbitron text-blue-400 tracking-wide">SUCCESS RATE</span>
                 </div>
-                <div className="text-2xl font-orbitron font-bold text-white">
+                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
                   {copyTradingStats.success_rate.toFixed(1)}%
                 </div>
               </div>
 
               {/* Total Volume */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <TrendingUp size={20} className="text-purple-400" />
-                  <span className="text-sm font-orbitron text-purple-400 tracking-wide">TOTAL VOLUME</span>
+              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
+                <div className="flex items-center gap-2 md:gap-3 mb-2">
+                  <TrendingUp size={18} className="md:w-5 md:h-5 text-purple-400" />
+                  <span className="text-xs md:text-sm font-orbitron text-purple-400 tracking-wide">TOTAL VOLUME</span>
                 </div>
-                <div className="text-2xl font-orbitron font-bold text-white">
+                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
                   ${copyTradingStats.total_volume_traded.toLocaleString()}
                 </div>
               </div>
@@ -1167,9 +1251,9 @@ function ProfilePageContent() {
         )}
 
         {/* Account Logs Section */}
-        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
+        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
               <FileText size={20} />
               Account Event Logs ({logsTotal})
             </h3>
@@ -1231,15 +1315,26 @@ function ProfilePageContent() {
                           </p>
                           {log.target_token && (
                             <button
-                              onClick={() => copyToClipboard(log.target_token || '')}
+                              onClick={() => copyToClipboard(log.target_token || '', `log-target-${log.id}`)}
                               className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                             >
                               <Copy size={14} />
                             </button>
                           )}
+                          {log.target_token && copiedKey === `log-target-${log.id}` && (
+                            <span className="text-xs text-molten-gold">Copied</span>
+                          )}
                         </div>
                       </div>
                     </div>
+                    {log.token_name && (
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Token Name</p>
+                        <p className="text-white font-space-grotesk font-semibold text-sm">
+                          {log.token_name}
+                        </p>
+                      </div>
+                    )}
                     
                     {/* Transaction Signature */}
                     {log.transaction_signature && (
@@ -1250,40 +1345,53 @@ function ProfilePageContent() {
                             {log.transaction_signature}
                           </p>
                           <button
-                            onClick={() => copyToClipboard(log.transaction_signature || '')}
+                            onClick={() => copyToClipboard(log.transaction_signature || '', `log-sig-${log.id}`)}
                             className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                           >
                             <Copy size={14} />
                           </button>
+                          {copiedKey === `log-sig-${log.id}` && (
+                            <span className="text-xs text-molten-gold">Copied</span>
+                          )}
                         </div>
                       </div>
                     )}
                     
                     {/* Amounts */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {log.amount_in && (
-                        <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Amount In</p>
-                          <p className="text-white font-space-grotesk font-mono text-sm">
-                            {log.amount_in}
-                          </p>
-                        </div>
-                      )}
+                      {log.amount_in && (() => {
+                        const isBuyOperation = log.event_type === 'tracked_wallet_purchase' || log.event_type === 'user_purchase'
+                        const isToken = !isBuyOperation
+                        return (
+                          <div>
+                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Amount In</p>
+                            <p className="text-white font-space-grotesk font-mono text-sm">
+                              {formatAmount(log.amount_in, selectedCoin, isToken, isToken ? log.token_decimals : null)}
+                              {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
+                            </p>
+                          </div>
+                        )
+                      })()}
                       
-                      {log.amount_out && (
-                        <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Amount Out</p>
-                          <p className="text-white font-space-grotesk font-mono text-sm">
-                            {log.amount_out}
-                          </p>
-                        </div>
-                      )}
+                      {log.amount_out && (() => {
+                        const isBuyOperation = log.event_type === 'tracked_wallet_purchase' || log.event_type === 'user_purchase'
+                        const isToken = isBuyOperation
+                        return (
+                          <div>
+                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Amount Out</p>
+                            <p className="text-white font-space-grotesk font-mono text-sm">
+                              {formatAmount(log.amount_out, selectedCoin, isToken, isToken ? log.token_decimals : null)}
+                              {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
+                            </p>
+                          </div>
+                        )
+                      })()}
                       
                       {log.fee_amount && (
                         <div>
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Fee Amount</p>
                           <p className="text-white font-space-grotesk font-mono text-sm">
-                            {log.fee_amount}
+                            {formatAmount(log.fee_amount, selectedCoin, false)} {selectedCoin.toUpperCase()}
                           </p>
                         </div>
                       )}
@@ -1359,10 +1467,10 @@ function ProfilePageContent() {
 
   const renderProfileOverview = () => {
     return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <h1 className="text-3xl font-orbitron font-bold text-molten-gold">
+        <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold">
           Profile Overview
         </h1>
       </div>
@@ -1382,21 +1490,21 @@ function ProfilePageContent() {
       )}
 
         {/* Profile Overview */}
-        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-8">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 bg-gradient-to-br from-molten-gold to-yellow-600 rounded-full flex items-center justify-center">
-              <User size={40} className="text-void-black" />
+        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-8">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6">
+            <div className="w-16 h-16 md:w-24 md:h-24 bg-gradient-to-br from-molten-gold to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <User size={32} className="md:w-10 md:h-10 text-void-black" />
             </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-orbitron font-bold text-white mb-2">
+            <div className="flex-1 text-center md:text-left w-full">
+              <h2 className="text-xl md:text-2xl font-orbitron font-bold text-white mb-2">
                 {profile?.username || user?.username}
               </h2>
-              <p className="text-molten-gold/80 font-space-grotesk text-lg mb-4">
+              <p className="text-molten-gold/80 font-space-grotesk text-sm md:text-lg mb-4">
                 Trading Master
               </p>
-              <div className="flex gap-4">
+              <div className="flex justify-center md:justify-start gap-3 md:gap-4 flex-wrap">
                 <div className="text-center">
-                  <p className="text-2xl font-orbitron font-bold text-molten-gold">
+                  <p className="text-xl md:text-2xl font-orbitron font-bold text-molten-gold">
                     {isLoading ? '...' : profile?.total_trades || 0}
                   </p>
                   <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
@@ -1404,7 +1512,7 @@ function ProfilePageContent() {
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-orbitron font-bold text-green-400">
+                  <p className="text-xl md:text-2xl font-orbitron font-bold text-green-400">
                     {isLoading ? '...' : `${profile?.win_rate || 0}%`}
                   </p>
                   <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
@@ -1412,7 +1520,7 @@ function ProfilePageContent() {
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-orbitron font-bold text-white">
+                  <p className="text-xl md:text-2xl font-orbitron font-bold text-white">
                     {isLoading ? '...' : profile?.active_trades || 0}
                   </p>
                   <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
@@ -1425,11 +1533,11 @@ function ProfilePageContent() {
         </div>
 
         {/* Account Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
           {/* Personal Information */}
-          <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-            <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-6 flex items-center gap-3">
-              <User size={20} />
+          <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+            <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
+              <User size={18} className="md:w-5 md:h-5" />
               Personal Information
             </h3>
             
@@ -1441,14 +1549,17 @@ function ProfilePageContent() {
                     Email Address
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                   <p className="text-white font-space-grotesk flex-1">{profile?.email || user?.email}</p>
                   <button
-                    onClick={() => copyToClipboard(profile?.email || user?.email || '')}
+                    onClick={() => copyToClipboard(profile?.email || user?.email || '', 'email')}
                     className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                   >
                     <Copy size={14} />
                   </button>
+                      {copiedKey === 'email' && (
+                        <span className="text-xs text-molten-gold">Copied</span>
+                      )}
                 </div>
               </div>
 
@@ -1462,11 +1573,14 @@ function ProfilePageContent() {
                 <div className="flex items-center gap-2">
                   <p className="text-white font-space-grotesk flex-1">{profile?.username || user?.username}</p>
                   <button
-                    onClick={() => copyToClipboard(profile?.username || user?.username || '')}
+                    onClick={() => copyToClipboard(profile?.username || user?.username || '', 'username')}
                     className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                   >
                     <Copy size={14} />
                   </button>
+                  {copiedKey === 'username' && (
+                    <span className="text-xs text-molten-gold">Copied</span>
+                  )}
                 </div>
               </div>
 
@@ -1548,9 +1662,9 @@ function ProfilePageContent() {
           </div>
 
           {/* Wallet Information */}
-          <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-            <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-6 flex items-center gap-3">
-              <Wallet size={20} />
+          <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+            <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
+              <Wallet size={18} className="md:w-5 md:h-5" />
               Wallet Information
             </h3>
             
@@ -1568,11 +1682,14 @@ function ProfilePageContent() {
                       {formatWalletAddress(profile?.public_address || '')}
                     </p>
                     <button
-                      onClick={() => copyToClipboard(profile?.public_address || '')}
+                      onClick={() => copyToClipboard(profile?.public_address || '', 'public')}
                       className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                     >
                       <Copy size={14} />
                     </button>
+                    {copiedKey === 'public' && (
+                      <span className="text-xs text-molten-gold">Copied</span>
+                    )}
                   </div>
                 </div>
                 
@@ -1598,11 +1715,14 @@ function ProfilePageContent() {
                     </p>
                     {showPrivateKey && (
                       <button
-                        onClick={() => copyToClipboard(profile?.private_key || '')}
+                        onClick={() => copyToClipboard(profile?.private_key || '', 'private')}
                         className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                       >
                         <Copy size={14} />
                       </button>
+                    )}
+                    {showPrivateKey && copiedKey === 'private' && (
+                      <span className="text-xs text-molten-gold">Copied</span>
                     )}
                   </div>
                 </div>
@@ -1625,9 +1745,19 @@ function ProfilePageContent() {
                       <RefreshCw size={16} className={balanceRefreshing ? 'animate-spin' : ''} />
                     </motion.button>
                   </div>
-                  <p className="text-2xl font-orbitron font-bold text-molten-gold">
+                  <p className="text-xl md:text-2xl font-orbitron font-bold text-molten-gold break-words">
                     {isLoading || balanceRefreshing ? '...' : `${parseFloat(selectedCoin === 'sol' ? (profile?.sol_balance || '0') : (profile?.bnb_balance || '0')).toFixed(4)} ${selectedCoin.toUpperCase()}`}
                   </p>
+                  <div className="mt-3">
+                    <motion.button
+                      onClick={() => setShowWithdraw(true)}
+                      className="px-3 py-2 bg-molten-gold/10 border border-molten-gold/20 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300 text-sm font-orbitron"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      Withdraw
+                    </motion.button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1641,17 +1771,45 @@ function ProfilePageContent() {
           </div>
         </div>
 
+        {/* PnL Section */}
+        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+          <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
+            <TrendingUp size={18} className="md:w-5 md:h-5" />
+            Profit & Loss
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
+              <p className="text-xs font-orbitron text-molten-gold/80 tracking-wider uppercase mb-1">Total PnL</p>
+              <p className={`text-xl md:text-2xl font-orbitron font-bold ${((profile as any)?.pnl_total || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {isLoading ? '...' : ((profile as any)?.pnl_total ?? 0)}
+              </p>
+            </div>
+            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
+              <p className="text-xs font-orbitron text-molten-gold/80 tracking-wider uppercase mb-1">PnL (24h)</p>
+              <p className={`text-xl md:text-2xl font-orbitron font-bold ${((profile as any)?.pnl_24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {isLoading ? '...' : ((profile as any)?.pnl_24h ?? 0)}
+              </p>
+            </div>
+            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
+              <p className="text-xs font-orbitron text-molten-gold/80 tracking-wider uppercase mb-1">PnL (7d)</p>
+              <p className={`text-xl md:text-2xl font-orbitron font-bold ${((profile as any)?.pnl_7d || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {isLoading ? '...' : ((profile as any)?.pnl_7d ?? 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Trading Statistics */}
-        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-          <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-6 flex items-center gap-3">
-            <Activity size={20} />
+        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
+          <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
+            <Activity size={18} className="md:w-5 md:h-5" />
             Trading Statistics
           </h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4 text-center">
-              <Activity size={24} className="text-molten-gold mx-auto mb-3" />
-              <p className="text-2xl font-orbitron font-bold text-white mb-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
+              <Activity size={20} className="md:w-6 md:h-6 text-molten-gold mx-auto mb-2 md:mb-3" />
+              <p className="text-xl md:text-2xl font-orbitron font-bold text-white mb-1">
                 {isLoading ? '...' : profile?.total_trades || 0}
               </p>
               <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
@@ -1659,9 +1817,9 @@ function ProfilePageContent() {
               </p>
             </div>
             
-            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4 text-center">
-              <TrendingUp size={24} className="text-green-400 mx-auto mb-3" />
-              <p className="text-2xl font-orbitron font-bold text-green-400 mb-1">
+            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
+              <TrendingUp size={20} className="md:w-6 md:h-6 text-green-400 mx-auto mb-2 md:mb-3" />
+              <p className="text-xl md:text-2xl font-orbitron font-bold text-green-400 mb-1">
                 {isLoading ? '...' : `${profile?.win_rate || 0}%`}
               </p>
               <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
@@ -1670,9 +1828,9 @@ function ProfilePageContent() {
             </div>
             
             
-            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4 text-center">
-              <Activity size={24} className="text-blue-400 mx-auto mb-3" />
-              <p className="text-2xl font-orbitron font-bold text-blue-400 mb-1">
+            <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
+              <Activity size={20} className="md:w-6 md:h-6 text-blue-400 mx-auto mb-2 md:mb-3" />
+              <p className="text-xl md:text-2xl font-orbitron font-bold text-blue-400 mb-1">
                 {isLoading ? '...' : profile?.active_mirrors || 0}
               </p>
               <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
@@ -1683,10 +1841,10 @@ function ProfilePageContent() {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-4 justify-end">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4 justify-end">
           <motion.button 
             onClick={handleLogout}
-            className="px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center gap-2"
+            className="px-4 md:px-6 py-2 md:py-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center gap-2 text-sm md:text-base"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -1700,6 +1858,103 @@ function ProfilePageContent() {
 
   return (
     <ProfileLayout>
+      {/* per-button copied indicator used; global removed */}
+
+      {showWithdraw && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="bg-gradient-to-r from-void-black/95 to-black/90 border border-molten-gold/30 rounded-lg p-4 md:p-6 w-full max-w-md mx-4 md:mx-0"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base md:text-lg font-orbitron font-bold text-molten-gold">Withdraw {selectedCoin.toUpperCase()}</h3>
+              <button onClick={() => setShowWithdraw(false)} className="text-molten-gold/60 hover:text-molten-gold text-lg md:text-xl">✕</button>
+            </div>
+            <div className="space-y-4">
+              {withdrawError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg"
+                >
+                  <p className="text-red-400 font-orbitron text-sm">{withdrawError}</p>
+                </motion.div>
+              )}
+              {withdrawSuccess && withdrawSuccess.success && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 bg-green-500/20 border border-green-500/30 rounded-lg"
+                >
+                  <p className="text-green-400 font-orbitron text-sm">Withdrawal successful.</p>
+                  <div className="mt-2 text-sm text-white/80 font-space-grotesk">
+                    <div>Signature: <span className="font-mono break-all">{withdrawSuccess.transaction_signature}</span></div>
+                    <div>Amount: {withdrawSuccess.amount_sol} SOL</div>
+                    <a href={withdrawSuccess.explorer_url} target="_blank" rel="noopener noreferrer" className="text-molten-gold underline">View on Explorer</a>
+                  </div>
+                </motion.div>
+              )}
+              <div>
+                <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">Destination Wallet</label>
+                <input
+                  type="text"
+                  value={withdrawDestination}
+                  onChange={(e) => setWithdrawDestination(e.target.value)}
+                  className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                  placeholder={`Enter ${selectedCoin.toUpperCase()} address`}
+                  disabled={withdrawing}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">Amount</label>
+                <input
+                  type="number"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                  placeholder="0.00"
+                  min="0"
+                  step="0.0001"
+                  disabled={withdrawing}
+                />
+              </div>
+              <div className="flex flex-col md:flex-row gap-2">
+                <motion.button
+                  onClick={handleWithdraw}
+                  disabled={withdrawing || !withdrawDestination || !withdrawAmount}
+                  className="flex-1 px-4 py-2 bg-molten-gold text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-colors duration-300 disabled:opacity-50"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {withdrawing ? 'Processing withdrawal...' : 'Withdraw'}
+                </motion.button>
+                <motion.button
+                  onClick={() => {
+                    setShowWithdraw(false)
+                    setWithdrawDestination('')
+                    setWithdrawAmount('')
+                    setWithdrawSuccess(null)
+                  }}
+                  disabled={withdrawing}
+                  className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Cancel
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
       {currentSection === 'wallet-tracker' ? renderWalletTrackerSection() : 
        currentSection === 'tracker-logs' ? renderTrackerLogs() : 
        renderProfileOverview()}

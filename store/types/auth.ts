@@ -86,6 +86,8 @@ export interface CopyTradingLog {
   transaction_signature: string | null;
   wallet_address: string | null;
   target_token: string | null;
+  token_name: string | null;
+  token_decimals: number | null;
   amount_in: string | null;
   amount_out: string | null;
   fee_amount: string | null;
