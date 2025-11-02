@@ -102,6 +102,8 @@ function ProfilePageContent() {
   const [walletSettingsLoading, setWalletSettingsLoading] = useState(false)
   const [walletSettingsSuccess, setWalletSettingsSuccess] = useState<string | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState<string>('')
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawDestination, setWithdrawDestination] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
@@ -415,7 +417,7 @@ function ProfilePageContent() {
       setWalletTrackerSuccess(null)
       setTradeAmountSuccess(null)
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/trade-amount`, {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/trade-amount/${selectedCoin}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -639,10 +641,17 @@ function ProfilePageContent() {
 
       {/* Tracked Wallets Section */}
       <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
-        <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
-          <Wallet size={20} />
-          Tracked Wallets ({walletsTotal})
-        </h3>
+        <div className="flex items-start justify-between mb-4 md:mb-6">
+          <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
+            <Wallet size={20} />
+            Tracked Wallets ({walletsTotal})
+          </h3>
+        </div>
+        <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+          <p className="text-xs text-yellow-400 font-space-grotesk">
+            <span className="font-semibold">Platform Fee:</span> A 1% fee applies to all trades
+          </p>
+        </div>
         
         {(walletTrackerLoading || coinSwitching) && (!trackedWallets || trackedWallets.length === 0) ? (
           <div className="text-center py-8">
@@ -1044,6 +1053,98 @@ function ProfilePageContent() {
                     </div>
                   </div>
 
+                  <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                    <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Advanced Filters</h4>
+                    
+                    <div className="space-y-4">
+                      <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-orbitron font-semibold text-white">Buy Strategy</h4>
+                          <button
+                            disabled
+                            className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
+                          >
+                            change
+                          </button>
+                        </div>
+                        <p className="text-sm text-white/80 font-space-grotesk capitalize">
+                          {walletSettings[showWalletSettings].buy_strategy?.replace(/_/g, ' ') || 'Constant Size'}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-orbitron text-white font-semibold">Max buys per mirror per hour</label>
+                            <div className="flex gap-2">
+                              <button
+                                disabled
+                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
+                              >
+                                change
+                              </button>
+                              <button
+                                disabled
+                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
+                              >
+                                remove
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-sm text-white/80 font-space-grotesk">
+                            {walletSettings[showWalletSettings].max_buys_per_mirror_per_hour ?? '1'}
+                          </p>
+                        </div>
+
+                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-orbitron text-white font-semibold">Max buys per mirror per day</label>
+                            <div className="flex gap-2">
+                              <button
+                                disabled
+                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
+                              >
+                                change
+                              </button>
+                              <button
+                                disabled
+                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
+                              >
+                                remove
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-sm text-white/80 font-space-grotesk">
+                            {walletSettings[showWalletSettings].max_buys_per_mirror_per_day ?? '1'}
+                          </p>
+                        </div>
+
+                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-orbitron text-white font-semibold">Max buys per token per day</label>
+                            <div className="flex gap-2">
+                              <button
+                                disabled
+                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
+                              >
+                                change
+                              </button>
+                              <button
+                                disabled
+                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
+                              >
+                                remove
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-sm text-white/80 font-space-grotesk">
+                            {walletSettings[showWalletSettings].max_buys_per_token_per_day ?? '1'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <motion.button
                     onClick={() => handleUpdateWalletSettings(showWalletSettings)}
                     disabled={walletSettingsLoading}
@@ -1137,7 +1238,7 @@ function ProfilePageContent() {
                   <span className="text-xs md:text-sm font-orbitron text-purple-400 tracking-wide">TOTAL VOLUME</span>
                 </div>
                 <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
-                  ${copyTradingStats.total_volume_traded.toLocaleString()}
+                  {copyTradingStats.total_volume_traded.toLocaleString()} {selectedCoin.toUpperCase()}
                 </div>
               </div>
 
@@ -1364,7 +1465,7 @@ function ProfilePageContent() {
                         const isToken = !isBuyOperation
                         return (
                           <div>
-                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Amount In</p>
+                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
                             <p className="text-white font-space-grotesk font-mono text-sm">
                               {formatAmount(log.amount_in, selectedCoin, isToken, isToken ? log.token_decimals : null)}
                               {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
@@ -1378,7 +1479,7 @@ function ProfilePageContent() {
                         const isToken = isBuyOperation
                         return (
                           <div>
-                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Amount Out</p>
+                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
                             <p className="text-white font-space-grotesk font-mono text-sm">
                               {formatAmount(log.amount_out, selectedCoin, isToken, isToken ? log.token_decimals : null)}
                               {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
@@ -1512,11 +1613,11 @@ function ProfilePageContent() {
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl md:text-2xl font-orbitron font-bold text-green-400">
-                    {isLoading ? '...' : `${profile?.win_rate || 0}%`}
+                  <p className="text-xl md:text-2xl font-orbitron font-bold text-red-400">
+                    {isLoading ? '...' : profile?.failed_trades || 0}
                   </p>
                   <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
-                    Win Rate
+                    Failed Trades
                   </p>
                 </div>
                 <div className="text-center">
@@ -1663,10 +1764,17 @@ function ProfilePageContent() {
 
           {/* Wallet Information */}
           <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
-            <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
-              <Wallet size={18} className="md:w-5 md:h-5" />
-              Wallet Information
-            </h3>
+            <div className="flex items-start justify-between mb-4 md:mb-6">
+              <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
+                <Wallet size={18} className="md:w-5 md:h-5" />
+                Wallet Information
+              </h3>
+            </div>
+            <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+              <p className="text-xs text-yellow-400 font-space-grotesk">
+                <span className="font-semibold">Platform Fee:</span> A 1% fee applies to all trades
+              </p>
+            </div>
             
             {(profile || wallet) ? (
               <div className="space-y-4">
@@ -1818,12 +1926,12 @@ function ProfilePageContent() {
             </div>
             
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
-              <TrendingUp size={20} className="md:w-6 md:h-6 text-green-400 mx-auto mb-2 md:mb-3" />
-              <p className="text-xl md:text-2xl font-orbitron font-bold text-green-400 mb-1">
-                {isLoading ? '...' : `${profile?.win_rate || 0}%`}
+              <XCircle size={20} className="md:w-6 md:h-6 text-red-400 mx-auto mb-2 md:mb-3" />
+              <p className="text-xl md:text-2xl font-orbitron font-bold text-red-400 mb-1">
+                {isLoading ? '...' : profile?.failed_trades || 0}
               </p>
               <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
-                Win Rate
+                Failed Trades
               </p>
             </div>
             

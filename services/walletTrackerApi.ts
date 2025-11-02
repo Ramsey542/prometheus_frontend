@@ -160,7 +160,7 @@ export const walletTrackerApi = {
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
-
+      console.log('the settings', settings)
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${coin}/${walletAddress}/settings`, {
         method: 'PUT',
         headers: {

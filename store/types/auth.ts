@@ -42,6 +42,7 @@ export interface UserProfile {
   active_trades: number;
   portfolio_value: string;
   active_mirrors: number;
+  failed_trades?: number;
 }
 
 export interface TrackedWallet {
