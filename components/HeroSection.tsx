@@ -70,9 +70,6 @@ export default function HeroSection() {
             <Link href="/signup" className="px-8 py-4 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 inline-block rounded-lg">
               Enter the Forge
             </Link>
-            <button className="px-8 py-4 border border-white text-white font-orbitron font-bold tracking-wider hover:bg-white/10 transition duration-300 rounded-lg">
-              View Live Speed
-            </button>
           </motion.div>
 
           {/* Compatibility Text */}

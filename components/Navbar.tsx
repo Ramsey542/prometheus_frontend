@@ -51,18 +51,23 @@ export default function Navbar() {
         <nav className="hidden md:flex gap-8 items-center ml-auto">
           {!isAuthenticatedPage && (
             <>
-              {['Telemetry', 'Wards', 'How it Works', 'Covenant', 'Guild'].map((item) => (
-                <a
-                  key={item}
-                  href="#"
-                  className="text-sm tracking-widest text-white hover:text-molten-gold transition duration-300"
-                >
-                  {item}
-                </a>
-              ))}
-              <button className="px-4 py-2 border border-white text-white text-sm tracking-widest hover:bg-white/10 transition duration-300 rounded-lg">
+              <a
+                href="https://discord.gg"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 border border-white text-white text-sm tracking-widest hover:bg-white/10 transition duration-300 rounded-lg"
+              >
                 Temple
-              </button>
+              </a>
+              <span
+                className="px-4 py-2 border border-white/40 text-white/60 text-sm tracking-widest rounded-lg cursor-not-allowed select-none"
+                title="Coming soon"
+              >
+                Guild
+              </span>
+              <Link href="/signup" className="px-6 py-2 bg-molten-gold text-void-black font-bold text-sm tracking-widest hover:brightness-110 transition duration-300 rounded-lg">
+                Enter the Forge
+              </Link>
             </>
           )}
           
@@ -129,11 +134,6 @@ export default function Navbar() {
             </div>
           )}
           
-          {!isAuthenticated && (
-            <Link href="/signup" className="px-6 py-2 bg-molten-gold text-void-black font-bold text-sm tracking-widest hover:brightness-110 transition duration-300 rounded-lg">
-              Enter the Forge
-            </Link>
-          )}
         </nav>
         
         {!isAuthenticatedPage && (
@@ -154,18 +154,18 @@ export default function Navbar() {
           className="md:hidden border-t border-molten-gold/20 bg-black/80 backdrop-blur-sm"
         >
           <div className="px-6 py-4 space-y-4">
-            {['Telemetry', 'Wards', 'How it Works', 'Covenant', 'Guild'].map((item) => (
-              <a
-                key={item}
-                href="#"
-                className="block text-sm tracking-widest text-white hover:text-molten-gold transition duration-300 py-2"
-              >
-                {item}
-              </a>
-            ))}
-            <button className="w-full text-left px-0 py-2 border-b border-white/20 text-white text-sm tracking-widest hover:text-molten-gold transition duration-300">
+            <a
+              href="https://discord.gg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-sm tracking-widest text-white hover:text-molten-gold transition duration-300 py-2"
+              onClick={() => setMenuOpen(false)}
+            >
               Temple
-            </button>
+            </a>
+            <span className="block text-sm tracking-widest text-white/60 py-2 cursor-not-allowed select-none">
+              Guild
+            </span>
             
             {isAuthenticated && user ? (
               <div className="pt-4 border-t border-molten-gold/20 space-y-3">

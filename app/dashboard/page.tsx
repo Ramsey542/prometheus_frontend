@@ -19,7 +19,6 @@ interface WalletSettings {
   dip_recovery_percentage: number
   dip_recovery_timeout: number
   slippage: number | ''
-  buy_strategy?: string
   max_buys_per_mirror_per_hour?: number
   max_buys_per_mirror_per_day?: number
   max_buys_per_token_per_day?: number
@@ -36,7 +35,6 @@ export default function DashboardPage() {
     dip_recovery_percentage: 5,
     dip_recovery_timeout: 600,
     slippage: 1,
-    buy_strategy: 'constant_size',
     max_buys_per_mirror_per_hour: 1,
     max_buys_per_mirror_per_day: 1,
     max_buys_per_token_per_day: 1
@@ -46,12 +44,10 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
-  const [editingField, setEditingField] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState<string>('')
 
   const swapStrategies = [
     { value: 'none', label: 'None' },
-    { value: 'fixed_buys', label: 'Fixed Buys' }
+    { value: 'fixed_buys', label: 'Constant Size' }
   ]
 
   const profile = useSelector((state: RootState) => state.auth.profile)
@@ -94,6 +90,9 @@ export default function DashboardPage() {
       const payload = {
         ...settings,
         slippage: settings.slippage === '' ? 0 : settings.slippage,
+        max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour ?? undefined,
+        max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day ?? undefined,
+        max_buys_per_token_per_day: settings.max_buys_per_token_per_day ?? undefined,
       }
 
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings`, {
@@ -169,7 +168,7 @@ export default function DashboardPage() {
 
           <div className="space-y-4 md:space-y-6">
             <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
-              <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Swap Strategy</h3>
+              <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Buy Strategy</h3>
               <div className="relative">
                 <button
                   onClick={() => setShowDropdown(!showDropdown)}
@@ -423,90 +422,58 @@ export default function DashboardPage() {
               <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Advanced Filters</h3>
               
               <div className="space-y-4">
-                <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-orbitron font-semibold text-white">Buy Strategy</h4>
-                    <button
-                      disabled
-                      className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                    >
-                      change
-                    </button>
-                  </div>
-                  <p className="text-sm text-white/80 font-space-grotesk capitalize">
-                    {settings.buy_strategy?.replace(/_/g, ' ') || 'Constant Size'}
-                  </p>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                    Max buys per mirror per hour
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.max_buys_per_mirror_per_hour ?? ''}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      max_buys_per_mirror_per_hour: e.target.value === '' ? undefined : parseInt(e.target.value) || undefined
+                    }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="1"
+                    step="1"
+                    placeholder="1"
+                  />
                 </div>
 
-                <div className="space-y-3">
-                  <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-orbitron text-white font-semibold">Max buys per mirror per hour</label>
-                      <div className="flex gap-2">
-                        <button
-                          disabled
-                          className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                        >
-                          change
-                        </button>
-                        <button
-                          disabled
-                          className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                        >
-                          remove
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-white/80 font-space-grotesk">
-                      {settings.max_buys_per_mirror_per_hour ?? '1'}
-                    </p>
-                  </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                    Max buys per mirror per day
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.max_buys_per_mirror_per_day ?? ''}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      max_buys_per_mirror_per_day: e.target.value === '' ? undefined : parseInt(e.target.value) || undefined
+                    }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="1"
+                    step="1"
+                    placeholder="1"
+                  />
+                </div>
 
-                  <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-orbitron text-white font-semibold">Max buys per mirror per day</label>
-                      <div className="flex gap-2">
-                        <button
-                          disabled
-                          className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                        >
-                          change
-                        </button>
-                        <button
-                          disabled
-                          className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                        >
-                          remove
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-white/80 font-space-grotesk">
-                      {settings.max_buys_per_mirror_per_day ?? '1'}
-                    </p>
-                  </div>
-
-                  <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-orbitron text-white font-semibold">Max buys per token per day</label>
-                      <div className="flex gap-2">
-                        <button
-                          disabled
-                          className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                        >
-                          change
-                        </button>
-                        <button
-                          disabled
-                          className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                        >
-                          remove
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-white/80 font-space-grotesk">
-                      {settings.max_buys_per_token_per_day ?? '1'}
-                    </p>
-                  </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                    Max buys per token per day
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.max_buys_per_token_per_day ?? ''}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      max_buys_per_token_per_day: e.target.value === '' ? undefined : parseInt(e.target.value) || undefined
+                    }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="1"
+                    step="1"
+                    placeholder="1"
+                  />
                 </div>
               </div>
             </div>

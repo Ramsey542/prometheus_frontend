@@ -43,7 +43,7 @@ export default function CustomBuysPage() {
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
         <div className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-4 md:p-8 shadow-2xl shadow-molten-gold/10">
-          <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6">Sell Owned Tokens</h1>
+          <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6">Sell Owner Tokens</h1>
 
           {errorMessage && (
             <motion.div

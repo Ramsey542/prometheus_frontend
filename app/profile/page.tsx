@@ -110,7 +110,6 @@ function ProfilePageContent() {
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawSuccess, setWithdrawSuccess] = useState<any>(null)
   const [withdrawError, setWithdrawError] = useState<string | null>(null)
-  console.log('profile', profile)
   const [copyTradingStats, setCopyTradingStats] = useState<CopyTradingStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
@@ -472,7 +471,10 @@ function ProfilePageContent() {
       const settings = walletSettings[walletAddress]
       const normalized = {
         ...settings,
-        slippage: settings.slippage === '' ? 0 : settings.slippage
+        slippage: settings.slippage === '' ? 0 : settings.slippage,
+        max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
+        max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day,
+        max_buys_per_token_per_day: settings.max_buys_per_token_per_day,
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
       
@@ -848,7 +850,7 @@ function ProfilePageContent() {
               {walletSettings[showWalletSettings] && (
                 <div className="space-y-4">
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
-                    <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Swap Strategy</h4>
+                    <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Buy Strategy</h4>
                     <select
                       value={walletSettings[showWalletSettings].swap_strategy || 'none'}
                       onChange={(e) => setWalletSettings(prev => ({
@@ -861,7 +863,7 @@ function ProfilePageContent() {
                       className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
                     >
                       <option value="none">None</option>
-                      <option value="fixed_buys">Fixed Buys</option>
+                      <option value="fixed_buys">Constant Size</option>
                     </select>
                   </div>
 
@@ -1057,90 +1059,67 @@ function ProfilePageContent() {
                     <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Advanced Filters</h4>
                     
                     <div className="space-y-4">
-                      <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-sm font-orbitron font-semibold text-white">Buy Strategy</h4>
-                          <button
-                            disabled
-                            className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                          >
-                            change
-                          </button>
-                        </div>
-                        <p className="text-sm text-white/80 font-space-grotesk capitalize">
-                          {walletSettings[showWalletSettings].buy_strategy?.replace(/_/g, ' ') || 'Constant Size'}
-                        </p>
+                      <div>
+                        <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Max buys per mirror per hour
+                        </label>
+                        <input
+                          type="number"
+                          value={walletSettings[showWalletSettings].max_buys_per_mirror_per_hour ?? ''}
+                          onChange={(e) => setWalletSettings(prev => ({
+                            ...prev,
+                            [showWalletSettings]: {
+                              ...prev[showWalletSettings],
+                              max_buys_per_mirror_per_hour: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
+                            }
+                          }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="1"
+                          step="1"
+                          placeholder="1"
+                        />
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-orbitron text-white font-semibold">Max buys per mirror per hour</label>
-                            <div className="flex gap-2">
-                              <button
-                                disabled
-                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                              >
-                                change
-                              </button>
-                              <button
-                                disabled
-                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                              >
-                                remove
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-sm text-white/80 font-space-grotesk">
-                            {walletSettings[showWalletSettings].max_buys_per_mirror_per_hour ?? '1'}
-                          </p>
-                        </div>
+                      <div>
+                        <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Max buys per mirror per day
+                        </label>
+                        <input
+                          type="number"
+                          value={walletSettings[showWalletSettings].max_buys_per_mirror_per_day ?? ''}
+                          onChange={(e) => setWalletSettings(prev => ({
+                            ...prev,
+                            [showWalletSettings]: {
+                              ...prev[showWalletSettings],
+                              max_buys_per_mirror_per_day: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
+                            }
+                          }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="1"
+                          step="1"
+                          placeholder="1"
+                        />
+                      </div>
 
-                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-orbitron text-white font-semibold">Max buys per mirror per day</label>
-                            <div className="flex gap-2">
-                              <button
-                                disabled
-                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                              >
-                                change
-                              </button>
-                              <button
-                                disabled
-                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                              >
-                                remove
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-sm text-white/80 font-space-grotesk">
-                            {walletSettings[showWalletSettings].max_buys_per_mirror_per_day ?? '1'}
-                          </p>
-                        </div>
-
-                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-orbitron text-white font-semibold">Max buys per token per day</label>
-                            <div className="flex gap-2">
-                              <button
-                                disabled
-                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                              >
-                                change
-                              </button>
-                              <button
-                                disabled
-                                className="text-xs text-gray-500 font-space-grotesk underline cursor-not-allowed opacity-50"
-                              >
-                                remove
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-sm text-white/80 font-space-grotesk">
-                            {walletSettings[showWalletSettings].max_buys_per_token_per_day ?? '1'}
-                          </p>
-                        </div>
+                      <div>
+                        <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Max buys per token per day
+                        </label>
+                        <input
+                          type="number"
+                          value={walletSettings[showWalletSettings].max_buys_per_token_per_day ?? ''}
+                          onChange={(e) => setWalletSettings(prev => ({
+                            ...prev,
+                            [showWalletSettings]: {
+                              ...prev[showWalletSettings],
+                              max_buys_per_token_per_day: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
+                            }
+                          }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="1"
+                          step="1"
+                          placeholder="1"
+                        />
                       </div>
                     </div>
                   </div>
@@ -1614,7 +1593,7 @@ function ProfilePageContent() {
                 </div>
                 <div className="text-center">
                   <p className="text-xl md:text-2xl font-orbitron font-bold text-red-400">
-                    {isLoading ? '...' : profile?.failed_trades || 0}
+                    {isLoading ? '...' : (profile?.failed_trades ?? copyTradingStats?.failed_trades ?? 0)}
                   </p>
                   <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
                     Failed Trades
@@ -1928,7 +1907,7 @@ function ProfilePageContent() {
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <XCircle size={20} className="md:w-6 md:h-6 text-red-400 mx-auto mb-2 md:mb-3" />
               <p className="text-xl md:text-2xl font-orbitron font-bold text-red-400 mb-1">
-                {isLoading ? '...' : profile?.failed_trades || 0}
+                {isLoading ? '...' : (profile?.failed_trades ?? copyTradingStats?.failed_trades ?? 0)}
               </p>
               <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
                 Failed Trades

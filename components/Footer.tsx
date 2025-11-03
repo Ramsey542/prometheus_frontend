@@ -4,10 +4,9 @@ import { motion } from 'framer-motion'
 
 export default function Footer() {
   const footerLinks = [
-    { label: "Lightpaper", href: "#" },
-    { label: "Status", href: "#" },
-    { label: "Terms", href: "#" },
-    { label: "Privacy", href: "#" }
+    { label: "Risk", href: "/risk" },
+    { label: "Terms", href: "/terms-of-service" },
+    { label: "Privacy", href: "/privacy" }
   ]
 
   return (

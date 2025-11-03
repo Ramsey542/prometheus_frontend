@@ -21,9 +21,6 @@ export default function TelemetrySection() {
               Public telemetry: fills, median latency, same-block rate — refreshed in real time.
             </p>
           </div>
-          <button className="px-8 py-4 border border-white text-white font-orbitron font-bold tracking-wider hover:bg-white/10 transition duration-300 rounded-lg">
-            Open Telemetry
-          </button>
         </motion.div>
 
         <motion.div

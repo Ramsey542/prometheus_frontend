@@ -144,31 +144,19 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
             <Image src="/assets/sol.png" alt="SOL" width={16} height={16} className="w-4 h-4" />
             SOL
           </motion.button>
-          <div className="flex-1 relative group">
-            <motion.button
-              onClick={() => {
-                if (selectedCoin === 'sol') {
-                  return
-                }
-                handleCoinToggle('bnb')
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-orbitron font-semibold transition-all duration-300 w-full ${
-                selectedCoin === 'bnb'
-                  ? 'bg-gradient-to-r from-molten-gold to-yellow-500 text-void-black shadow-lg shadow-molten-gold/30'
-                  : 'text-white/60 opacity-50 cursor-not-allowed'
-              }`}
-              whileHover={selectedCoin === 'bnb' ? { scale: 1.02 } : {}}
-              whileTap={selectedCoin === 'bnb' ? { scale: 0.98 } : {}}
-            >
-              <Image src="/assets/bnb.png" alt="BNB" width={16} height={16} className="w-4 h-4" />
-              BNB
-            </motion.button>
-            {selectedCoin === 'sol' && (
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                BNB is not live yet
-              </div>
-            )}
-          </div>
+          <motion.button
+            onClick={() => handleCoinToggle('bnb')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-orbitron font-semibold transition-all duration-300 ${
+              selectedCoin === 'bnb'
+                ? 'bg-gradient-to-r from-molten-gold to-yellow-500 text-void-black shadow-lg shadow-molten-gold/30'
+                : 'text-white/60 hover:text-molten-gold hover:bg-gradient-to-r hover:from-molten-gold/10 hover:to-yellow-500/10'
+            }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Image src="/assets/bnb.png" alt="BNB" width={16} height={16} className="w-4 h-4" />
+            BNB
+          </motion.button>
         </div>
       </div>
 
