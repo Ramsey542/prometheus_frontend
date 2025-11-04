@@ -113,7 +113,6 @@ function ProfilePageContent() {
   const [copyTradingStats, setCopyTradingStats] = useState<CopyTradingStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
-  
   const currentSection = searchParams.get('section') || 'overview'
   useEffect(() => {
     if (user) {
@@ -1834,7 +1833,7 @@ function ProfilePageContent() {
                     </motion.button>
                   </div>
                   <p className="text-xl md:text-2xl font-orbitron font-bold text-molten-gold break-words">
-                    {isLoading || balanceRefreshing ? '...' : `${parseFloat(selectedCoin === 'sol' ? (profile?.sol_balance || '0') : (profile?.bnb_balance || '0')).toFixed(4)} ${selectedCoin.toUpperCase()}`}
+                    {isLoading || balanceRefreshing ? '...' : `${parseFloat(profile?.sol_balance || '0').toFixed(4)} ${selectedCoin.toUpperCase()}`}
                   </p>
                   <div className="mt-3">
                     <motion.button
