@@ -70,9 +70,6 @@ export default function RiteOfFireSection() {
           viewport={{ once: true }}
           className="flex justify-center"
         >
-          <button className="px-12 py-6 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 rounded-lg">
-            Start Copy Trading
-          </button>
         </motion.div>
       </div>
     </section>

@@ -404,8 +404,9 @@ function ProfilePageContent() {
 
   const handleUpdateTradeAmount = async () => {
     const amount = parseFloat(tradeAmountValue)
-    if (isNaN(amount) || amount < Number(config.trade_amount)) {
-      setTradeAmountError(`Trade amount must be at least ${config.trade_amount} ${selectedCoin.toUpperCase()}`)
+    const trade_amount = selectedCoin === 'sol' ? config.sol_trade_amount : config.bnb_trade_amount
+    if (isNaN(amount) || amount < Number(trade_amount)) {
+      setTradeAmountError(`Trade amount must be at least ${trade_amount} ${selectedCoin.toUpperCase()}`)
       return
     }
 
@@ -1680,7 +1681,7 @@ function ProfilePageContent() {
                       value={tradeAmountValue}
                       onChange={(e) => handleTradeAmountChange(e.target.value)}
                       className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                      placeholder={`Minimum ${config.trade_amount} ${selectedCoin.toUpperCase()}`}
+                      placeholder={`Minimum ${selectedCoin === 'sol' ? config.sol_trade_amount : config.bnb_trade_amount} ${selectedCoin.toUpperCase()}`}
                     />
                     {tradeAmountError && (
                       <motion.div

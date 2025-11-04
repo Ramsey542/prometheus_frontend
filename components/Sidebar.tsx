@@ -47,7 +47,7 @@ const navigationSections: NavigationSection[] = [
       { id: 'wallet-tracker', label: 'Wallet Tracker', icon: Zap },
       { id: 'tracker-logs', label: 'Tracker Logs', icon: MessageCircle },
       { id: 'controls', label: 'Controls', icon: BarChart3, isActive: true },
-      { id: 'custom-buys', label: 'Custom Swaps', icon: Banknote, isActive: true },
+      { id: 'custom-buys', label: 'Held Tokens', icon: Banknote, isActive: true },
     ]
   },
 

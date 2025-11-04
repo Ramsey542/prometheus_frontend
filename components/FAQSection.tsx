@@ -98,9 +98,6 @@ export default function FAQSection() {
           viewport={{ once: true }}
           className="flex justify-center"
         >
-          <button className="px-8 py-4 bg-black/50 border border-white text-white font-orbitron font-bold tracking-wider hover:bg-white/10 transition duration-300 rounded-lg">
-            Read the Covenant →
-          </button>
         </motion.div>
       </div>
     </section>

@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { logout } from '../store/slices/authSlice'
+import { config } from '../lib/config'
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -16,7 +17,7 @@ export default function Navbar() {
   const pathname = usePathname()
   const { isAuthenticated, user, selectedCoin } = useAppSelector((state) => state.auth)
   const isAuthenticatedPage = isAuthenticated && (pathname === '/profile' || pathname === '/dashboard' || pathname === '/custom-buys')
-
+  console.log('the discord link', config.discord_link)
   useEffect(() => {
     if (!isAuthenticatedPage) return
 
@@ -52,8 +53,8 @@ export default function Navbar() {
           {!isAuthenticatedPage && (
             <>
               <a
-                href="https://discord.gg"
-                target="_blank"
+                href={config.discord_link}
+                target={config.discord_link ? '_blank' : '_self'}
                 rel="noopener noreferrer"
                 className="px-4 py-2 border border-white text-white text-sm tracking-widest hover:bg-white/10 transition duration-300 rounded-lg"
               >
@@ -103,8 +104,8 @@ export default function Navbar() {
               )}
               {isAuthenticatedPage && (
                 <a
-                  href="https://discord.gg"
-                  target="_blank"
+                  href={config.discord_link}
+                  target={config.discord_link ? '_blank' : '_self'}
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/20 transition duration-300"
                 >
@@ -155,8 +156,8 @@ export default function Navbar() {
         >
           <div className="px-6 py-4 space-y-4">
             <a
-              href="https://discord.gg"
-              target="_blank"
+              href={config.discord_link}
+              target={config.discord_link ? '_blank' : '_self'}
               rel="noopener noreferrer"
               className="block text-sm tracking-widest text-white hover:text-molten-gold transition duration-300 py-2"
               onClick={() => setMenuOpen(false)}
