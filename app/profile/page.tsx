@@ -20,7 +20,10 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  RefreshCw
+  RefreshCw,
+  Share2,
+  Download,
+  X
 } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { logout, getProfile } from '../../store/slices/authSlice'
@@ -73,7 +76,6 @@ function ProfilePageContent() {
   const searchParams = useSearchParams()
   const { user, wallet, profile, isLoading, error, selectedCoin } = useAppSelector((state) => state.auth)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
-  
   const [trackedWallets, setTrackedWallets] = useState<TrackedWallet[]>([])
   const [newWalletAddress, setNewWalletAddress] = useState('')
   const [walletTrackerLoading, setWalletTrackerLoading] = useState(false)
@@ -113,12 +115,23 @@ function ProfilePageContent() {
   const [copyTradingStats, setCopyTradingStats] = useState<CopyTradingStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
+  const [pnlImageModal, setPnlImageModal] = useState<{ open: boolean; imageUrl: string | null; loading: boolean }>({ open: false, imageUrl: null, loading: false })
+  const [showPrivateKeyWarning, setShowPrivateKeyWarning] = useState(false)
   const currentSection = searchParams.get('section') || 'overview'
   useEffect(() => {
     if (user) {
       dispatch(getProfile(selectedCoin))
     }
   }, [dispatch, user, selectedCoin])
+
+  useEffect(() => {
+    if (user && profile && currentSection === 'overview') {
+      const hasSeenWarning = localStorage.getItem('private_key_warning_seen')
+      if (!hasSeenWarning) {
+        setShowPrivateKeyWarning(true)
+      }
+    }
+  }, [user, profile, currentSection])
 
   useEffect(() => {
     if (profile?.trade_amount !== undefined) {
@@ -334,7 +347,6 @@ function ProfilePageContent() {
       setWalletTrackerError(null)
       
       const response = await walletTrackerApi.getAllLogs(page, 10, selectedCoin)
-      console.log('response', response)
       if (response && typeof response === 'object' && 'logs' in response) {
         setTrackerLogs(response.logs || [])
         setLogsTotalPages(response.total_pages || 1)
@@ -551,7 +563,6 @@ function ProfilePageContent() {
         throw new Error(message)
       }
       const data = await response.json()
-      console.log('data', data)
       setWithdrawSuccess(data)
       await dispatch(getProfile(selectedCoin))
     } catch (err: any) {
@@ -563,6 +574,62 @@ function ProfilePageContent() {
 
   const formatWalletAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+  const handleGeneratePnlImage = async (log: CopyTradingLog) => {
+    if (!log.target_token || !log.token_name || !log.amount_in || !log.amount_out) {
+      return
+    }
+
+    try {
+      setPnlImageModal({ open: true, imageUrl: null, loading: true })
+      const blob = await walletTrackerApi.generatePnlImage(
+        log.target_token,
+        log.token_name,
+        log.amount_in,
+        log.amount_out,
+        log.pnl ?? 0,
+        log.transaction_signature ?? '',
+        selectedCoin
+      )
+      const imageUrl = URL.createObjectURL(blob)
+      setPnlImageModal({ open: true, imageUrl, loading: false })
+    } catch (err: any) {
+      console.error('Failed to generate PnL image:', err)
+      setPnlImageModal({ open: false, imageUrl: null, loading: false })
+    }
+  }
+
+  const handleDownloadPnlImage = () => {
+    if (!pnlImageModal.imageUrl) return
+    const link = document.createElement('a')
+    link.href = pnlImageModal.imageUrl
+    link.download = `pnl-${Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleSharePnlImage = async () => {
+    if (!pnlImageModal.imageUrl) return
+    
+    try {
+      const response = await fetch(pnlImageModal.imageUrl)
+      const blob = await response.blob()
+      const file = new File([blob], 'pnl-image.png', { type: 'image/png' })
+      
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'PnL Trade Result',
+        })
+      } else {
+        await navigator.clipboard.writeText(pnlImageModal.imageUrl)
+        alert('Image URL copied to clipboard')
+      }
+    } catch (err) {
+      console.error('Failed to share:', err)
+    }
   }
 
   const renderWalletTrackerSection = () => (
@@ -1405,6 +1472,28 @@ function ProfilePageContent() {
                             <span className="text-xs text-molten-gold">Copied</span>
                           )}
                         </div>
+                        {/* PnL Display for successful user_sell */}
+                        {log.event_type === 'user_sell' && log.status === 'success' && log.pnl !== null && log.pnl !== undefined && (
+                          <div className="mt-3 pt-3 border-t border-molten-gold/10">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">PnL</p>
+                                <p className={`font-orbitron font-bold text-sm ${log.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {log.pnl >= 0 ? '+' : ''}{log.pnl.toFixed(6)} {selectedCoin.toUpperCase()}
+                                </p>
+                              </div>
+                              <motion.button
+                                onClick={() => handleGeneratePnlImage(log)}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300"
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                <Share2 size={14} />
+                                <span className="text-xs font-orbitron font-semibold">Share</span>
+                              </motion.button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     {log.token_name && (
@@ -1593,7 +1682,20 @@ function ProfilePageContent() {
                 </div>
                 <div className="text-center">
                   <p className="text-xl md:text-2xl font-orbitron font-bold text-red-400">
-                    {isLoading ? '...' : (profile?.failed_trades ?? copyTradingStats?.failed_trades ?? 0)}
+                    {isLoading ? '...' : (() => {
+                      const fromProfile = profile?.failed_trades
+                      if (typeof fromProfile === 'number') return fromProfile
+                      const fromStats = copyTradingStats?.failed_trades
+                      if (typeof fromStats === 'number') return fromStats
+                      const total = typeof profile?.total_trades === 'number' ? profile.total_trades : undefined
+                      const winRate = typeof profile?.win_rate === 'number' ? profile.win_rate : undefined
+                      if (typeof total === 'number' && typeof winRate === 'number') {
+                        const wins = Math.round((winRate / 100) * total)
+                        const failed = Math.max(0, total - wins)
+                        return failed
+                      }
+                      return 0
+                    })()}
                   </p>
                   <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
                     Failed Trades
@@ -1907,7 +2009,20 @@ function ProfilePageContent() {
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <XCircle size={20} className="md:w-6 md:h-6 text-red-400 mx-auto mb-2 md:mb-3" />
               <p className="text-xl md:text-2xl font-orbitron font-bold text-red-400 mb-1">
-                {isLoading ? '...' : (profile?.failed_trades ?? copyTradingStats?.failed_trades ?? 0)}
+                {isLoading ? '...' : (() => {
+                  const fromProfile = profile?.failed_trades
+                  if (typeof fromProfile === 'number') return fromProfile
+                  const fromStats = copyTradingStats?.failed_trades
+                  if (typeof fromStats === 'number') return fromStats
+                  const total = typeof profile?.total_trades === 'number' ? profile.total_trades : undefined
+                  const winRate = typeof profile?.win_rate === 'number' ? profile.win_rate : undefined
+                  if (typeof total === 'number' && typeof winRate === 'number') {
+                    const wins = Math.round((winRate / 100) * total)
+                    const failed = Math.max(0, total - wins)
+                    return failed
+                  }
+                  return 0
+                })()}
               </p>
               <p className="text-xs font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
                 Failed Trades
@@ -2045,6 +2160,144 @@ function ProfilePageContent() {
       {currentSection === 'wallet-tracker' ? renderWalletTrackerSection() : 
        currentSection === 'tracker-logs' ? renderTrackerLogs() : 
        renderProfileOverview()}
+
+      {showPrivateKeyWarning && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-6 max-w-lg w-full shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl md:text-2xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
+                <Shield size={24} />
+                Important Security Warning
+              </h2>
+              <motion.button
+                onClick={() => {
+                  localStorage.setItem('private_key_warning_seen', 'true')
+                  setShowPrivateKeyWarning(false)
+                }}
+                className="text-white/60 hover:text-white transition-colors"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <X size={24} />
+              </motion.button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                <p className="text-red-400 font-orbitron font-semibold text-sm mb-2">
+                  ⚠️ CRITICAL: Save Your Private Key Immediately
+                </p>
+                <p className="text-white/80 font-space-grotesk text-sm leading-relaxed">
+                  Your private key is displayed in your profile. This key gives <strong>full control</strong> over your wallet and funds.
+                </p>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                <p className="text-yellow-400 font-orbitron font-semibold text-sm mb-2">
+                  🔒 Security Best Practices:
+                </p>
+                <ul className="text-white/80 font-space-grotesk text-sm space-y-2 list-disc list-inside leading-relaxed">
+                  <li>Save your private key in a secure location (password manager, encrypted file, or physical safe)</li>
+                  <li><strong>Never share</strong> your private key with anyone.</li>
+                  <li>Do not store it in plain text on your computer or in cloud storage</li>
+                  <li>If you lose your private key, you will permanently lose access to your wallet and funds</li>
+                </ul>
+              </div>
+
+              <div className="bg-molten-gold/10 border border-molten-gold/30 rounded-lg p-4">
+                <p className="text-molten-gold font-orbitron font-semibold text-sm mb-2">
+                  ✅ What to Do:
+                </p>
+                <p className="text-white/80 font-space-grotesk text-sm leading-relaxed">
+                  Go to your <strong>Wallet Information</strong> section below, click the eye icon to reveal your private key, and save it securely before continuing.
+                </p>
+              </div>
+            </div>
+
+            <motion.button
+              onClick={() => {
+                localStorage.setItem('private_key_warning_seen', 'true')
+                setShowPrivateKeyWarning(false)
+              }}
+              className="w-full px-6 py-3 bg-molten-gold text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-colors duration-300"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              I Understand
+            </motion.button>
+          </motion.div>
+        </div>
+      )}
+
+      {pnlImageModal.open && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-6 max-w-2xl w-full shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-orbitron font-bold text-molten-gold">
+                PnL Trade Result
+              </h2>
+              <motion.button
+                onClick={() => {
+                  if (pnlImageModal.imageUrl) {
+                    URL.revokeObjectURL(pnlImageModal.imageUrl)
+                  }
+                  setPnlImageModal({ open: false, imageUrl: null, loading: false })
+                }}
+                className="text-white/60 hover:text-white transition-colors"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <X size={24} />
+              </motion.button>
+            </div>
+
+            {pnlImageModal.loading ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw size={32} className="animate-spin text-molten-gold" />
+                <span className="ml-3 text-white font-space-grotesk">Generating image...</span>
+              </div>
+            ) : pnlImageModal.imageUrl ? (
+              <div className="space-y-4">
+                <div className="bg-void-black/50 rounded-lg p-4 flex items-center justify-center overflow-auto max-h-[60vh]">
+                  <img
+                    src={pnlImageModal.imageUrl}
+                    alt="PnL Trade Result"
+                    className="max-w-[500px] max-h-[500px] w-auto h-auto rounded-lg object-contain"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <motion.button
+                    onClick={handleDownloadPnlImage}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Download size={18} />
+                    <span className="font-orbitron font-semibold">Download</span>
+                  </motion.button>
+                  <motion.button
+                    onClick={handleSharePnlImage}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 rounded-lg hover:bg-indigo-500/20 transition-colors duration-300"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Share2 size={18} />
+                    <span className="font-orbitron font-semibold">Share</span>
+                  </motion.button>
+                </div>
+              </div>
+            ) : null}
+          </motion.div>
+        </div>
+      )}
     </ProfileLayout>
   )
 }

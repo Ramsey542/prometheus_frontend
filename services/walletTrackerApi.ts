@@ -230,5 +230,54 @@ export const walletTrackerApi = {
       return await handleResponse(response);
     });
   },
+
+  async getTokenBalances(coin: string = 'sol', offset: number = 0, limit: number = 20): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet/tokens/balances/${coin}?offset=${offset}&limit=${limit}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return await handleResponse(response);
+    });
+  },
+
+  async generatePnlImage(tokenAddress: string, tokenName: string, sent: string, received: string, pnl: number | null | undefined, transactionSignature: string | null, coin: string = 'sol'): Promise<Blob> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/pnl-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token_address: tokenAddress,
+          token_name: tokenName,
+          sent: sent,
+          received: received,
+          pnl: pnl,
+          transaction_signature: transactionSignature,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new WalletTrackerApiError(
+          errorData.detail || `HTTP error! status: ${response.status}`,
+          response.status
+        );
+      }
+
+      return await response.blob();
+    });
+  },
 };
 

@@ -17,7 +17,6 @@ export default function Navbar() {
   const pathname = usePathname()
   const { isAuthenticated, user, selectedCoin } = useAppSelector((state) => state.auth)
   const isAuthenticatedPage = isAuthenticated && (pathname === '/profile' || pathname === '/dashboard' || pathname === '/custom-buys')
-  console.log('the discord link', config.discord_link)
   useEffect(() => {
     if (!isAuthenticatedPage) return
 

@@ -96,6 +96,7 @@ export interface CopyTradingLog {
   error_message: string | null;
   event_data: string | null;
   created_at: string;
+  pnl?: number | null;
 }
 
 export interface WalletStats {
