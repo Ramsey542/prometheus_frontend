@@ -6,7 +6,6 @@ import DashboardLayout from '../../components/DashboardLayout'
 import { RefreshCw, ExternalLink, XCircle, CheckCircle } from 'lucide-react'
 import { useAppSelector } from '../../store/hooks'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
-import Image from 'next/image'
 
 interface TokenBalance {
   token_address: string
@@ -29,6 +28,7 @@ export default function CustomBuysPage() {
   const [hideLowBalances, setHideLowBalances] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalBalance, setTotalBalance] = useState(0)
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const [sellModal, setSellModal] = useState<{ token: TokenBalance | null; open: boolean }>({ token: null, open: false })
   const [sellAmount, setSellAmount] = useState('')
   const [slippage, setSlippage] = useState('')
@@ -250,19 +250,20 @@ export default function CustomBuysPage() {
                       <motion.tr
                         key={token.token_address}
                         initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
+              animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05 }}
                         className="border-b border-molten-gold/10 hover:bg-molten-gold/5 transition-colors duration-200"
                       >
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
-                            {token.logo_uri ? (
-                              <Image
+                            {token.logo_uri && !failedImages.has(token.logo_uri) ? (
+                              <img
                                 src={token.logo_uri}
                                 alt={token.token_symbol || 'Token'}
-                                width={32}
-                                height={32}
-                                className="w-8 h-8 rounded-full"
+                                className="w-8 h-8 rounded-full object-cover"
+                                onError={() => {
+                                  setFailedImages(prev => new Set(prev).add(token.logo_uri!))
+                                }}
                               />
                             ) : (
                               <div className="w-8 h-8 rounded-full bg-molten-gold/20 flex items-center justify-center">
@@ -441,7 +442,7 @@ export default function CustomBuysPage() {
                 <label className="block text-sm font-orbitron font-semibold text-white mb-2">
                   Sell Amount
                 </label>
-                <input
+              <input
                   type="number"
                   value={sellAmount}
                   onChange={(e) => setSellAmount(e.target.value)}
@@ -472,24 +473,24 @@ export default function CustomBuysPage() {
                 <p className="text-xs text-white/60 mt-1">
                   Balance: {parseFloat(sellModal.token.balance || '0').toFixed(4)}
                 </p>
-              </div>
+            </div>
 
               <div>
                 <label className="block text-sm font-orbitron font-semibold text-white mb-2">
                   Slippage (%)
                 </label>
-                <input
-                  type="number"
-                  value={slippage}
-                  onChange={(e) => setSlippage(e.target.value)}
+              <input
+                type="number"
+                value={slippage}
+                onChange={(e) => setSlippage(e.target.value)}
                   className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none"
-                  placeholder="1.0"
-                  min="1"
-                  max="100"
-                  step="0.1"
+                placeholder="1.0"
+                min="1"
+                max="100"
+                step="0.1"
                   disabled={selling}
-                />
-              </div>
+              />
+            </div>
 
               <div className="flex gap-3 pt-2">
                 <motion.button
@@ -501,24 +502,24 @@ export default function CustomBuysPage() {
                     setSellSuccess(null)
                     setTransactionSignature(null)
                   }}
-                  disabled={selling}
+                disabled={selling}
                   className="flex-1 px-4 py-2 bg-void-black/50 border border-white/20 text-white rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
                   Cancel
                 </motion.button>
-                <motion.button
-                  onClick={handleSell}
+              <motion.button
+                onClick={handleSell}
                   disabled={selling || !sellAmount || !slippage}
                   className="flex-1 px-4 py-2 bg-red-500/20 border border-red-500/40 text-red-300 font-orbitron font-bold rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
                   {selling ? 'Processing...' : 'Sell'}
-                </motion.button>
-              </div>
+              </motion.button>
             </div>
+          </div>
           </motion.div>
         </div>
       )}
