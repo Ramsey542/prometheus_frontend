@@ -97,6 +97,11 @@ export interface CopyTradingLog {
   event_data: string | null;
   created_at: string;
   pnl?: number | null;
+  is_active?: boolean;
+  tp_sl_is_active?: boolean;
+  current_price?: number | null;
+  take_profit_levels?: Array<{ profit_percentage: number; sell_percentage: number }> | null;
+  stop_loss_levels?: Array<{ loss_percentage: number; sell_percentage: number }> | null;
 }
 
 export interface WalletStats {

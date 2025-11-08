@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <Navbar />
       
       {/* Main Content */}
-      <main className="md:ml-64 pt-36 min-h-screen">
+      <main className="md:ml-64 pt-20 min-h-screen">
         <div className="p-4 md:p-8">
           {children}
         </div>

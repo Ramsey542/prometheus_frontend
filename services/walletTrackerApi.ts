@@ -36,7 +36,7 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/track/${coin}`, {
+      const response = await fetch(`${config.apiBaseUrl}/track/wallet/${coin}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -59,7 +59,7 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/track/${coin}/${walletAddress}`, {
+      const response = await fetch(`${config.apiBaseUrl}/track/wallet/${coin}/${walletAddress}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

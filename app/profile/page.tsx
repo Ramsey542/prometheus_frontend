@@ -19,6 +19,8 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   FileText,
   RefreshCw,
   Share2,
@@ -103,6 +105,13 @@ function ProfilePageContent() {
   const [showWalletSettings, setShowWalletSettings] = useState<string | null>(null)
   const [walletSettingsLoading, setWalletSettingsLoading] = useState(false)
   const [walletSettingsSuccess, setWalletSettingsSuccess] = useState<string | null>(null)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<{[key: string]: boolean}>({})
+  const [showAllTP, setShowAllTP] = useState<{[key: string]: boolean}>({})
+  const [showAllSL, setShowAllSL] = useState<{[key: string]: boolean}>({})
+  const [tpValidationErrors, setTpValidationErrors] = useState<{[key: string]: string | null}>({})
+  const [slValidationErrors, setSlValidationErrors] = useState<{[key: string]: string | null}>({})
+  const [tpSlIsActive, setTpSlIsActive] = useState<{[key: string]: boolean}>({})
+  const [stopTrackingModal, setStopTrackingModal] = useState<{open: boolean, walletAddress: string | null, isActive: boolean}>({open: false, walletAddress: null, isActive: false})
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
@@ -289,14 +298,44 @@ function ProfilePageContent() {
     }
   }
 
-  const handleStopTracking = async (walletAddress: string) => {
+  const handleStopTrackingClick = async (walletAddress: string) => {
+    try {
+      const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
+      const isActive = settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : false
+      
+      if (isActive) {
+        setStopTrackingModal({
+          open: true,
+          walletAddress,
+          isActive
+        })
+      } else {
+        await handleStopTracking(walletAddress, false)
+      }
+    } catch (err: any) {
+      console.error('Failed to check wallet settings:', err)
+      await handleStopTracking(walletAddress, false)
+    }
+  }
+
+  const handleStopTracking = async (walletAddress: string, disableTpSl: boolean = false) => {
     try {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
 
+      if (disableTpSl) {
+        const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
+        const updatedSettings = {
+          ...settings,
+          tp_sl_is_active: false
+        }
+        await walletTrackerApi.updateTrackedWalletSettings(walletAddress, updatedSettings, selectedCoin)
+      }
+
       await walletTrackerApi.stopTrackingWallet(walletAddress, selectedCoin)
       setWalletTrackerSuccess('Wallet tracking stopped successfully!')
+      setStopTrackingModal({open: false, walletAddress: null, isActive: false})
       await fetchTrackedWallets()
       await fetchCopyTradingStats()
     } catch (err: any) {
@@ -461,9 +500,121 @@ function ProfilePageContent() {
   const fetchWalletSettings = async (walletAddress: string) => {
     try {
       const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
-      setWalletSettings(prev => ({ ...prev, [walletAddress]: settings }))
+      console.log('the settings', settings)
+      setWalletSettings(prev => ({
+        ...prev,
+        [walletAddress]: {
+          ...settings,
+          take_profit_levels: settings.take_profit_levels && settings.take_profit_levels.length > 0
+            ? settings.take_profit_levels
+            : [{ profit_percentage: 0, sell_percentage: 0 }],
+          stop_loss_levels: settings.stop_loss_levels && settings.stop_loss_levels.length > 0
+            ? settings.stop_loss_levels
+            : [{ loss_percentage: 0, sell_percentage: 0 }]
+        }
+      }))
+      setTpSlIsActive(prev => ({
+        ...prev,
+        [walletAddress]: settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : true
+      }))
     } catch (err) {
       console.error('Failed to fetch wallet settings:', err)
+    }
+  }
+
+  const calculateTotalSellPercentage = (levels: any[]): number => {
+    return levels.reduce((sum, level) => sum + (level.sell_percentage || 0), 0)
+  }
+
+  const addTakeProfitLevel = (walletAddress: string) => {
+    const currentLevels = walletSettings[walletAddress]?.take_profit_levels || []
+    setWalletSettings(prev => ({
+      ...prev,
+      [walletAddress]: {
+        ...prev[walletAddress],
+        take_profit_levels: [...currentLevels, { profit_percentage: 0, sell_percentage: 0 }]
+      }
+    }))
+    setShowAllTP(prev => ({ ...prev, [walletAddress]: true }))
+  }
+
+  const removeTakeProfitLevel = (walletAddress: string, index: number) => {
+    const currentLevels = walletSettings[walletAddress]?.take_profit_levels || []
+    setWalletSettings(prev => ({
+      ...prev,
+      [walletAddress]: {
+        ...prev[walletAddress],
+        take_profit_levels: currentLevels.filter((_: any, i: number) => i !== index)
+      }
+    }))
+  }
+
+  const updateTakeProfitLevel = (walletAddress: string, index: number, field: 'profit_percentage' | 'sell_percentage', value: string) => {
+    const currentLevels = walletSettings[walletAddress]?.take_profit_levels || []
+    const updatedLevels = [...currentLevels]
+    const numValue = value === '' ? 0 : parseFloat(value) || 0
+    updatedLevels[index] = { ...updatedLevels[index], [field]: numValue }
+    setWalletSettings(prev => ({
+      ...prev,
+      [walletAddress]: {
+        ...prev[walletAddress],
+        take_profit_levels: updatedLevels
+      }
+    }))
+    
+    const total = calculateTotalSellPercentage(updatedLevels)
+    if (total > 100) {
+      setTpValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage cannot exceed 100%' }))
+    } else if (total < 100 && updatedLevels.some(l => l.profit_percentage > 0 || l.sell_percentage > 0)) {
+      setTpValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage must equal 100%' }))
+    } else {
+      setTpValidationErrors(prev => ({ ...prev, [walletAddress]: null }))
+    }
+  }
+
+  const addStopLossLevel = (walletAddress: string) => {
+    const currentLevels = walletSettings[walletAddress]?.stop_loss_levels || []
+    setWalletSettings(prev => ({
+      ...prev,
+      [walletAddress]: {
+        ...prev[walletAddress],
+        stop_loss_levels: [...currentLevels, { loss_percentage: 0, sell_percentage: 0 }]
+      }
+    }))
+    setShowAllSL(prev => ({ ...prev, [walletAddress]: true }))
+  }
+
+  const removeStopLossLevel = (walletAddress: string, index: number) => {
+    const currentLevels = walletSettings[walletAddress]?.stop_loss_levels || []
+    setWalletSettings(prev => ({
+      ...prev,
+      [walletAddress]: {
+        ...prev[walletAddress],
+        stop_loss_levels: currentLevels.filter((_: any, i: number) => i !== index)
+      }
+    }))
+  }
+
+  const updateStopLossLevel = (walletAddress: string, index: number, field: 'loss_percentage' | 'sell_percentage', value: string) => {
+    const currentLevels = walletSettings[walletAddress]?.stop_loss_levels || []
+    const updatedLevels = [...currentLevels]
+    const numValue = value === '' ? 0 : parseFloat(value) || 0
+    updatedLevels[index] = { ...updatedLevels[index], [field]: numValue }
+    setWalletSettings(prev => ({
+      ...prev,
+      [walletAddress]: {
+        ...prev[walletAddress],
+        stop_loss_levels: updatedLevels
+      }
+    }))
+    
+    const total = calculateTotalSellPercentage(updatedLevels)
+    if (total > 100) {
+      setSlValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage cannot exceed 100%' }))
+    } else if (total < 100 && updatedLevels.some(l => l.loss_percentage > 0 || l.sell_percentage > 0)) {
+      setSlValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage must equal 100%' }))
+    } else {
+      setSlValidationErrors(prev => ({ ...prev, [walletAddress]: null }))
     }
   }
 
@@ -487,6 +638,9 @@ function ProfilePageContent() {
         max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
         max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day,
         max_buys_per_token_per_day: settings.max_buys_per_token_per_day,
+        take_profit_levels: settings.take_profit_levels,
+        stop_loss_levels: settings.stop_loss_levels,
+        tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
       
@@ -818,7 +972,7 @@ function ProfilePageContent() {
                     
                     {wallet.is_active ? (
                       <motion.button
-                        onClick={() => handleStopTracking(wallet.wallet_address)}
+                        onClick={() => handleStopTrackingClick(wallet.wallet_address)}
                         disabled={walletTrackerLoading}
                         className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center gap-2 text-sm font-orbitron font-semibold disabled:opacity-50"
                         whileHover={{ scale: 1.02 }}
@@ -1122,10 +1276,209 @@ function ProfilePageContent() {
                     </div>
                   </div>
 
+                  {/* TP/SL Control Switch */}
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
-                    <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Advanced Filters</h4>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-orbitron font-semibold text-white mb-1">Take Profit / Stop Loss</h4>
+                        <p className="text-white/60 font-space-grotesk text-xs">Enable or disable TP/SL tracking</p>
+                      </div>
+                      <motion.button
+                        onClick={() => setTpSlIsActive(prev => ({
+                          ...prev,
+                          [showWalletSettings]: !(prev[showWalletSettings] ?? true)
+                        }))}
+                        className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${
+                          (tpSlIsActive[showWalletSettings] ?? true) ? 'bg-molten-gold' : 'bg-gray-600'
+                        }`}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <motion.div
+                          className="w-5 h-5 bg-white rounded-full"
+                          animate={{ x: (tpSlIsActive[showWalletSettings] ?? true) ? 20 : 0 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        />
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  {/* Auto Take Profit */}
+                  <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <h4 className="text-lg font-orbitron font-semibold text-white">Auto Take Profit</h4>
+                      <div className="group relative">
+                        <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                          <span className="text-xs text-molten-gold">?</span>
+                        </div>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                          Set multiple profit targets. When a token reaches the specified profit percentage, the system will automatically sell the configured percentage of your holdings. The total sell percentage across all levels must equal 100%. Example: TP1 at 100% profit sells 50%, TP2 at 150% profit sells remaining 50%.
+                        </div>
+                      </div>
+                    </div>
                     
-                    <div className="space-y-4">
+                    <div className={`space-y-3 ${!(tpSlIsActive[showWalletSettings] ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {(walletSettings[showWalletSettings]?.take_profit_levels || []).map((level: any, index: number) => {
+                        const tpLevels = walletSettings[showWalletSettings]?.take_profit_levels || []
+                        const shouldShow = index === 0 || showAllTP[showWalletSettings]
+                        if (!shouldShow) return null
+                        
+                        return (
+                          <div key={index} className="flex items-center gap-3">
+                            <span className="text-sm text-white/60 font-space-grotesk w-30">When price up &gt;</span>
+                            <input
+                              type="number"
+                              value={level.profit_percentage === 0 ? '' : level.profit_percentage}
+                              onChange={(e) => updateTakeProfitLevel(showWalletSettings, index, 'profit_percentage', e.target.value)}
+                              className="w-24 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                              placeholder="0"
+                              min="0"
+                              step="0.1"
+                            />
+                            <span className="text-white">%</span>
+                            <span className="text-white/60 font-space-grotesk">sell</span>
+                            <input
+                              type="number"
+                              value={level.sell_percentage === 0 ? '' : level.sell_percentage}
+                              onChange={(e) => updateTakeProfitLevel(showWalletSettings, index, 'sell_percentage', e.target.value)}
+                              className="w-24 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                              placeholder="0"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                            />
+                            <span className="text-white">%</span>
+                            {tpLevels.length > 1 && (
+                              <button
+                                onClick={() => removeTakeProfitLevel(showWalletSettings, index)}
+                                className="text-red-400 hover:text-red-300 transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {tpValidationErrors[showWalletSettings] && (
+                        <p className="text-sm text-red-400 font-space-grotesk">{tpValidationErrors[showWalletSettings]}</p>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => addTakeProfitLevel(showWalletSettings)}
+                          className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm font-space-grotesk"
+                        >
+                          <Plus size={16} />
+                          <span>Add Level</span>
+                        </button>
+                        {(walletSettings[showWalletSettings]?.take_profit_levels || []).length > 1 && (
+                          <button
+                            onClick={() => setShowAllTP(prev => ({ ...prev, [showWalletSettings]: !prev[showWalletSettings] }))}
+                            className="flex items-center gap-2 text-molten-gold hover:text-yellow-400 transition-colors text-sm font-space-grotesk"
+                          >
+                            <span>View All</span>
+                            {showAllTP[showWalletSettings] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Auto Stop Loss */}
+                  <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <h4 className="text-lg font-orbitron font-semibold text-white">Auto Stop Loss</h4>
+                      <div className="group relative">
+                        <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                          <span className="text-xs text-molten-gold">?</span>
+                        </div>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                          Set multiple stop loss levels. When a token drops to the specified loss percentage, the system will automatically sell the configured percentage of your holdings. The total sell percentage across all levels must equal 100%. Example: SL at 15% loss sells 100% of holdings.
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className={`space-y-3 ${!(tpSlIsActive[showWalletSettings] ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {(walletSettings[showWalletSettings]?.stop_loss_levels || []).map((level: any, index: number) => {
+                        const slLevels = walletSettings[showWalletSettings]?.stop_loss_levels || []
+                        const shouldShow = index === 0 || showAllSL[showWalletSettings]
+                        if (!shouldShow) return null
+                        
+                        return (
+                          <div key={index} className="flex items-center gap-3">
+                            <span className="text-sm text-white/60 font-space-grotesk w-30">When price down &gt;</span>
+                            <input
+                              type="number"
+                              value={level.loss_percentage === 0 ? '' : level.loss_percentage}
+                              onChange={(e) => updateStopLossLevel(showWalletSettings, index, 'loss_percentage', e.target.value)}
+                              className="w-24 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                              placeholder="0"
+                              min="0"
+                              step="0.1"
+                            />
+                            <span className="text-white">%</span>
+                            <span className="text-white/60 font-space-grotesk">sell</span>
+                            <input
+                              type="number"
+                              value={level.sell_percentage === 0 ? '' : level.sell_percentage}
+                              onChange={(e) => updateStopLossLevel(showWalletSettings, index, 'sell_percentage', e.target.value)}
+                              className="w-24 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                              placeholder="0"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                            />
+                            <span className="text-white">%</span>
+                            {slLevels.length > 1 && (
+                              <button
+                                onClick={() => removeStopLossLevel(showWalletSettings, index)}
+                                className="text-red-400 hover:text-red-300 transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                      {slValidationErrors[showWalletSettings] && (
+                        <p className="text-sm text-red-400 font-space-grotesk">{slValidationErrors[showWalletSettings]}</p>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => addStopLossLevel(showWalletSettings)}
+                          className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm font-space-grotesk"
+                        >
+                          <Plus size={16} />
+                          <span>Add Level</span>
+                        </button>
+                        {(walletSettings[showWalletSettings]?.stop_loss_levels || []).length > 1 && (
+                          <button
+                            onClick={() => setShowAllSL(prev => ({ ...prev, [showWalletSettings]: !prev[showWalletSettings] }))}
+                            className="flex items-center gap-2 text-molten-gold hover:text-yellow-400 transition-colors text-sm font-space-grotesk"
+                          >
+                            <span>View All</span>
+                            {showAllSL[showWalletSettings] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Advanced Filters - Collapsable */}
+                  <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                    <button
+                      onClick={() => setShowAdvancedFilters(prev => ({ ...prev, [showWalletSettings]: !prev[showWalletSettings] }))}
+                      className="flex items-center justify-between w-full"
+                    >
+                      <h4 className="text-lg font-orbitron font-semibold text-white">Advanced Filters</h4>
+                      {showAdvancedFilters[showWalletSettings] ? <ChevronUp size={20} className="text-molten-gold" /> : <ChevronDown size={20} className="text-molten-gold" />}
+                    </button>
+                    
+                    {showAdvancedFilters[showWalletSettings] && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-4 space-y-4"
+                      >
                       <div>
                         <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
                           Max buys per mirror per hour
@@ -1188,7 +1541,8 @@ function ProfilePageContent() {
                           placeholder="1"
                         />
                       </div>
-                    </div>
+                      </motion.div>
+                    )}
                   </div>
 
                   <motion.button
@@ -1430,7 +1784,9 @@ function ProfilePageContent() {
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'}`} />
+                      {log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
+                        <div className={`w-3 h-3 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'}`} />
+                      )}
                       <span className={`text-sm font-orbitron font-semibold tracking-wider uppercase ${
                         log.event_type === 'tracked_wallet_purchase' ? 'text-green-400' : 
                         log.event_type === 'user_purchase' ? 'text-blue-400' :
@@ -1439,6 +1795,67 @@ function ProfilePageContent() {
                       }`}>
                         {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
                       </span>
+                      {log.tp_sl_is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
+                        <div className="group relative">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-lg shadow-green-400/50" />
+                            <span className="text-xs font-orbitron font-semibold text-green-400 glow-green">(TP/SL)</span>
+                          </div>
+                          <div className="absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl">
+                            <div className="space-y-3">
+                              <p className="text-molten-gold font-orbitron font-semibold mb-2">TP/SL is active for this trade</p>
+                              {log.current_price !== null && log.current_price !== undefined && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
+                                  <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
+                                </div>
+                              )}
+                              {log.take_profit_levels && log.take_profit_levels.length > 0 && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Take Profit Levels</p>
+                                  <div className="space-y-1">
+                                    {log.take_profit_levels.map((tp, idx) => (
+                                      <p key={idx} className="text-white font-space-grotesk">
+                                        {tp.profit_percentage}% profit → sell {tp.sell_percentage}%
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {log.stop_loss_levels && log.stop_loss_levels.length > 0 && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Stop Loss Levels</p>
+                                  <div className="space-y-1">
+                                    {log.stop_loss_levels.map((sl, idx) => (
+                                      <p key={idx} className="text-white font-space-grotesk">
+                                        {sl.loss_percentage}% loss → sell {sl.sell_percentage}%
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {log.is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
+                        <div className="group relative">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse shadow-lg shadow-green-400/50" />
+                            <span className="text-xs font-orbitron font-semibold text-green-400">ACTIVE</span>
+                          </div>
+                          <div className="absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl">
+                            <div className="space-y-2">
+                              {log.current_price !== null && log.current_price !== undefined && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
+                                  <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <span className="text-xs text-white/40 font-space-grotesk">
                       {log.created_at ? new Date(log.created_at).toLocaleString() : 'Unknown Date'}
@@ -1566,8 +1983,8 @@ function ProfilePageContent() {
                       )}
                     </div>
                     
-                    {/* Event Data */}
-                    {log.event_data && (
+                    {/* Event Data - Only show for non-user purchase/sell events */}
+                    {log.event_data && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Event Data</p>
                         <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-3">
@@ -2295,6 +2712,87 @@ function ProfilePageContent() {
                 </div>
               </div>
             ) : null}
+          </motion.div>
+        </div>
+      )}
+
+      {/* Stop Tracking Modal */}
+      {stopTrackingModal.open && stopTrackingModal.walletAddress && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-void-black border border-molten-gold/30 rounded-lg p-6 max-w-md w-full"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-orbitron font-bold text-molten-gold">
+                Stop Tracking Wallet
+              </h3>
+              <button
+                onClick={() => setStopTrackingModal({open: false, walletAddress: null, isActive: false})}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-white font-space-grotesk mb-4">
+                This wallet has active Take Profit / Stop Loss settings. How would you like to proceed?
+              </p>
+              {stopTrackingModal.isActive && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
+                  <p className="text-yellow-400 font-orbitron font-semibold text-sm mb-2">
+                    Active Settings:
+                  </p>
+                  <p className="text-white/80 font-space-grotesk text-sm">
+                    • Take Profit / Stop Loss is active
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <motion.button
+                onClick={() => {
+                  if (stopTrackingModal.walletAddress) {
+                    handleStopTracking(stopTrackingModal.walletAddress, true)
+                  }
+                }}
+                disabled={walletTrackerLoading}
+                className="w-full px-4 py-3 bg-red-500/20 border border-red-500/50 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors duration-300 flex items-center justify-center gap-2 font-orbitron font-semibold disabled:opacity-50"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <XCircle size={18} />
+                Disable TP/SL & Stop Tracking
+              </motion.button>
+
+              <motion.button
+                onClick={() => {
+                  if (stopTrackingModal.walletAddress) {
+                    handleStopTracking(stopTrackingModal.walletAddress, false)
+                  }
+                }}
+                disabled={walletTrackerLoading}
+                className="w-full px-4 py-3 bg-molten-gold/20 border border-molten-gold/50 text-molten-gold rounded-lg hover:bg-molten-gold/30 transition-colors duration-300 flex items-center justify-center gap-2 font-orbitron font-semibold disabled:opacity-50"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <EyeOff size={18} />
+                Only Stop Copy Trading (Keep TP/SL)
+              </motion.button>
+
+              <motion.button
+                onClick={() => setStopTrackingModal({open: false, walletAddress: null, isActive: false})}
+                disabled={walletTrackerLoading}
+                className="w-full px-4 py-3 bg-gray-600/20 border border-gray-600/50 text-gray-400 rounded-lg hover:bg-gray-600/30 transition-colors duration-300 font-orbitron font-semibold disabled:opacity-50"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Cancel
+              </motion.button>
+            </div>
           </motion.div>
         </div>
       )}

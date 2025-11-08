@@ -275,3 +275,30 @@ html {
   color: var(--void-black);
 }
 
+/* Glowing Green Text Effect */
+.glow-green {
+  text-shadow: 
+    0 0 5px rgba(34, 197, 94, 0.8),
+    0 0 10px rgba(34, 197, 94, 0.6),
+    0 0 15px rgba(34, 197, 94, 0.4),
+    0 0 20px rgba(34, 197, 94, 0.2);
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    text-shadow: 
+      0 0 5px rgba(34, 197, 94, 0.8),
+      0 0 10px rgba(34, 197, 94, 0.6),
+      0 0 15px rgba(34, 197, 94, 0.4),
+      0 0 20px rgba(34, 197, 94, 0.2);
+  }
+  50% {
+    text-shadow: 
+      0 0 10px rgba(34, 197, 94, 1),
+      0 0 20px rgba(34, 197, 94, 0.8),
+      0 0 30px rgba(34, 197, 94, 0.6),
+      0 0 40px rgba(34, 197, 94, 0.4);
+  }
+}
+
