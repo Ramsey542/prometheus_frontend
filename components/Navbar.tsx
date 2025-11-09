@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Flame, Menu, X, User, LogOut } from 'lucide-react'
+import { Flame, Menu, X, User, LogOut, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
@@ -124,6 +124,15 @@ export default function Navbar() {
                 <User size={16} />
                 <span className="text-sm font-orbitron tracking-wide">{user.username}</span>
               </div>
+              {config.adminUsernames.includes(user.username) && (
+                <Link
+                  href="/admin"
+                  className="px-4 py-2 border border-purple-400 text-purple-400 text-sm tracking-widest hover:bg-purple-400/10 transition duration-300 rounded-lg flex items-center gap-2"
+                >
+                  <Shield size={14} />
+                  Admin Dashboard
+                </Link>
+              )}
               <button
                 onClick={handleLogout}
                 className="px-4 py-2 border border-red-400 text-red-400 text-sm tracking-widest hover:bg-red-400/10 transition duration-300 rounded-lg flex items-center gap-2"
@@ -173,6 +182,16 @@ export default function Navbar() {
                   <User size={16} />
                   <span className="text-sm font-orbitron tracking-wide">{user.username}</span>
                 </div>
+                {config.adminUsernames.includes(user.username) && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full text-left px-0 py-2 text-purple-400 text-sm tracking-widest hover:text-purple-300 transition duration-300 flex items-center gap-2"
+                  >
+                    <Shield size={14} />
+                    Admin Dashboard
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full text-left px-0 py-2 text-red-400 text-sm tracking-widest hover:text-red-300 transition duration-300 flex items-center gap-2"
