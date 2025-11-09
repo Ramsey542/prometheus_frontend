@@ -162,19 +162,6 @@ export default function AdminOverview() {
           </motion.div>
         )}
 
-        {/* Fees Pie Chart */}
-        {overviewData?.fees_by_type && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-6"
-          >
-            <h3 className="text-xl font-orbitron font-semibold text-white mb-4">Fees by Type</h3>
-            <div className="h-64 flex items-center justify-center">
-              <SimplePieChart data={overviewData.fees_by_type} />
-            </div>
-          </motion.div>
-        )}
 
         {/* Trade Status Pie Chart */}
         {overviewData?.trades_by_status && (
