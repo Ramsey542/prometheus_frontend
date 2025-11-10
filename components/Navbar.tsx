@@ -16,7 +16,7 @@ export default function Navbar() {
   const dispatch = useAppDispatch()
   const pathname = usePathname()
   const { isAuthenticated, user, selectedCoin } = useAppSelector((state) => state.auth)
-  const isAuthenticatedPage = isAuthenticated && (pathname === '/profile' || pathname === '/dashboard' || pathname === '/custom-buys')
+  const isAuthenticatedPage = isAuthenticated && (pathname === '/profile' || pathname === '/dashboard' || pathname === '/custom-buys' || pathname === '/admin')
   useEffect(() => {
     if (!isAuthenticatedPage) return
 
@@ -145,17 +145,17 @@ export default function Navbar() {
           
         </nav>
         
-        {!isAuthenticatedPage && (
-          <button 
-            onClick={() => setMenuOpen(!menuOpen)} 
-            className="md:hidden text-molten-gold"
-          >
-            {menuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        )}
+        {/* Mobile Menu Button - Show on all pages */}
+        <button 
+          onClick={() => setMenuOpen(!menuOpen)} 
+          className="md:hidden text-molten-gold"
+        >
+          {menuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
       
-      {!isAuthenticatedPage && menuOpen && (
+      {/* Mobile Menu Dropdown - Show when menu is open */}
+      {menuOpen && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
@@ -163,25 +163,65 @@ export default function Navbar() {
           className="md:hidden border-t border-molten-gold/20 bg-black/80 backdrop-blur-sm"
         >
           <div className="px-6 py-4 space-y-4">
-            <a
-              href={config.discord_link}
-              target={config.discord_link ? '_blank' : '_self'}
-              rel="noopener noreferrer"
-              className="block text-sm tracking-widest text-white hover:text-molten-gold transition duration-300 py-2"
-              onClick={() => setMenuOpen(false)}
-            >
-              Temple
-            </a>
-            <span className="block text-sm tracking-widest text-white/60 py-2 cursor-not-allowed select-none">
-              Guild
-            </span>
+            {!isAuthenticatedPage && (
+              <>
+                <a
+                  href={config.discord_link}
+                  target={config.discord_link ? '_blank' : '_self'}
+                  rel="noopener noreferrer"
+                  className="block text-sm tracking-widest text-white hover:text-molten-gold transition duration-300 py-2"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Temple
+                </a>
+                <span className="block text-sm tracking-widest text-white/60 py-2 cursor-not-allowed select-none">
+                  Guild
+                </span>
+              </>
+            )}
             
             {isAuthenticated && user ? (
-              <div className="pt-4 border-t border-molten-gold/20 space-y-3">
+              <div className={`${!isAuthenticatedPage ? 'pt-4 border-t border-molten-gold/20' : ''} space-y-3`}>
                 <div className="flex items-center gap-2 text-molten-gold">
                   <User size={16} />
                   <span className="text-sm font-orbitron tracking-wide">{user.username}</span>
                 </div>
+                
+                {isAuthenticatedPage && (
+                  <>
+                    {selectedCoin && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
+                        <Image
+                          src={`/assets/${selectedCoin}.png`}
+                          alt={selectedCoin.toUpperCase()}
+                          width={20}
+                          height={20}
+                          className="w-5 h-5"
+                        />
+                        <span className="text-sm font-orbitron font-semibold text-molten-gold">
+                          {selectedCoin.toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    <Link
+                      href={config.discord_link}
+                      target={config.discord_link ? '_blank' : '_self'}
+                      rel="noopener noreferrer"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/20 transition duration-300 text-indigo-400 text-sm"
+                    >
+                      <Image
+                        src="/assets/discord.png"
+                        alt="Discord"
+                        width={16}
+                        height={16}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-xs font-orbitron font-semibold">Discord</span>
+                    </Link>
+                  </>
+                )}
+                
                 {config.adminUsernames.includes(user.username) && (
                   <Link
                     href="/admin"
@@ -192,6 +232,7 @@ export default function Navbar() {
                     Admin Dashboard
                   </Link>
                 )}
+                
                 <button
                   onClick={handleLogout}
                   className="w-full text-left px-0 py-2 text-red-400 text-sm tracking-widest hover:text-red-300 transition duration-300 flex items-center gap-2"
