@@ -30,6 +30,7 @@ export default function AdminLeadWallets() {
       setLoading(true)
       setError(null)
       const data = await walletTrackerApi.getAdminLeadWallets()
+      console.log(data)
       setLeadWallets(data.lead_wallets || [])
     } catch (err: any) {
       setError(err.message || 'Failed to fetch lead wallets')
