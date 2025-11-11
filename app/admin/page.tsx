@@ -5,15 +5,16 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useAppSelector } from '../../store/hooks'
 import { config } from '../../lib/config'
-import { LayoutDashboard, FileText, ChevronRight, Search, ArrowUpDown } from 'lucide-react'
+import { LayoutDashboard, FileText, ChevronRight, Search, ArrowUpDown, Users } from 'lucide-react'
 import Navbar from '../../components/Navbar'
 import AdminOverview from '../../components/AdminOverview'
 import AdminLogs from '../../components/AdminLogs'
+import AdminLeadWallets from '../../components/AdminLeadWallets'
 
 export default function AdminDashboard() {
   const router = useRouter()
   const { user, isAuthenticated } = useAppSelector((state) => state.auth)
-  const [activeSection, setActiveSection] = useState<'overview' | 'logs'>('overview')
+  const [activeSection, setActiveSection] = useState<'overview' | 'logs' | 'lead_wallets'>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
@@ -83,6 +84,24 @@ export default function AdminDashboard() {
                 </div>
                 {activeSection === 'logs' && <ChevronRight size={16} />}
               </button>
+
+              <button
+                onClick={() => {
+                  setActiveSection('lead_wallets')
+                  setSidebarOpen(false)
+                }}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-300 ${
+                  activeSection === 'lead_wallets'
+                    ? 'bg-molten-gold/20 border border-molten-gold/50 text-molten-gold'
+                    : 'bg-void-black/50 border border-molten-gold/10 text-white/60 hover:bg-molten-gold/10 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Users size={18} />
+                  <span className="font-orbitron font-semibold">Lead Wallets</span>
+                </div>
+                {activeSection === 'lead_wallets' && <ChevronRight size={16} />}
+              </button>
             </nav>
           </div>
         </div>
@@ -108,6 +127,7 @@ export default function AdminDashboard() {
 
             {activeSection === 'overview' && <AdminOverview />}
             {activeSection === 'logs' && <AdminLogs />}
+            {activeSection === 'lead_wallets' && <AdminLeadWallets />}
           </div>
         </main>
       </div>

@@ -71,6 +71,26 @@ export const walletTrackerApi = {
     });
   },
 
+  async deleteTrackedWallet(walletAddress: string, coin: string = 'sol'): Promise<{ message: string }> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      
+      if (!accessToken) {
+        throw new WalletTrackerApiError('No access token found', 401);
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/track/tracked-wallet/${coin}/${walletAddress}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
   async getTrackedWallets(page: number = 1, limit: number = 10, coin: string = 'sol'): Promise<{ wallets: TrackedWallet[], total: number, page: number, totalPages: number }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
@@ -311,6 +331,23 @@ export const walletTrackerApi = {
       if (sortOrder) params.append('sort_order', sortOrder);
 
       const response = await fetch(`${config.apiBaseUrl}/admin/log?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async getAdminLeadWallets(): Promise<{ lead_wallets: Array<{ wallet_address: string; followers: number; win_rate: number; total_pnl: number; tracking_status: 'active' | 'inactive' }> }> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/admin/lead-wallets`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

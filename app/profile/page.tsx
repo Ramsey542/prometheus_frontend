@@ -376,6 +376,28 @@ function ProfilePageContent() {
     }
   }
 
+  const handleDeleteTrackedWallet = async (walletAddress: string) => {
+    try {
+      setWalletTrackerLoading(true)
+      setWalletTrackerError(null)
+      setWalletTrackerSuccess(null)
+      await walletTrackerApi.deleteTrackedWallet(walletAddress, selectedCoin)
+      setTrackedWallets((prev) => prev.filter((wallet) => wallet.wallet_address !== walletAddress))
+      setWalletsTotal((prev) => Math.max(prev - 1, 0))
+      await fetchTrackedWallets()
+      await fetchCopyTradingStats()
+      setWalletTrackerSuccess('Wallet removed successfully!')
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to remove wallet from tracking'
+      setWalletTrackerError(errorMessage)
+      if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
+        router.push('/login')
+      }
+    } finally {
+      setWalletTrackerLoading(false)
+    }
+  }
+
   const fetchAllLogs = async (page: number = 1) => {
     try {
       if (page === 1) {
@@ -993,6 +1015,15 @@ function ProfilePageContent() {
                         Resume
                       </motion.button>
                     )}
+                    <motion.button
+                      onClick={() => handleDeleteTrackedWallet(wallet.wallet_address)}
+                      disabled={walletTrackerLoading}
+                      className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Trash2 size={14} />
+                    </motion.button>
                   </div>
                 </div>
               </motion.div>
