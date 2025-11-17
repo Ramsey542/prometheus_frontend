@@ -29,6 +29,20 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface VerifyEmailRequest {
+  email: string;
+  otp_code: string;
+}
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirm {
+  token: string;
+  new_password: string;
+}
+
 export interface UserProfile {
   username: string;
   email: string;

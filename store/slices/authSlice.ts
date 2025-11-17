@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { AuthState, SignupRequest, LoginRequest, TokenPair, User, Wallet, UserProfile } from '../types/auth';
+import { AuthState, SignupRequest, LoginRequest, TokenPair, User, Wallet, UserProfile, VerifyEmailRequest, PasswordResetRequest, PasswordResetConfirm } from '../types/auth';
 import { authApi } from '../../services/authApi';
 
 const initialState: AuthState = {
@@ -175,6 +175,42 @@ export const initializeAuth = createAsyncThunk(
   }
 );
 
+export const verifyEmail = createAsyncThunk(
+  'auth/verifyEmail',
+  async (payload: VerifyEmailRequest, { rejectWithValue }) => {
+    try {
+      const response = await authApi.verifyEmail(payload);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Email verification failed');
+    }
+  }
+);
+
+export const requestPasswordReset = createAsyncThunk(
+  'auth/requestPasswordReset',
+  async (payload: PasswordResetRequest, { rejectWithValue }) => {
+    try {
+      const response = await authApi.requestPasswordReset(payload);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Password reset request failed');
+    }
+  }
+);
+
+export const resetPassword = createAsyncThunk(
+  'auth/resetPassword',
+  async (payload: PasswordResetConfirm, { rejectWithValue }) => {
+    try {
+      const response = await authApi.resetPassword(payload);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Password reset failed');
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -323,6 +359,45 @@ const authSlice = createSlice({
           state.isAuthenticated = true;
           state.error = null;
         }
+      })
+      .addCase(verifyEmail.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(verifyEmail.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.tokens = action.payload;
+        state.wallet = action.payload.wallet || null;
+        state.isAuthenticated = true;
+        state.error = null;
+      })
+      .addCase(verifyEmail.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(requestPasswordReset.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(requestPasswordReset.fulfilled, (state) => {
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(requestPasswordReset.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(resetPassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(resetPassword.fulfilled, (state) => {
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
       });
   },
 });

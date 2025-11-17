@@ -1,5 +1,5 @@
 import { config } from '../lib/config';
-import { SignupRequest, LoginRequest, TokenPair, UserProfile } from '../store/types/auth';
+import { SignupRequest, LoginRequest, TokenPair, UserProfile, VerifyEmailRequest, PasswordResetRequest, PasswordResetConfirm } from '../store/types/auth';
 
 class AuthApiError extends Error {
   constructor(message: string, public status?: number) {
@@ -143,6 +143,50 @@ export const authApi = {
         'Content-Type': 'application/json',
       },
     });
+    return await handleResponse(response);
+  },
+
+  async verifyEmail(payload: VerifyEmailRequest): Promise<TokenPair> {
+    const response = await fetch(`${config.apiBaseUrl}/auth/verify-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await handleResponse(response);
+    
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('refresh_token', data.refresh_token);
+    if (data.wallet) {
+      localStorage.setItem('wallet', JSON.stringify(data.wallet));
+    }
+    
+    return data;
+  },
+
+  async requestPasswordReset(payload: PasswordResetRequest): Promise<{ message: string }> {
+    const response = await fetch(`${config.apiBaseUrl}/auth/request-password-reset`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return await handleResponse(response);
+  },
+
+  async resetPassword(payload: PasswordResetConfirm): Promise<{ message: string }> {
+    const response = await fetch(`${config.apiBaseUrl}/auth/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
     return await handleResponse(response);
   },
 };

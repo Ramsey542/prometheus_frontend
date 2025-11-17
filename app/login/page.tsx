@@ -172,6 +172,11 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
+                <div className="mt-2 text-right">
+                  <Link href="/forgot-password" className="text-sm text-molten-gold/70 hover:text-molten-gold transition duration-300 font-space-grotesk">
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
 
               {/* Submit Button */}
