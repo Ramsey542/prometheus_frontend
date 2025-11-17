@@ -1,14 +1,14 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { Flame, ArrowLeft, CheckCircle, XCircle, Mail } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { verifyEmail, clearError } from '../../store/slices/authSlice'
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const [otpCode, setOtpCode] = useState('')
   const [email, setEmail] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
@@ -186,6 +186,18 @@ export default function VerifyEmailPage() {
         </motion.div>
       </div>
     </div>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-void-black text-white flex items-center justify-center">
+        <div className="text-molten-gold">Loading...</div>
+      </div>
+    }>
+      <VerifyEmailContent />
+    </Suspense>
   )
 }
 
