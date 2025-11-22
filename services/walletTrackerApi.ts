@@ -51,7 +51,7 @@ export const walletTrackerApi = {
 
 
 
-  async stopTrackingWallet(walletAddress: string, coin: string = 'sol'): Promise<{ message: string }> {
+  async stopTrackingWallet(walletAddress: string, coin: string = 'sol', disableTpSl: boolean = false): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       
@@ -59,7 +59,7 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/track/wallet/${coin}/${walletAddress}`, {
+      const response = await fetch(`${config.apiBaseUrl}/track/wallet/${coin}/${walletAddress}?disable_tp_sl=${disableTpSl}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -180,9 +180,7 @@ export const walletTrackerApi = {
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
-      console.log('the settings', JSON.stringify(settings))
-      console.log('the wallet address', walletAddress)
-      console.log('the coin', coin)
+
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${coin}/${walletAddress}/settings`, {
         method: 'PUT',
         headers: {

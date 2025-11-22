@@ -324,16 +324,7 @@ function ProfilePageContent() {
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
 
-      if (disableTpSl) {
-        const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
-        const updatedSettings = {
-          ...settings,
-          tp_sl_is_active: false
-        }
-        await walletTrackerApi.updateTrackedWalletSettings(walletAddress, updatedSettings, selectedCoin)
-      }
-
-      await walletTrackerApi.stopTrackingWallet(walletAddress, selectedCoin)
+      await walletTrackerApi.stopTrackingWallet(walletAddress, selectedCoin, disableTpSl)
       setWalletTrackerSuccess('Wallet tracking stopped successfully!')
       setStopTrackingModal({open: false, walletAddress: null, isActive: false})
       await fetchTrackedWallets()
