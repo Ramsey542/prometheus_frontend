@@ -1817,6 +1817,39 @@ function ProfilePageContent() {
                       }`}>
                         {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
                       </span>
+                      {log.tracked_wallet_address && (
+                        <div className="group relative">
+                          <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-molten-gold border border-molten-gold/40 rounded-full bg-molten-gold/10">
+                            Wallet {log.tracked_wallet_address.slice(0, 4)}...{log.tracked_wallet_address.slice(-4)}
+                          </span>
+                          <div className="absolute bottom-full left-0 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20 font-space-grotesk">
+                            {log.tracked_wallet_address}
+                          </div>
+                        </div>
+                      )}
+                      {log.event_type === 'user_sell' && (
+                        log.is_tp_sl_sell ? (
+                          <div className="group relative">
+                            <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-green-200 border border-green-400/40 rounded-full bg-green-500/10 shadow-[0_0_12px_rgba(74,222,128,0.5)]">
+                              {(log.tp_sl_trigger_type ? log.tp_sl_trigger_type.toUpperCase() : 'TP/SL')} Trade
+                            </span>
+                            {(typeof log.tp_sl_trigger_price === 'number' || typeof log.tp_sl_trigger_value === 'number') && (
+                              <div className="absolute bottom-full left-0 mb-2 w-64 bg-void-black/95 border border-green-400/30 rounded-lg p-3 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20 font-space-grotesk space-y-1">
+                                {typeof log.tp_sl_trigger_price === 'number' && (
+                                  <p>Executed @ ${log.tp_sl_trigger_price.toFixed(6)}</p>
+                                )}
+                                {typeof log.tp_sl_trigger_value === 'number' && (
+                                  <p>Trigger Value: {log.tp_sl_trigger_value}</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-yellow-200 border border-yellow-400/40 rounded-full bg-yellow-500/10 shadow-[0_0_12px_rgba(234,179,8,0.45)]">
+                            Copy Trade
+                          </span>
+                        )
+                      )}
                       {log.tp_sl_is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
                         <div className="group relative">
                           <div className="flex items-center gap-2">

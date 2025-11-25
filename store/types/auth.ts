@@ -100,6 +100,7 @@ export interface CopyTradingLog {
   event_type: string;
   transaction_signature: string | null;
   wallet_address: string | null;
+  tracked_wallet_address?: string | null;
   target_token: string | null;
   token_name: string | null;
   token_decimals: number | null;
@@ -116,6 +117,10 @@ export interface CopyTradingLog {
   current_price?: number | null;
   take_profit_levels?: Array<{ profit_percentage: number; sell_percentage: number }> | null;
   stop_loss_levels?: Array<{ loss_percentage: number; sell_percentage: number }> | null;
+  is_tp_sl_sell?: boolean | null;
+  tp_sl_trigger_type?: string | null;
+  tp_sl_trigger_value?: number | null;
+  tp_sl_trigger_price?: number | null;
 }
 
 export interface WalletStats {
