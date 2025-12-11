@@ -115,6 +115,9 @@ function ProfilePageContent() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
+  const [editingCustomName, setEditingCustomName] = useState<string | null>(null)
+  const [customNameValue, setCustomNameValue] = useState<string>('')
+  const [customNameLoading, setCustomNameLoading] = useState<string | null>(null)
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawDestination, setWithdrawDestination] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
@@ -200,6 +203,16 @@ function ProfilePageContent() {
       })
     }
   }, [user, currentSection, trackedWallets])
+
+  useEffect(() => {
+    if (user && currentSection === 'tracker-logs' && trackerLogs && trackerLogs.length > 0) {
+      trackerLogs.forEach(log => {
+        if (log.tracked_wallet_address && !walletSettings[log.tracked_wallet_address]) {
+          fetchWalletSettings(log.tracked_wallet_address)
+        }
+      })
+    }
+  }, [user, currentSection, trackerLogs])
 
   const fetchTrackedWallets = async (page: number = 1) => {
     try {
@@ -647,6 +660,7 @@ function ProfilePageContent() {
       const settings = walletSettings[walletAddress]
       const normalized = {
         ...settings,
+        custom_name: settings.custom_name || '',
         slippage: settings.slippage === '' ? 0 : settings.slippage,
         max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
         max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day,
@@ -669,6 +683,63 @@ function ProfilePageContent() {
       }
     } finally {
       setWalletSettingsLoading(false)
+    }
+  }
+
+  const handleStartEditCustomName = async (walletAddress: string) => {
+    if (!walletSettings[walletAddress]) {
+      await fetchWalletSettings(walletAddress)
+    }
+    const currentName = walletSettings[walletAddress]?.custom_name || ''
+    setCustomNameValue(currentName)
+    setEditingCustomName(walletAddress)
+  }
+
+  const handleCancelEditCustomName = () => {
+    setEditingCustomName(null)
+    setCustomNameValue('')
+  }
+
+  const handleSaveCustomName = async (walletAddress: string) => {
+    try {
+      setCustomNameLoading(walletAddress)
+      setWalletTrackerError(null)
+
+      const settings = walletSettings[walletAddress] || {}
+      const normalized = {
+        ...settings,
+        custom_name: customNameValue.trim() || '',
+        slippage: settings.slippage === '' ? 0 : settings.slippage,
+        max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
+        max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day,
+        max_buys_per_token_per_day: settings.max_buys_per_token_per_day,
+        take_profit_levels: settings.take_profit_levels,
+        stop_loss_levels: settings.stop_loss_levels,
+        tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
+      }
+      
+      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
+      
+      // Update local state
+      setWalletSettings(prev => ({
+        ...prev,
+        [walletAddress]: {
+          ...prev[walletAddress],
+          custom_name: customNameValue.trim() || ''
+        }
+      }))
+      
+      setEditingCustomName(null)
+      setCustomNameValue('')
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to update custom name'
+      setWalletTrackerError(errorMessage)
+      
+      if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
+        router.push('/login')
+      }
+    } finally {
+      setCustomNameLoading(null)
     }
   }
 
@@ -920,17 +991,76 @@ function ProfilePageContent() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      <p className="text-xs md:text-sm text-white font-space-grotesk font-mono break-all">
-                        {formatWalletAddress(wallet.wallet_address)}
-                      </p>
-                      <button
-                        onClick={() => copyToClipboard(wallet.wallet_address, `tracked-${wallet.id}`)}
-                        className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
-                      >
-                        <Copy size={14} />
-                      </button>
-                      {copiedKey === `tracked-${wallet.id}` && (
-                        <span className="text-xs text-molten-gold">Copied</span>
+                      {editingCustomName === wallet.wallet_address ? (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={customNameValue}
+                            onChange={(e) => setCustomNameValue(e.target.value)}
+                            placeholder="Enter custom name"
+                            className="flex-1 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-1.5 text-white font-space-grotesk text-xs md:text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300 min-w-0"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveCustomName(wallet.wallet_address)
+                              } else if (e.key === 'Escape') {
+                                handleCancelEditCustomName()
+                              }
+                            }}
+                          />
+                          <motion.button
+                            onClick={() => handleSaveCustomName(wallet.wallet_address)}
+                            disabled={customNameLoading === wallet.wallet_address}
+                            className="px-2 py-1.5 bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            {customNameLoading === wallet.wallet_address ? (
+                              <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <CheckCircle size={14} />
+                            )}
+                          </motion.button>
+                          <motion.button
+                            onClick={handleCancelEditCustomName}
+                            disabled={customNameLoading === wallet.wallet_address}
+                            className="px-2 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <XCircle size={14} />
+                          </motion.button>
+                        </div>
+                      ) : (
+                        <>
+                          <motion.button
+                            onClick={() => handleStartEditCustomName(wallet.wallet_address)}
+                            className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            title="Edit custom name"
+                          >
+                            <Edit3 size={14} />
+                          </motion.button>
+                          <button
+                            onClick={() => copyToClipboard(wallet.wallet_address, `tracked-${wallet.id}`)}
+                            className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                            title="Copy wallet address"
+                          >
+                            <Copy size={14} />
+                          </button>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <p 
+                              className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default"
+                              title={wallet.wallet_address}
+                            >
+                              {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
+                            </p>
+                          </div>
+                          {copiedKey === `tracked-${wallet.id}` && (
+                            <span className="text-xs text-molten-gold">Copied</span>
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 text-xs md:text-sm">
@@ -1818,13 +1948,21 @@ function ProfilePageContent() {
                         {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
                       </span>
                       {log.tracked_wallet_address && (
-                        <div className="group relative">
-                          <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-molten-gold border border-molten-gold/40 rounded-full bg-molten-gold/10">
-                            Wallet {log.tracked_wallet_address.slice(0, 4)}...{log.tracked_wallet_address.slice(-4)}
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
+                          <span className="text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
+                          <span className="text-xs md:text-sm font-space-grotesk font-mono text-white">
+                            {walletSettings[log.tracked_wallet_address]?.custom_name || formatWalletAddress(log.tracked_wallet_address)}
                           </span>
-                          <div className="absolute bottom-full left-0 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20 font-space-grotesk">
-                            {log.tracked_wallet_address}
-                          </div>
+                          <button
+                            onClick={() => copyToClipboard(log.tracked_wallet_address || '', `log-tracked-${log.id}`)}
+                            className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                            title="Copy tracked wallet address"
+                          >
+                            <Copy size={12} />
+                          </button>
+                          {copiedKey === `log-tracked-${log.id}` && (
+                            <span className="text-xs text-molten-gold">Copied</span>
+                          )}
                         </div>
                       )}
                       {log.event_type === 'user_sell' && (
@@ -1918,6 +2056,38 @@ function ProfilePageContent() {
                   </div>
                   
                   <div className="space-y-4">
+                    {/* Tracked Wallet Address - Prominent Display */}
+                    {log.tracked_wallet_address && (
+                      <div className="bg-molten-gold/10 border border-molten-gold/30 rounded-lg p-3 md:p-4">
+                        <p className="text-molten-gold/80 font-orbitron text-xs tracking-wider uppercase mb-2">Copied Wallet</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-white font-space-grotesk font-semibold text-sm md:text-base flex-1 min-w-0 break-all">
+                            {walletSettings[log.tracked_wallet_address]?.custom_name || formatWalletAddress(log.tracked_wallet_address)}
+                          </p>
+                          {walletSettings[log.tracked_wallet_address]?.custom_name && (
+                            <p className="text-white/60 font-space-grotesk font-mono text-xs">
+                              ({formatWalletAddress(log.tracked_wallet_address)})
+                            </p>
+                          )}
+                          <button
+                            onClick={() => copyToClipboard(log.tracked_wallet_address || '', `log-tracked-${log.id}`)}
+                            className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                            title="Copy tracked wallet address"
+                          >
+                            <Copy size={16} />
+                          </button>
+                          {copiedKey === `log-tracked-${log.id}` && (
+                            <span className="text-xs text-molten-gold">Copied</span>
+                          )}
+                        </div>
+                        {!walletSettings[log.tracked_wallet_address]?.custom_name && (
+                          <p className="text-white/40 font-space-grotesk font-mono text-xs mt-2 break-all">
+                            {log.tracked_wallet_address}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
                     {/* Transaction Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
