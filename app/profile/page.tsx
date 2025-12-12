@@ -207,8 +207,11 @@ function ProfilePageContent() {
   useEffect(() => {
     if (user && currentSection === 'tracker-logs' && trackerLogs && trackerLogs.length > 0) {
       trackerLogs.forEach(log => {
-        if (log.tracked_wallet_address && !walletSettings[log.tracked_wallet_address]) {
-          fetchWalletSettings(log.tracked_wallet_address)
+        const trackedWalletAddr = log.event_type === 'tracked_wallet_activity' 
+          ? log.wallet_address 
+          : (log.tracked_wallet_address || log.copied_wallet)
+        if (trackedWalletAddr && !walletSettings[trackedWalletAddr]) {
+          fetchWalletSettings(trackedWalletAddr)
         }
       })
     }
@@ -526,7 +529,6 @@ function ProfilePageContent() {
   const fetchWalletSettings = async (walletAddress: string) => {
     try {
       const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
-      console.log('the settings', settings)
       setWalletSettings(prev => ({
         ...prev,
         [walletAddress]: {
@@ -1940,31 +1942,36 @@ function ProfilePageContent() {
                         <div className={`w-3 h-3 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'}`} />
                       )}
                       <span className={`text-sm font-orbitron font-semibold tracking-wider uppercase ${
-                        log.event_type === 'tracked_wallet_purchase' ? 'text-green-400' : 
+                        log.event_type === 'tracked_wallet_activity' ? 'text-green-400' : 
                         log.event_type === 'user_purchase' ? 'text-blue-400' :
                         log.event_type === 'user_sell' ? 'text-orange-400' :
                         log.event_type === 'admin_fee' ? 'text-purple-400' : 'text-gray-400'
                       }`}>
                         {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
                       </span>
-                      {log.tracked_wallet_address && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
-                          <span className="text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
-                          <span className="text-xs md:text-sm font-space-grotesk font-mono text-white">
-                            {walletSettings[log.tracked_wallet_address]?.custom_name || formatWalletAddress(log.tracked_wallet_address)}
-                          </span>
-                          <button
-                            onClick={() => copyToClipboard(log.tracked_wallet_address || '', `log-tracked-${log.id}`)}
-                            className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
-                            title="Copy tracked wallet address"
-                          >
-                            <Copy size={12} />
-                          </button>
-                          {copiedKey === `log-tracked-${log.id}` && (
-                            <span className="text-xs text-molten-gold">Copied</span>
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const trackedWalletAddr = log.event_type === 'tracked_wallet_activity' 
+                          ? log.wallet_address 
+                          : (log.tracked_wallet_address || log.copied_wallet)
+                        return trackedWalletAddr && (
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
+                            <span className="text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
+                            <span className="text-xs md:text-sm font-space-grotesk font-mono text-white">
+                              {walletSettings[trackedWalletAddr]?.custom_name || formatWalletAddress(trackedWalletAddr)}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(trackedWalletAddr || '', `log-tracked-${log.id}`)}
+                              className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                              title="Copy tracked wallet address"
+                            >
+                              <Copy size={12} />
+                            </button>
+                            {copiedKey === `log-tracked-${log.id}` && (
+                              <span className="text-xs text-molten-gold">Copied</span>
+                            )}
+                          </div>
+                        )
+                      })()}
                       {log.event_type === 'user_sell' && (
                         log.is_tp_sl_sell ? (
                           <div className="group relative">
@@ -2057,36 +2064,41 @@ function ProfilePageContent() {
                   
                   <div className="space-y-4">
                     {/* Tracked Wallet Address - Prominent Display */}
-                    {log.tracked_wallet_address && (
-                      <div className="bg-molten-gold/10 border border-molten-gold/30 rounded-lg p-3 md:p-4">
-                        <p className="text-molten-gold/80 font-orbitron text-xs tracking-wider uppercase mb-2">Copied Wallet</p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-white font-space-grotesk font-semibold text-sm md:text-base flex-1 min-w-0 break-all">
-                            {walletSettings[log.tracked_wallet_address]?.custom_name || formatWalletAddress(log.tracked_wallet_address)}
-                          </p>
-                          {walletSettings[log.tracked_wallet_address]?.custom_name && (
-                            <p className="text-white/60 font-space-grotesk font-mono text-xs">
-                              ({formatWalletAddress(log.tracked_wallet_address)})
+                    {(() => {
+                      const trackedWalletAddr = log.event_type === 'tracked_wallet_activity' 
+                        ? log.wallet_address 
+                        : (log.tracked_wallet_address || log.copied_wallet)
+                      return trackedWalletAddr && (
+                        <div className="bg-molten-gold/10 border border-molten-gold/30 rounded-lg p-3 md:p-4">
+                          <p className="text-molten-gold/80 font-orbitron text-xs tracking-wider uppercase mb-2">Copied Wallet</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-white font-space-grotesk font-semibold text-sm md:text-base flex-1 min-w-0 break-all">
+                              {walletSettings[trackedWalletAddr]?.custom_name || formatWalletAddress(trackedWalletAddr)}
+                            </p>
+                            {walletSettings[trackedWalletAddr]?.custom_name && (
+                              <p className="text-white/60 font-space-grotesk font-mono text-xs">
+                                ({formatWalletAddress(trackedWalletAddr)})
+                              </p>
+                            )}
+                            <button
+                              onClick={() => copyToClipboard(trackedWalletAddr || '', `log-tracked-${log.id}`)}
+                              className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                              title="Copy tracked wallet address"
+                            >
+                              <Copy size={16} />
+                            </button>
+                            {copiedKey === `log-tracked-${log.id}` && (
+                              <span className="text-xs text-molten-gold">Copied</span>
+                            )}
+                          </div>
+                          {!walletSettings[trackedWalletAddr]?.custom_name && (
+                            <p className="text-white/40 font-space-grotesk font-mono text-xs mt-2 break-all">
+                              {trackedWalletAddr}
                             </p>
                           )}
-                          <button
-                            onClick={() => copyToClipboard(log.tracked_wallet_address || '', `log-tracked-${log.id}`)}
-                            className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
-                            title="Copy tracked wallet address"
-                          >
-                            <Copy size={16} />
-                          </button>
-                          {copiedKey === `log-tracked-${log.id}` && (
-                            <span className="text-xs text-molten-gold">Copied</span>
-                          )}
                         </div>
-                        {!walletSettings[log.tracked_wallet_address]?.custom_name && (
-                          <p className="text-white/40 font-space-grotesk font-mono text-xs mt-2 break-all">
-                            {log.tracked_wallet_address}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      )
+                    })()}
                     
                     {/* Transaction Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2096,6 +2108,14 @@ function ProfilePageContent() {
                           {log.status?.toUpperCase() || 'UNKNOWN'}
                         </p>
                       </div>
+                      {log.side && (
+                        <div>
+                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Side</p>
+                          <p className={`font-orbitron font-bold ${log.side === 'BUY' ? 'text-green-400' : log.side === 'SELL' ? 'text-red-400' : 'text-white'}`}>
+                            {log.side}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Target Token</p>
                         <div className="flex items-center gap-2">
@@ -2171,7 +2191,46 @@ function ProfilePageContent() {
                     {/* Amounts */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {log.amount_in && (() => {
-                        const isBuyOperation = log.event_type === 'tracked_wallet_purchase' || log.event_type === 'user_purchase'
+                        if (log.event_type === 'tracked_wallet_activity') {
+                          const isBuy = log.side === 'BUY'
+                          let targetToken: string | null | undefined
+                          let baseToken: string | null | undefined
+                          if (isBuy) {
+                            targetToken = log.target_token
+                            baseToken = log.base_token
+                          } else {
+                            targetToken = log.base_token
+                            baseToken = log.target_token
+                          }
+                          
+                          if (isBuy) {
+                            const isToken = true
+                            const tokenName = log.token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_in, selectedCoin, isToken, log.token_decimals)}
+                                  {` ${tokenName}`}
+                                </p>
+                              </div>
+                            )
+                          } else {
+                            const isToken = false
+                            const currencyName = log.base_token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_in, selectedCoin, isToken, null)}
+                                  {` ${currencyName}`}
+                                </p>
+                              </div>
+                            )
+                          }
+                        }
+                        
+                        const isBuyOperation = log.event_type === 'user_purchase'
                         const isToken = !isBuyOperation
                         return (
                           <div>
@@ -2185,7 +2244,47 @@ function ProfilePageContent() {
                       })()}
                       
                       {log.amount_out && (() => {
-                        const isBuyOperation = log.event_type === 'tracked_wallet_purchase' || log.event_type === 'user_purchase'
+                        if (log.event_type === 'tracked_wallet_activity') {
+                          const isBuy = log.side === 'BUY'
+                          let targetToken: string | null | undefined
+                          let baseToken: string | null | undefined
+                          
+                          if (isBuy) {
+                            targetToken = log.target_token
+                            baseToken = log.base_token
+                          } else {
+                            targetToken = log.base_token
+                            baseToken = log.target_token
+                          }
+                          
+                          if (isBuy) {
+                            const isToken = false
+                            const currencyName = log.base_token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_out, selectedCoin, isToken, null)}
+                                  {` ${currencyName}`}
+                                </p>
+                              </div>
+                            )
+                          } else {
+                            const isToken = true
+                            const tokenName = log.token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_out, selectedCoin, isToken, log.token_decimals)}
+                                  {` ${tokenName}`}
+                                </p>
+                              </div>
+                            )
+                          }
+                        }
+                        
+                        const isBuyOperation = log.event_type === 'user_purchase'
                         const isToken = isBuyOperation
                         return (
                           <div>

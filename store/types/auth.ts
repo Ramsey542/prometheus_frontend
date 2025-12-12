@@ -103,11 +103,15 @@ export interface CopyTradingLog {
   tracked_wallet_address?: string | null;
   target_token: string | null;
   token_name: string | null;
+  base_token: string | null;
+  base_token_name: string | null;
   token_decimals: number | null;
   amount_in: string | null;
   amount_out: string | null;
   fee_amount: string | null;
   status: string | null;
+  side: string | null;
+  copied_wallet: string | null;
   error_message: string | null;
   event_data: string | null;
   created_at: string;

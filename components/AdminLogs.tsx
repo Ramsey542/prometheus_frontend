@@ -200,7 +200,7 @@ export default function AdminLogs() {
                     <span className={`font-orbitron font-semibold ${
                       log.event_type === 'user_purchase' ? 'text-blue-400' :
                       log.event_type === 'user_sell' ? 'text-orange-400' :
-                      log.event_type === 'tracked_wallet_purchase' ? 'text-green-400' :
+                      log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
                       'text-gray-400'
                     }`}>
                       {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN'}
