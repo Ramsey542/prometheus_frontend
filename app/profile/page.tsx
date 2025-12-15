@@ -1874,13 +1874,20 @@ function ProfilePageContent() {
                   className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4"
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Wallet size={20} className="text-molten-gold" />
-                      <span className="font-orbitron font-bold text-white text-sm">
-                        {wallet.wallet_address.slice(0, 6)}...{wallet.wallet_address.slice(-4)}
-                      </span>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <Wallet size={20} className="text-molten-gold flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-orbitron font-bold text-white text-sm truncate">
+                          {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
+                        </p>
+                        {walletSettings[wallet.wallet_address]?.custom_name && (
+                          <p className="text-white/60 font-space-grotesk font-mono text-xs truncate">
+                            {formatWalletAddress(wallet.wallet_address)}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className={`px-2 py-1 rounded-full text-xs font-orbitron font-bold ${
+                    <div className={`px-2 py-1 rounded-full text-xs font-orbitron font-bold flex-shrink-0 ${
                       wallet.is_active 
                         ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
                         : 'bg-red-500/20 text-red-400 border border-red-500/50'
@@ -2063,43 +2070,6 @@ function ProfilePageContent() {
                   </div>
                   
                   <div className="space-y-4">
-                    {/* Tracked Wallet Address - Prominent Display */}
-                    {(() => {
-                      const trackedWalletAddr = log.event_type === 'tracked_wallet_activity' 
-                        ? log.wallet_address 
-                        : (log.tracked_wallet_address || log.copied_wallet)
-                      return trackedWalletAddr && (
-                        <div className="bg-molten-gold/10 border border-molten-gold/30 rounded-lg p-3 md:p-4">
-                          <p className="text-molten-gold/80 font-orbitron text-xs tracking-wider uppercase mb-2">Copied Wallet</p>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-white font-space-grotesk font-semibold text-sm md:text-base flex-1 min-w-0 break-all">
-                              {walletSettings[trackedWalletAddr]?.custom_name || formatWalletAddress(trackedWalletAddr)}
-                            </p>
-                            {walletSettings[trackedWalletAddr]?.custom_name && (
-                              <p className="text-white/60 font-space-grotesk font-mono text-xs">
-                                ({formatWalletAddress(trackedWalletAddr)})
-                              </p>
-                            )}
-                            <button
-                              onClick={() => copyToClipboard(trackedWalletAddr || '', `log-tracked-${log.id}`)}
-                              className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
-                              title="Copy tracked wallet address"
-                            >
-                              <Copy size={16} />
-                            </button>
-                            {copiedKey === `log-tracked-${log.id}` && (
-                              <span className="text-xs text-molten-gold">Copied</span>
-                            )}
-                          </div>
-                          {!walletSettings[trackedWalletAddr]?.custom_name && (
-                            <p className="text-white/40 font-space-grotesk font-mono text-xs mt-2 break-all">
-                              {trackedWalletAddr}
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })()}
-                    
                     {/* Transaction Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
