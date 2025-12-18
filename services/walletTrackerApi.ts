@@ -265,6 +265,22 @@ export const walletTrackerApi = {
     });
   },
 
+  async getTrackedPositions(coin: string = 'sol'): Promise<Record<string, { tp_sl_active: boolean; buy_price: number; remaining_amount: number; targets: Array<{ type: string; percentage: number; sell_percentage: number; target_price: number }>; decimals_adjusted: boolean }>> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-positions/${coin}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return await handleResponse(response);
+    });
+  },
+
   async generatePnlImage(tokenAddress: string, tokenName: string, sent: string, received: string, pnl: number | null | undefined, transactionSignature: string | null, coin: string = 'sol'): Promise<Blob> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');

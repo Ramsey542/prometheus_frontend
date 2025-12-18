@@ -18,6 +18,19 @@ interface TokenBalance {
   logo_uri?: string
 }
 
+interface TrackedPositionInfo {
+  tp_sl_active: boolean
+  buy_price: number
+  remaining_amount: number
+  targets: Array<{
+    type: string
+    percentage: number
+    sell_percentage: number
+    target_price: number
+  }>
+  decimals_adjusted: boolean
+}
+
 export default function CustomBuysPage() {
   const { selectedCoin } = useAppSelector((s) => s.auth)
   const [tokens, setTokens] = useState<TokenBalance[]>([])
@@ -37,6 +50,7 @@ export default function CustomBuysPage() {
   const [sellError, setSellError] = useState<string | null>(null)
   const [transactionSignature, setTransactionSignature] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
+  const [trackedPositions, setTrackedPositions] = useState<Record<string, TrackedPositionInfo>>({})
 
   const tokensPerPage = 20
 
@@ -46,23 +60,28 @@ export default function CustomBuysPage() {
       setError(null)
       setLoading(true)
       const offset = (currentPage - 1) * tokensPerPage
-      const response = await walletTrackerApi.getTokenBalances(selectedCoin, offset, tokensPerPage)
+      
+      const [tokenResponse, positionsResponse] = await Promise.all([
+        walletTrackerApi.getTokenBalances(selectedCoin, offset, tokensPerPage),
+        walletTrackerApi.getTrackedPositions(selectedCoin)
+      ])
       
       let tokenList: TokenBalance[] = []
       
-      if (response.token_balances && Array.isArray(response.token_balances)) {
-        tokenList = response.token_balances
-      } else if (Array.isArray(response)) {
-        tokenList = response
-      } else if (response.tokens && Array.isArray(response.tokens)) {
-        tokenList = response.tokens
-      } else if (response.data && Array.isArray(response.data)) {
-        tokenList = response.data
+      if (tokenResponse.token_balances && Array.isArray(tokenResponse.token_balances)) {
+        tokenList = tokenResponse.token_balances
+      } else if (Array.isArray(tokenResponse)) {
+        tokenList = tokenResponse
+      } else if (tokenResponse.tokens && Array.isArray(tokenResponse.tokens)) {
+        tokenList = tokenResponse.tokens
+      } else if (tokenResponse.data && Array.isArray(tokenResponse.data)) {
+        tokenList = tokenResponse.data
       }
       
       setTokens(tokenList)
-      if (typeof response?.total_count === 'number') {
-        setTotalCount(response.total_count)
+      setTrackedPositions(positionsResponse || {})
+      if (typeof tokenResponse?.total_count === 'number') {
+        setTotalCount(tokenResponse.total_count)
       } else {
         setTotalCount(tokenList.length)
       }
@@ -242,6 +261,7 @@ export default function CustomBuysPage() {
                       <th className="text-right py-3 px-4 text-sm font-orbitron font-semibold text-molten-gold uppercase">Balance</th>
                       <th className="text-right py-3 px-4 text-sm font-orbitron font-semibold text-molten-gold uppercase">Price</th>
                       <th className="text-right py-3 px-4 text-sm font-orbitron font-semibold text-molten-gold uppercase">Balance USD</th>
+                      <th className="text-center py-3 px-4 text-sm font-orbitron font-semibold text-molten-gold uppercase">TP/SL</th>
                       <th className="text-center py-3 px-4 text-sm font-orbitron font-semibold text-molten-gold uppercase">Actions</th>
                     </tr>
                   </thead>
@@ -326,6 +346,57 @@ export default function CustomBuysPage() {
                               ) : (
                                 <p className="text-sm font-space-grotesk text-white/40">-</p>
                               )
+                          })()}
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          {(() => {
+                            const positionInfo = trackedPositions[token.token_address.toLowerCase()]
+                            if (!positionInfo) {
+                              return <span className="text-xs text-white/40 font-space-grotesk">-</span>
+                            }
+                            const tpTargets = positionInfo.targets.filter(t => t.type === 'tp')
+                            const slTargets = positionInfo.targets.filter(t => t.type === 'sl')
+                            return (
+                              <div className="relative group inline-block">
+                                <span className={`text-xs font-orbitron font-semibold px-2 py-1 rounded cursor-help ${positionInfo.tp_sl_active ? 'bg-green-500/20 text-green-400 border border-green-500/40' : 'bg-gray-500/20 text-gray-400 border border-gray-500/40'}`}>
+                                  {positionInfo.tp_sl_active ? 'Active' : 'Inactive'}
+                                </span>
+                                <div className="absolute z-50 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-void-black/95 border border-molten-gold/40 rounded-lg shadow-xl">
+                                  <div className="text-xs font-space-grotesk space-y-2">
+                                    <div className="flex justify-between border-b border-molten-gold/20 pb-2">
+                                      <span className="text-white/60">Buy Price:</span>
+                                      <span className="text-molten-gold font-semibold">${positionInfo.buy_price < 0.0001 ? positionInfo.buy_price.toExponential(4) : positionInfo.buy_price.toFixed(8)}</span>
+                                    </div>
+                                    {tpTargets.length > 0 && (
+                                      <div className="space-y-1">
+                                        <span className="text-green-400 font-semibold">Take Profit:</span>
+                                        {tpTargets.map((tp, i) => (
+                                          <div key={i} className="flex justify-between text-white/80 pl-2">
+                                            <span>+{tp.percentage}% → sell {tp.sell_percentage}%</span>
+                                            <span className="text-green-300">${tp.target_price < 0.0001 ? tp.target_price.toExponential(4) : tp.target_price.toFixed(8)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {slTargets.length > 0 && (
+                                      <div className="space-y-1">
+                                        <span className="text-red-400 font-semibold">Stop Loss:</span>
+                                        {slTargets.map((sl, i) => (
+                                          <div key={i} className="flex justify-between text-white/80 pl-2">
+                                            <span>-{sl.percentage}% → sell {sl.sell_percentage}%</span>
+                                            <span className="text-red-300">${sl.target_price < 0.0001 ? sl.target_price.toExponential(4) : sl.target_price.toFixed(8)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {tpTargets.length === 0 && slTargets.length === 0 && (
+                                      <span className="text-white/40">No targets configured</span>
+                                    )}
+                                  </div>
+                                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full border-8 border-transparent border-t-molten-gold/40"></div>
+                                </div>
+                              </div>
+                            )
                           })()}
                         </td>
                         <td className="py-4 px-4">

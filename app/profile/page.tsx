@@ -217,6 +217,16 @@ function ProfilePageContent() {
     }
   }, [user, currentSection, trackerLogs])
 
+  useEffect(() => {
+    if (user && currentSection === 'tracker-logs' && copyTradingStats?.wallet_stats) {
+      copyTradingStats.wallet_stats.forEach(wallet => {
+        if (!walletSettings[wallet.wallet_address]) {
+          fetchWalletSettings(wallet.wallet_address)
+        }
+      })
+    }
+  }, [user, currentSection, copyTradingStats])
+
   const fetchTrackedWallets = async (page: number = 1) => {
     try {
       setWalletTrackerLoading(true)
@@ -1943,12 +1953,12 @@ function ProfilePageContent() {
                   animate={{ opacity: 1, y: 0 }}
                   className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4"
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 mb-4">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
                       {log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
                         <div className={`w-3 h-3 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'}`} />
                       )}
-                      <span className={`text-sm font-orbitron font-semibold tracking-wider uppercase ${
+                      <span className={`text-xs md:text-sm font-orbitron font-semibold tracking-wider uppercase ${
                         log.event_type === 'tracked_wallet_activity' ? 'text-green-400' : 
                         log.event_type === 'user_purchase' ? 'text-blue-400' :
                         log.event_type === 'user_sell' ? 'text-orange-400' :
@@ -1961,9 +1971,9 @@ function ProfilePageContent() {
                           ? log.wallet_address 
                           : (log.tracked_wallet_address || log.copied_wallet)
                         return trackedWalletAddr && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
-                            <span className="text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
-                            <span className="text-xs md:text-sm font-space-grotesk font-mono text-white">
+                          <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
+                            <span className="hidden sm:inline text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
+                            <span className="text-xs font-space-grotesk font-mono text-white">
                               {walletSettings[trackedWalletAddr]?.custom_name || formatWalletAddress(trackedWalletAddr)}
                             </span>
                             <button
@@ -1982,19 +1992,32 @@ function ProfilePageContent() {
                       {log.event_type === 'user_sell' && (
                         log.is_tp_sl_sell ? (
                           <div className="group relative">
-                            <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-green-200 border border-green-400/40 rounded-full bg-green-500/10 shadow-[0_0_12px_rgba(74,222,128,0.5)]">
-                              {(log.tp_sl_trigger_type ? log.tp_sl_trigger_type.toUpperCase() : 'TP/SL')} Trade
+                            <span className={`px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide rounded-full ${log.tp_sl_trigger_type === 'take_profit' ? 'text-green-200 border border-green-400/40 bg-green-500/10 shadow-[0_0_12px_rgba(74,222,128,0.5)]' : 'text-red-200 border border-red-400/40 bg-red-500/10 shadow-[0_0_12px_rgba(239,68,68,0.5)]'}`}>
+                              {log.tp_sl_trigger_type === 'take_profit' ? 'TP' : log.tp_sl_trigger_type === 'stop_loss' ? 'SL' : 'TP/SL'} {typeof log.tp_sl_trigger_value === 'number' && `(${log.tp_sl_trigger_type === 'take_profit' ? '+' : '-'}${log.tp_sl_trigger_value}%)`}
                             </span>
-                            {(typeof log.tp_sl_trigger_price === 'number' || typeof log.tp_sl_trigger_value === 'number') && (
-                              <div className="absolute bottom-full left-0 mb-2 w-64 bg-void-black/95 border border-green-400/30 rounded-lg p-3 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20 font-space-grotesk space-y-1">
-                                {typeof log.tp_sl_trigger_price === 'number' && (
-                                  <p>Executed @ ${log.tp_sl_trigger_price.toFixed(6)}</p>
-                                )}
-                                {typeof log.tp_sl_trigger_value === 'number' && (
-                                  <p>Trigger Value: {log.tp_sl_trigger_value}</p>
-                                )}
-                              </div>
-                            )}
+                            <div className="absolute bottom-full left-0 mb-2 w-72 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20 font-space-grotesk space-y-2">
+                              <p className={`font-orbitron font-semibold ${log.tp_sl_trigger_type === 'take_profit' ? 'text-green-400' : 'text-red-400'}`}>
+                                {log.tp_sl_trigger_type === 'take_profit' ? 'Take Profit Triggered' : 'Stop Loss Triggered'}
+                              </p>
+                              {typeof log.tp_sl_buy_price === 'number' && (
+                                <div className="flex justify-between border-b border-white/10 pb-1">
+                                  <span className="text-white/60">Buy Price:</span>
+                                  <span className="text-molten-gold">${log.tp_sl_buy_price < 0.0001 ? log.tp_sl_buy_price.toExponential(4) : log.tp_sl_buy_price.toFixed(8)}</span>
+                                </div>
+                              )}
+                              {typeof log.tp_sl_trigger_price === 'number' && (
+                                <div className="flex justify-between border-b border-white/10 pb-1">
+                                  <span className="text-white/60">Trigger Price:</span>
+                                  <span className={log.tp_sl_trigger_type === 'take_profit' ? 'text-green-400' : 'text-red-400'}>${log.tp_sl_trigger_price < 0.0001 ? log.tp_sl_trigger_price.toExponential(4) : log.tp_sl_trigger_price.toFixed(8)}</span>
+                                </div>
+                              )}
+                              {typeof log.tp_sl_trigger_value === 'number' && (
+                                <div className="flex justify-between">
+                                  <span className="text-white/60">Target:</span>
+                                  <span className={log.tp_sl_trigger_type === 'take_profit' ? 'text-green-400' : 'text-red-400'}>{log.tp_sl_trigger_type === 'take_profit' ? '+' : '-'}{log.tp_sl_trigger_value}%</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-yellow-200 border border-yellow-400/40 rounded-full bg-yellow-500/10 shadow-[0_0_12px_rgba(234,179,8,0.45)]">
@@ -2064,7 +2087,7 @@ function ProfilePageContent() {
                         </div>
                       )}
                     </div>
-                    <span className="text-xs text-white/40 font-space-grotesk">
+                    <span className="text-xs text-white/40 font-space-grotesk flex-shrink-0">
                       {log.created_at ? new Date(log.created_at).toLocaleString() : 'Unknown Date'}
                     </span>
                   </div>

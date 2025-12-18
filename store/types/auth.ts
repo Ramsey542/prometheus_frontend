@@ -125,6 +125,7 @@ export interface CopyTradingLog {
   tp_sl_trigger_type?: string | null;
   tp_sl_trigger_value?: number | null;
   tp_sl_trigger_price?: number | null;
+  tp_sl_buy_price?: number | null;
 }
 
 export interface WalletStats {
