@@ -138,8 +138,8 @@ export default function CustomBuysPage() {
       return
     }
     const slippageNum = parseFloat(slippage)
-    if (isNaN(slippageNum) || slippageNum < 1 || slippageNum > 100) {
-      setSellError('Slippage must be between 1 and 100 percent')
+    if (isNaN(slippageNum) || slippageNum < 0) {
+      setSellError('Slippage must be greater than or equal to 0')
       return
     }
     try {
@@ -556,8 +556,7 @@ export default function CustomBuysPage() {
                 onChange={(e) => setSlippage(e.target.value)}
                   className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none"
                 placeholder="1.0"
-                min="1"
-                max="100"
+                min="0"
                 step="0.1"
                   disabled={selling}
               />
