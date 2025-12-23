@@ -98,8 +98,8 @@ export default function TokenBuysPage() {
       return
     }
 
-    if (isNaN(slippageNum) || slippageNum < 0) {
-      setBuyError('Slippage must be greater than or equal to 0')
+    if (isNaN(slippageNum) || slippageNum < 0 || slippageNum > 100) {
+      setBuyError('Slippage must be between 0 and 100')
       return
     }
 
@@ -238,6 +238,7 @@ export default function TokenBuysPage() {
                 className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-4 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none"
                 placeholder="10"
                 min="0"
+                max="100"
                 step="0.1"
                 disabled={buying}
               />
