@@ -2093,6 +2093,18 @@ function ProfilePageContent() {
                   </div>
                   
                   <div className="space-y-4">
+                    {log.status === 'failed' && log.error_message && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <XCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error</p>
+                            <p className="text-red-300 font-space-grotesk text-sm">{log.error_message}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Transaction Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -2313,7 +2325,7 @@ function ProfilePageContent() {
                     )}
                   </div>
                   
-                  {log.error_message && (
+                  {log.error_message && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
                     <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                       <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error Message</p>
                       <p className="text-red-300 font-space-grotesk text-sm">{log.error_message}</p>

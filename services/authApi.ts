@@ -189,4 +189,60 @@ export const authApi = {
 
     return await handleResponse(response);
   },
+
+  async get(url: string): Promise<any> {
+    const accessToken = localStorage.getItem('access_token');
+    
+    if (!accessToken) {
+      throw new AuthApiError('No access token found', 401);
+    }
+
+    const response = await fetch(`${config.apiBaseUrl}${url}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return await handleResponse(response);
+  },
+
+  async post(url: string, payload: any): Promise<any> {
+    const accessToken = localStorage.getItem('access_token');
+    
+    if (!accessToken) {
+      throw new AuthApiError('No access token found', 401);
+    }
+
+    const response = await fetch(`${config.apiBaseUrl}${url}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return await handleResponse(response);
+  },
+
+  async put(url: string, payload: any): Promise<any> {
+    const accessToken = localStorage.getItem('access_token');
+    
+    if (!accessToken) {
+      throw new AuthApiError('No access token found', 401);
+    }
+
+    const response = await fetch(`${config.apiBaseUrl}${url}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return await handleResponse(response);
+  },
 };
