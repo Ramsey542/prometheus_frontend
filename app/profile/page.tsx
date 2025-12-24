@@ -1094,12 +1094,13 @@ function ProfilePageContent() {
                       </div>
                     </div>
                     <p className="text-white/40 font-space-grotesk text-xs mt-2">
-                      Added: {new Date(wallet.created_at).toLocaleDateString('en-US', {
+                      Added: {new Date(wallet.created_at).toLocaleString('en-US', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',
-                        minute: '2-digit'
+                        minute: '2-digit',
+                        hour12: true
                       })}
                     </p>
                   </div>
@@ -2088,7 +2089,15 @@ function ProfilePageContent() {
                       )}
                     </div>
                     <span className="text-xs text-white/40 font-space-grotesk flex-shrink-0">
-                      {log.created_at ? new Date(log.created_at).toLocaleString() : 'Unknown Date'}
+                      {log.created_at ? new Date(log.created_at).toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: true
+                      }) : 'Unknown Date'}
                     </span>
                   </div>
                   
