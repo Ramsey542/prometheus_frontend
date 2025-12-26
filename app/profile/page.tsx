@@ -1,13 +1,13 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { 
-  User, 
-  Mail, 
-  Wallet, 
-  LogOut, 
-  Copy, 
-  Eye, 
+import {
+  User,
+  Mail,
+  Wallet,
+  LogOut,
+  Copy,
+  Eye,
   EyeOff,
   Shield,
   Activity,
@@ -41,34 +41,57 @@ const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boole
   try {
     const numAmount = BigInt(amount)
     let decimals: number
-    
+
     if (isToken && tokenDecimals !== null && tokenDecimals !== undefined) {
       decimals = tokenDecimals
     } else {
       decimals = coin === 'sol' ? 9 : 18
     }
-    
+
     const divisor = BigInt(10 ** decimals)
     const wholePart = numAmount / divisor
     const fractionalPart = numAmount % divisor
-    
+
     const wholeStr = wholePart.toString()
     let fractionalStr = fractionalPart.toString().padStart(decimals, '0')
-    
+
     while (fractionalStr.endsWith('0') && fractionalStr.length > 0) {
       fractionalStr = fractionalStr.slice(0, -1)
     }
-    
+
     if (fractionalStr === '') {
       return wholeStr
     }
-    
+
     const maxDisplayDecimals = decimals === 18 ? 8 : decimals === 9 ? 6 : 4
     const trimmedFractional = fractionalStr.slice(0, maxDisplayDecimals)
-    
+
     return `${wholeStr}.${trimmedFractional}`
   } catch {
     return amount
+  }
+}
+
+const formatDate = (dateString: string, includeSeconds: boolean = false): string => {
+  if (!dateString) return 'N/A'
+
+  let utcString = dateString
+  if (!utcString.endsWith('Z') && !utcString.includes('+')) {
+    utcString = utcString.replace(' ', 'T') + 'Z'
+  }
+
+  try {
+    return new Date(utcString).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: includeSeconds ? '2-digit' : undefined,
+      hour12: true
+    })
+  } catch {
+    return dateString
   }
 }
 
@@ -83,11 +106,11 @@ function ProfilePageContent() {
   const [walletTrackerLoading, setWalletTrackerLoading] = useState(false)
   const [walletTrackerError, setWalletTrackerError] = useState<string | null>(null)
   const [walletTrackerSuccess, setWalletTrackerSuccess] = useState<string | null>(null)
-  
+
   const [walletsPage, setWalletsPage] = useState(1)
   const [walletsTotalPages, setWalletsTotalPages] = useState(1)
   const [walletsTotal, setWalletsTotal] = useState(0)
-  
+
   const [trackerLogs, setTrackerLogs] = useState<CopyTradingLog[]>([])
   const [logsPage, setLogsPage] = useState(1)
   const [logsTotalPages, setLogsTotalPages] = useState(1)
@@ -101,17 +124,17 @@ function ProfilePageContent() {
   const [isEditingTradeAmount, setIsEditingTradeAmount] = useState(false)
   const [tradeAmountSuccess, setTradeAmountSuccess] = useState<string | null>(null)
   const [tradeAmountError, setTradeAmountError] = useState<string | null>(null)
-  const [walletSettings, setWalletSettings] = useState<{[key: string]: any}>({})
+  const [walletSettings, setWalletSettings] = useState<{ [key: string]: any }>({})
   const [showWalletSettings, setShowWalletSettings] = useState<string | null>(null)
   const [walletSettingsLoading, setWalletSettingsLoading] = useState(false)
   const [walletSettingsSuccess, setWalletSettingsSuccess] = useState<string | null>(null)
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState<{[key: string]: boolean}>({})
-  const [showAllTP, setShowAllTP] = useState<{[key: string]: boolean}>({})
-  const [showAllSL, setShowAllSL] = useState<{[key: string]: boolean}>({})
-  const [tpValidationErrors, setTpValidationErrors] = useState<{[key: string]: string | null}>({})
-  const [slValidationErrors, setSlValidationErrors] = useState<{[key: string]: string | null}>({})
-  const [tpSlIsActive, setTpSlIsActive] = useState<{[key: string]: boolean}>({})
-  const [stopTrackingModal, setStopTrackingModal] = useState<{open: boolean, walletAddress: string | null, isActive: boolean}>({open: false, walletAddress: null, isActive: false})
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<{ [key: string]: boolean }>({})
+  const [showAllTP, setShowAllTP] = useState<{ [key: string]: boolean }>({})
+  const [showAllSL, setShowAllSL] = useState<{ [key: string]: boolean }>({})
+  const [tpValidationErrors, setTpValidationErrors] = useState<{ [key: string]: string | null }>({})
+  const [slValidationErrors, setSlValidationErrors] = useState<{ [key: string]: string | null }>({})
+  const [tpSlIsActive, setTpSlIsActive] = useState<{ [key: string]: boolean }>({})
+  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean }>({ open: false, walletAddress: null, isActive: false })
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
@@ -174,7 +197,7 @@ function ProfilePageContent() {
       setWalletsPage(1)
       setWalletsTotalPages(1)
       setWalletsTotal(0)
-      
+
       const fetchData = async () => {
         await Promise.all([
           fetchTrackedWallets(),
@@ -183,7 +206,7 @@ function ProfilePageContent() {
         ])
         setCoinSwitching(false)
       }
-      
+
       fetchData()
     }
   }, [user, currentSection, selectedCoin])
@@ -207,8 +230,8 @@ function ProfilePageContent() {
   useEffect(() => {
     if (user && currentSection === 'tracker-logs' && trackerLogs && trackerLogs.length > 0) {
       trackerLogs.forEach(log => {
-        const trackedWalletAddr = log.event_type === 'tracked_wallet_activity' 
-          ? log.wallet_address 
+        const trackedWalletAddr = log.event_type === 'tracked_wallet_activity'
+          ? log.wallet_address
           : (log.tracked_wallet_address || log.copied_wallet)
         if (trackedWalletAddr && !walletSettings[trackedWalletAddr]) {
           fetchWalletSettings(trackedWalletAddr)
@@ -232,9 +255,9 @@ function ProfilePageContent() {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
       const response = await walletTrackerApi.getTrackedWallets(page, 10, selectedCoin)
-      
+
       let wallets = Array.isArray(response) ? response : (response.wallets || [])
-      
+
       if (copyTradingStats && copyTradingStats.wallet_stats) {
         wallets = wallets.map(wallet => {
           const walletStats = copyTradingStats.wallet_stats.find(stat => stat.wallet_address === wallet.wallet_address)
@@ -251,7 +274,7 @@ function ProfilePageContent() {
           return wallet
         })
       }
-      
+
       if (Array.isArray(response)) {
         setTrackedWallets(wallets)
         setWalletsTotalPages(1)
@@ -266,7 +289,7 @@ function ProfilePageContent() {
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch tracked wallets'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -284,7 +307,7 @@ function ProfilePageContent() {
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch copy trading stats'
       setStatsError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -315,7 +338,7 @@ function ProfilePageContent() {
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to add wallet to tracking'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -328,7 +351,7 @@ function ProfilePageContent() {
     try {
       const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
       const isActive = settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : false
-      
+
       if (isActive) {
         setStopTrackingModal({
           open: true,
@@ -352,13 +375,13 @@ function ProfilePageContent() {
 
       await walletTrackerApi.stopTrackingWallet(walletAddress, selectedCoin, disableTpSl)
       setWalletTrackerSuccess('Wallet tracking stopped successfully!')
-      setStopTrackingModal({open: false, walletAddress: null, isActive: false})
+      setStopTrackingModal({ open: false, walletAddress: null, isActive: false })
       await fetchTrackedWallets()
       await fetchCopyTradingStats()
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to stop wallet tracking'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -384,7 +407,7 @@ function ProfilePageContent() {
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to resume wallet tracking'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -423,7 +446,7 @@ function ProfilePageContent() {
         setLogsLoading(true)
       }
       setWalletTrackerError(null)
-      
+
       const response = await walletTrackerApi.getAllLogs(page, 10, selectedCoin)
       if (response && typeof response === 'object' && 'logs' in response) {
         setTrackerLogs(response.logs || [])
@@ -437,11 +460,11 @@ function ProfilePageContent() {
         setLogsPage(1)
         setLogsTotal(logs.length)
       }
-      
+
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch tracker logs'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -521,13 +544,13 @@ function ProfilePageContent() {
 
       const data = await response.json()
       setTradeAmountSuccess(data.message || 'Trade amount updated successfully!')
-      
+
       await dispatch(getProfile(selectedCoin))
       setIsEditingTradeAmount(false)
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to update trade amount'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -599,7 +622,7 @@ function ProfilePageContent() {
         take_profit_levels: updatedLevels
       }
     }))
-    
+
     const total = calculateTotalSellPercentage(updatedLevels)
     if (total > 100) {
       setTpValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage cannot exceed 100%' }))
@@ -645,7 +668,7 @@ function ProfilePageContent() {
         stop_loss_levels: updatedLevels
       }
     }))
-    
+
     const total = calculateTotalSellPercentage(updatedLevels)
     if (total > 100) {
       setSlValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage cannot exceed 100%' }))
@@ -682,14 +705,14 @@ function ProfilePageContent() {
         tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
-      
+
       setWalletSettingsSuccess('Wallet settings updated successfully!')
       setTimeout(() => setWalletSettingsSuccess(null), 5000)
       setShowWalletSettings(null)
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to update wallet settings'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -729,9 +752,9 @@ function ProfilePageContent() {
         stop_loss_levels: settings.stop_loss_levels,
         tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
       }
-      
+
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
-      
+
       // Update local state
       setWalletSettings(prev => ({
         ...prev,
@@ -740,13 +763,13 @@ function ProfilePageContent() {
           custom_name: customNameValue.trim() || ''
         }
       }))
-      
+
       setEditingCustomName(null)
       setCustomNameValue('')
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to update custom name'
       setWalletTrackerError(errorMessage)
-      
+
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
@@ -862,12 +885,12 @@ function ProfilePageContent() {
 
   const handleSharePnlImage = async () => {
     if (!pnlImageModal.imageUrl) return
-    
+
     try {
       const response = await fetch(pnlImageModal.imageUrl)
       const blob = await response.blob()
       const file = new File([blob], 'pnl-image.png', { type: 'image/png' })
-      
+
       if (navigator.share && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -897,7 +920,7 @@ function ProfilePageContent() {
           <Plus size={20} />
           Add Wallet to Track
         </h3>
-        
+
         <form onSubmit={handleAddWallet} className="space-y-4">
           <div>
             <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
@@ -971,7 +994,7 @@ function ProfilePageContent() {
             <span className="font-semibold">Platform Fee:</span> A 1% fee applies to all trades
           </p>
         </div>
-        
+
         {(walletTrackerLoading || coinSwitching) && (!trackedWallets || trackedWallets.length === 0) ? (
           <div className="text-center py-8">
             <div className="w-8 h-8 border-2 border-molten-gold border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -987,7 +1010,7 @@ function ProfilePageContent() {
           </div>
         ) : (
           <div className="space-y-4">
-                 {trackedWallets.map((wallet) => (
+            {trackedWallets.map((wallet) => (
               <motion.div
                 key={wallet.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -1062,7 +1085,7 @@ function ProfilePageContent() {
                             <Copy size={14} />
                           </button>
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <p 
+                            <p
                               className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default"
                               title={wallet.wallet_address}
                             >
@@ -1094,38 +1117,30 @@ function ProfilePageContent() {
                       </div>
                     </div>
                     <p className="text-white/40 font-space-grotesk text-xs mt-2">
-                      Added: {new Date(wallet.created_at).toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
+                      Added: {formatDate(wallet.created_at)}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 ml-4">
                     <motion.button
                       onClick={() => handleWalletSettingsClick(wallet.wallet_address)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-300 ${
-                        walletSettings[wallet.wallet_address] && 
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-300 ${walletSettings[wallet.wallet_address] &&
                         walletSettings[wallet.wallet_address].is_default === false
-                          ? 'bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20'
-                          : 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/20'
-                      }`}
+                        ? 'bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20'
+                        : 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/20'
+                        }`}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
                       <CheckCircle size={14} />
                       <span className="text-sm font-orbitron font-semibold">
-                        {walletSettings[wallet.wallet_address] && 
-                         walletSettings[wallet.wallet_address].is_default === false
+                        {walletSettings[wallet.wallet_address] &&
+                          walletSettings[wallet.wallet_address].is_default === false
                           ? 'Custom Controls'
                           : 'Default Controls'
                         }
                       </span>
                     </motion.button>
-                    
+
                     {wallet.is_active ? (
                       <motion.button
                         onClick={() => handleStopTrackingClick(wallet.wallet_address)}
@@ -1164,7 +1179,7 @@ function ProfilePageContent() {
             ))}
           </div>
         )}
-        
+
         {walletsTotalPages > 1 && (
           <div className="flex items-center justify-center gap-4 mt-6">
             <motion.button
@@ -1177,11 +1192,11 @@ function ProfilePageContent() {
               <ChevronLeft size={16} />
               Previous
             </motion.button>
-            
+
             <span className="text-white font-orbitron font-semibold">
               Page {walletsPage} of {walletsTotalPages}
             </span>
-            
+
             <motion.button
               onClick={() => handleWalletsPageChange(walletsPage + 1)}
               disabled={walletsPage >= walletsTotalPages}
@@ -1267,9 +1282,8 @@ function ProfilePageContent() {
                             buy_the_dip: !prev[showWalletSettings].buy_the_dip
                           }
                         }))}
-                        className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${
-                          walletSettings[showWalletSettings].buy_the_dip ? 'bg-molten-gold' : 'bg-gray-600'
-                        }`}
+                        className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${walletSettings[showWalletSettings].buy_the_dip ? 'bg-molten-gold' : 'bg-gray-600'
+                          }`}
                         whileTap={{ scale: 0.95 }}
                       >
                         <motion.div
@@ -1352,9 +1366,8 @@ function ProfilePageContent() {
                                     dip_recovery: !prev[showWalletSettings].dip_recovery
                                   }
                                 }))}
-                                className={`w-10 h-5 rounded-full p-1 transition-all duration-300 ${
-                                  walletSettings[showWalletSettings].dip_recovery ? 'bg-molten-gold' : 'bg-gray-600'
-                                }`}
+                                className={`w-10 h-5 rounded-full p-1 transition-all duration-300 ${walletSettings[showWalletSettings].dip_recovery ? 'bg-molten-gold' : 'bg-gray-600'
+                                  }`}
                                 whileTap={{ scale: 0.95 }}
                               >
                                 <motion.div
@@ -1415,27 +1428,27 @@ function ProfilePageContent() {
                     )}
                   </div>
 
-              {/* Slippage Settings */}
+                  {/* Slippage Settings */}
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
                     <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Slippage Settings</h4>
-                    
+
                     <div>
                       <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
                         SLIPPAGE (%)
                       </label>
                       <input
                         type="number"
-                    value={walletSettings[showWalletSettings].slippage === 0 || walletSettings[showWalletSettings].slippage ? walletSettings[showWalletSettings].slippage : ''}
-                    onChange={(e) => setWalletSettings(prev => ({
-                      ...prev,
-                      [showWalletSettings]: {
-                        ...prev[showWalletSettings],
-                        slippage: e.target.value === '' ? '' : parseFloat(e.target.value)
-                      }
-                    }))}
+                        value={walletSettings[showWalletSettings].slippage === 0 || walletSettings[showWalletSettings].slippage ? walletSettings[showWalletSettings].slippage : ''}
+                        onChange={(e) => setWalletSettings(prev => ({
+                          ...prev,
+                          [showWalletSettings]: {
+                            ...prev[showWalletSettings],
+                            slippage: e.target.value === '' ? '' : parseFloat(e.target.value)
+                          }
+                        }))}
                         className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                    min="0"
-                    max="100"
+                        min="0"
+                        max="100"
                         step="0.1"
                       />
                     </div>
@@ -1453,9 +1466,8 @@ function ProfilePageContent() {
                           ...prev,
                           [showWalletSettings]: !(prev[showWalletSettings] ?? true)
                         }))}
-                        className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${
-                          (tpSlIsActive[showWalletSettings] ?? true) ? 'bg-molten-gold' : 'bg-gray-600'
-                        }`}
+                        className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${(tpSlIsActive[showWalletSettings] ?? true) ? 'bg-molten-gold' : 'bg-gray-600'
+                          }`}
                         whileTap={{ scale: 0.95 }}
                       >
                         <motion.div
@@ -1480,13 +1492,13 @@ function ProfilePageContent() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className={`space-y-3 ${!(tpSlIsActive[showWalletSettings] ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
                       {(walletSettings[showWalletSettings]?.take_profit_levels || []).map((level: any, index: number) => {
                         const tpLevels = walletSettings[showWalletSettings]?.take_profit_levels || []
                         const shouldShow = index === 0 || showAllTP[showWalletSettings]
                         if (!shouldShow) return null
-                        
+
                         return (
                           <div key={index} className="flex items-center gap-3">
                             <span className="text-sm text-white/60 font-space-grotesk w-30">When price up &gt;</span>
@@ -1560,13 +1572,13 @@ function ProfilePageContent() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className={`space-y-3 ${!(tpSlIsActive[showWalletSettings] ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
                       {(walletSettings[showWalletSettings]?.stop_loss_levels || []).map((level: any, index: number) => {
                         const slLevels = walletSettings[showWalletSettings]?.stop_loss_levels || []
                         const shouldShow = index === 0 || showAllSL[showWalletSettings]
                         if (!shouldShow) return null
-                        
+
                         return (
                           <div key={index} className="flex items-center gap-3">
                             <span className="text-sm text-white/60 font-space-grotesk w-30">When price down &gt;</span>
@@ -1636,7 +1648,7 @@ function ProfilePageContent() {
                       <h4 className="text-lg font-orbitron font-semibold text-white">Advanced Filters</h4>
                       {showAdvancedFilters[showWalletSettings] ? <ChevronUp size={20} className="text-molten-gold" /> : <ChevronDown size={20} className="text-molten-gold" />}
                     </button>
-                    
+
                     {showAdvancedFilters[showWalletSettings] && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
@@ -1644,68 +1656,68 @@ function ProfilePageContent() {
                         exit={{ opacity: 0, height: 0 }}
                         className="mt-4 space-y-4"
                       >
-                      <div>
-                        <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
-                          Max buys per mirror per hour
-                        </label>
-                        <input
-                          type="number"
-                          value={walletSettings[showWalletSettings].max_buys_per_mirror_per_hour ?? ''}
-                          onChange={(e) => setWalletSettings(prev => ({
-                            ...prev,
-                            [showWalletSettings]: {
-                              ...prev[showWalletSettings],
-                              max_buys_per_mirror_per_hour: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
-                            }
-                          }))}
-                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                          min="1"
-                          step="1"
-                          placeholder="1"
-                        />
-                      </div>
+                        <div>
+                          <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                            Max buys per mirror per hour
+                          </label>
+                          <input
+                            type="number"
+                            value={walletSettings[showWalletSettings].max_buys_per_mirror_per_hour ?? ''}
+                            onChange={(e) => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                max_buys_per_mirror_per_hour: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
+                              }
+                            }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="1"
+                            step="1"
+                            placeholder="1"
+                          />
+                        </div>
 
-                      <div>
-                        <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
-                          Max buys per mirror per day
-                        </label>
-                        <input
-                          type="number"
-                          value={walletSettings[showWalletSettings].max_buys_per_mirror_per_day ?? ''}
-                          onChange={(e) => setWalletSettings(prev => ({
-                            ...prev,
-                            [showWalletSettings]: {
-                              ...prev[showWalletSettings],
-                              max_buys_per_mirror_per_day: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
-                            }
-                          }))}
-                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                          min="1"
-                          step="1"
-                          placeholder="1"
-                        />
-                      </div>
+                        <div>
+                          <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                            Max buys per mirror per day
+                          </label>
+                          <input
+                            type="number"
+                            value={walletSettings[showWalletSettings].max_buys_per_mirror_per_day ?? ''}
+                            onChange={(e) => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                max_buys_per_mirror_per_day: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
+                              }
+                            }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="1"
+                            step="1"
+                            placeholder="1"
+                          />
+                        </div>
 
-                      <div>
-                        <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
-                          Max buys per token per day
-                        </label>
-                        <input
-                          type="number"
-                          value={walletSettings[showWalletSettings].max_buys_per_token_per_day ?? ''}
-                          onChange={(e) => setWalletSettings(prev => ({
-                            ...prev,
-                            [showWalletSettings]: {
-                              ...prev[showWalletSettings],
-                              max_buys_per_token_per_day: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
-                            }
-                          }))}
-                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                          min="1"
-                          step="1"
-                          placeholder="1"
-                        />
-                      </div>
+                        <div>
+                          <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                            Max buys per token per day
+                          </label>
+                          <input
+                            type="number"
+                            value={walletSettings[showWalletSettings].max_buys_per_token_per_day ?? ''}
+                            onChange={(e) => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                max_buys_per_token_per_day: e.target.value === '' ? undefined : (isNaN(parseInt(e.target.value)) ? undefined : parseInt(e.target.value))
+                              }
+                            }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="1"
+                            step="1"
+                            placeholder="1"
+                          />
+                        </div>
                       </motion.div>
                     )}
                   </div>
@@ -1748,7 +1760,7 @@ function ProfilePageContent() {
             <TrendingUp size={20} />
             Copy Trading Statistics
           </h3>
-          
+
           {statsLoading ? (
             <div className="text-center py-8">
               <div className="w-8 h-8 border-2 border-molten-gold border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -1874,7 +1886,7 @@ function ProfilePageContent() {
               <TrendingUp size={20} />
               Wallet Performance Overview
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {copyTradingStats.wallet_stats.map((wallet, index) => (
                 <motion.div
@@ -1898,11 +1910,10 @@ function ProfilePageContent() {
                         )}
                       </div>
                     </div>
-                    <div className={`px-2 py-1 rounded-full text-xs font-orbitron font-bold flex-shrink-0 ${
-                      wallet.is_active 
-                        ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                        : 'bg-red-500/20 text-red-400 border border-red-500/50'
-                    }`}>
+                    <div className={`px-2 py-1 rounded-full text-xs font-orbitron font-bold flex-shrink-0 ${wallet.is_active
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                      }`}>
                       {wallet.is_active ? 'ACTIVE' : 'INACTIVE'}
                     </div>
                   </div>
@@ -1931,13 +1942,13 @@ function ProfilePageContent() {
               Account Event Logs ({logsTotal})
             </h3>
           </div>
-          
+
           {(initialLogsLoading || coinSwitching) ? (
             <div className="text-center py-12">
               <div className="w-12 h-12 border-4 border-molten-gold border-t-transparent rounded-full animate-spin mx-auto mb-6" />
               <p className="text-white/60 font-space-grotesk text-lg">
-              {coinSwitching ? `Loading ${selectedCoin.toUpperCase()} logs...` : 'Loading account logs...'}
-            </p>
+                {coinSwitching ? `Loading ${selectedCoin.toUpperCase()} logs...` : 'Loading account logs...'}
+              </p>
             </div>
           ) : !trackerLogs || trackerLogs.length === 0 ? (
             <div className="text-center py-12">
@@ -1959,17 +1970,16 @@ function ProfilePageContent() {
                       {log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
                         <div className={`w-3 h-3 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'}`} />
                       )}
-                      <span className={`text-xs md:text-sm font-orbitron font-semibold tracking-wider uppercase ${
-                        log.event_type === 'tracked_wallet_activity' ? 'text-green-400' : 
+                      <span className={`text-xs md:text-sm font-orbitron font-semibold tracking-wider uppercase ${log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
                         log.event_type === 'user_purchase' ? 'text-blue-400' :
-                        log.event_type === 'user_sell' ? 'text-orange-400' :
-                        log.event_type === 'admin_fee' ? 'text-purple-400' : 'text-gray-400'
-                      }`}>
+                          log.event_type === 'user_sell' ? 'text-orange-400' :
+                            log.event_type === 'admin_fee' ? 'text-purple-400' : 'text-gray-400'
+                        }`}>
                         {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
                       </span>
                       {(() => {
-                        const trackedWalletAddr = log.event_type === 'tracked_wallet_activity' 
-                          ? log.wallet_address 
+                        const trackedWalletAddr = log.event_type === 'tracked_wallet_activity'
+                          ? log.wallet_address
                           : (log.tracked_wallet_address || log.copied_wallet)
                         return trackedWalletAddr && (
                           <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
@@ -2089,18 +2099,10 @@ function ProfilePageContent() {
                       )}
                     </div>
                     <span className="text-xs text-white/40 font-space-grotesk flex-shrink-0">
-                      {log.created_at ? new Date(log.created_at).toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: true
-                      }) : 'Unknown Date'}
+                      {formatDate(log.created_at, true)}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-4">
                     {log.status === 'failed' && log.error_message && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
                       <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -2113,7 +2115,7 @@ function ProfilePageContent() {
                         </div>
                       </div>
                     )}
-                    
+
                     {/* Transaction Details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -2180,7 +2182,7 @@ function ProfilePageContent() {
                         </p>
                       </div>
                     )}
-                    
+
                     {/* Transaction Signature */}
                     {log.transaction_signature && (
                       <div>
@@ -2201,7 +2203,7 @@ function ProfilePageContent() {
                         </div>
                       </div>
                     )}
-                    
+
                     {/* Amounts */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {log.amount_in && (() => {
@@ -2216,7 +2218,7 @@ function ProfilePageContent() {
                             targetToken = log.base_token
                             baseToken = log.target_token
                           }
-                          
+
                           if (isBuy) {
                             const isToken = true
                             const tokenName = log.token_name || selectedCoin.toUpperCase()
@@ -2243,7 +2245,7 @@ function ProfilePageContent() {
                             )
                           }
                         }
-                        
+
                         const isBuyOperation = log.event_type === 'user_purchase'
                         const isToken = !isBuyOperation
                         return (
@@ -2256,13 +2258,13 @@ function ProfilePageContent() {
                           </div>
                         )
                       })()}
-                      
+
                       {log.amount_out && (() => {
                         if (log.event_type === 'tracked_wallet_activity') {
                           const isBuy = log.side === 'BUY'
                           let targetToken: string | null | undefined
                           let baseToken: string | null | undefined
-                          
+
                           if (isBuy) {
                             targetToken = log.target_token
                             baseToken = log.base_token
@@ -2270,7 +2272,7 @@ function ProfilePageContent() {
                             targetToken = log.base_token
                             baseToken = log.target_token
                           }
-                          
+
                           if (isBuy) {
                             const isToken = false
                             const currencyName = log.base_token_name || selectedCoin.toUpperCase()
@@ -2297,7 +2299,7 @@ function ProfilePageContent() {
                             )
                           }
                         }
-                        
+
                         const isBuyOperation = log.event_type === 'user_purchase'
                         const isToken = isBuyOperation
                         return (
@@ -2310,7 +2312,7 @@ function ProfilePageContent() {
                           </div>
                         )
                       })()}
-                      
+
                       {log.fee_amount && (
                         <div>
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Fee Amount</p>
@@ -2320,7 +2322,7 @@ function ProfilePageContent() {
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Event Data - Only show for non-user purchase/sell events */}
                     {log.event_data && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
                       <div>
@@ -2333,7 +2335,7 @@ function ProfilePageContent() {
                       </div>
                     )}
                   </div>
-                  
+
                   {log.error_message && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
                     <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                       <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error Message</p>
@@ -2344,11 +2346,11 @@ function ProfilePageContent() {
               ))}
             </div>
           )}
-          
+
           {/* Pagination */}
           {logsTotalPages > 1 && (
             <div className="mt-8 space-y-4">
-              
+
               {/* Traditional Pagination */}
               <div className="flex items-center justify-center gap-4">
                 <motion.button
@@ -2361,7 +2363,7 @@ function ProfilePageContent() {
                   <ChevronLeft size={16} />
                   Previous
                 </motion.button>
-                
+
                 <div className="flex items-center gap-2">
                   <span className="text-white font-orbitron font-semibold">
                     Page {logsPage} of {logsTotalPages}
@@ -2370,7 +2372,7 @@ function ProfilePageContent() {
                     ({logsTotal} total logs)
                   </span>
                 </div>
-                
+
                 <motion.button
                   onClick={() => handleLogsPageChange(logsPage + 1)}
                   disabled={logsPage >= logsTotalPages || logsLoading}
@@ -2391,27 +2393,27 @@ function ProfilePageContent() {
 
   const renderProfileOverview = () => {
     return (
-    <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold">
-          Profile Overview
-        </h1>
-      </div>
+      <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold">
+            Profile Overview
+          </h1>
+        </div>
 
-      {/* Trade Amount Success Message */}
-      {tradeAmountSuccess && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg"
-        >
-          <div className="flex items-center gap-2 text-green-400">
-            <CheckCircle size={20} />
-            <span className="font-orbitron font-bold">{tradeAmountSuccess}</span>
-          </div>
-        </motion.div>
-      )}
+        {/* Trade Amount Success Message */}
+        {tradeAmountSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg"
+          >
+            <div className="flex items-center gap-2 text-green-400">
+              <CheckCircle size={20} />
+              <span className="font-orbitron font-bold">{tradeAmountSuccess}</span>
+            </div>
+          </motion.div>
+        )}
 
         {/* Profile Overview */}
         <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-8">
@@ -2477,7 +2479,7 @@ function ProfilePageContent() {
               <User size={18} className="md:w-5 md:h-5" />
               Personal Information
             </h3>
-            
+
             <div className="space-y-4">
               <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-3">
@@ -2486,7 +2488,7 @@ function ProfilePageContent() {
                     Email Address
                   </span>
                 </div>
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <p className="text-white font-space-grotesk flex-1">{profile?.email || user?.email}</p>
                   <button
                     onClick={() => copyToClipboard(profile?.email || user?.email || '', 'email')}
@@ -2494,9 +2496,9 @@ function ProfilePageContent() {
                   >
                     <Copy size={14} />
                   </button>
-                      {copiedKey === 'email' && (
-                        <span className="text-xs text-molten-gold">Copied</span>
-                      )}
+                  {copiedKey === 'email' && (
+                    <span className="text-xs text-molten-gold">Copied</span>
+                  )}
                 </div>
               </div>
 
@@ -2611,7 +2613,7 @@ function ProfilePageContent() {
                 <span className="font-semibold">Platform Fee:</span> A 1% fee applies to all trades
               </p>
             </div>
-            
+
             {(profile || wallet) ? (
               <div className="space-y-4">
                 <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
@@ -2636,7 +2638,7 @@ function ProfilePageContent() {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-3">
                     <Shield size={16} className="text-molten-gold" />
@@ -2652,7 +2654,7 @@ function ProfilePageContent() {
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="text-white font-space-grotesk flex-1">
-                      {showPrivateKey 
+                      {showPrivateKey
                         ? formatWalletAddress(profile?.private_key || '')
                         : '••••••••••••••••'
                       }
@@ -2674,10 +2676,10 @@ function ProfilePageContent() {
                 <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                    <TrendingUp size={16} className="text-molten-gold" />
-                    <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
-                      {selectedCoin === 'sol' ? 'SOL Balance' : 'BNB Balance'}
-                    </span>
+                      <TrendingUp size={16} className="text-molten-gold" />
+                      <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
+                        {selectedCoin === 'sol' ? 'SOL Balance' : 'BNB Balance'}
+                      </span>
                     </div>
                     <motion.button
                       onClick={handleRefreshBalance}
@@ -2749,7 +2751,7 @@ function ProfilePageContent() {
             <Activity size={18} className="md:w-5 md:h-5" />
             Trading Statistics
           </h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <Activity size={20} className="md:w-6 md:h-6 text-molten-gold mx-auto mb-2 md:mb-3" />
@@ -2760,7 +2762,7 @@ function ProfilePageContent() {
                 Total Trades
               </p>
             </div>
-            
+
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <XCircle size={20} className="md:w-6 md:h-6 text-red-400 mx-auto mb-2 md:mb-3" />
               <p className="text-xl md:text-2xl font-orbitron font-bold text-red-400 mb-1">
@@ -2783,8 +2785,8 @@ function ProfilePageContent() {
                 Failed Trades
               </p>
             </div>
-            
-            
+
+
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <Activity size={20} className="md:w-6 md:h-6 text-blue-400 mx-auto mb-2 md:mb-3" />
               <p className="text-xl md:text-2xl font-orbitron font-bold text-blue-400 mb-1">
@@ -2799,7 +2801,7 @@ function ProfilePageContent() {
 
         {/* Actions */}
         <div className="flex flex-col md:flex-row gap-3 md:gap-4 justify-end">
-          <motion.button 
+          <motion.button
             onClick={handleLogout}
             className="px-4 md:px-6 py-2 md:py-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center gap-2 text-sm md:text-base"
             whileHover={{ scale: 1.02 }}
@@ -2808,9 +2810,9 @@ function ProfilePageContent() {
             <LogOut size={18} />
             <span className="font-space-grotesk font-medium">Logout</span>
           </motion.button>
+        </div>
       </div>
-    </div>
-  )
+    )
   }
 
   return (
@@ -2912,9 +2914,9 @@ function ProfilePageContent() {
         </motion.div>
       )}
 
-      {currentSection === 'wallet-tracker' ? renderWalletTrackerSection() : 
-       currentSection === 'tracker-logs' ? renderTrackerLogs() : 
-       renderProfileOverview()}
+      {currentSection === 'wallet-tracker' ? renderWalletTrackerSection() :
+        currentSection === 'tracker-logs' ? renderTrackerLogs() :
+          renderProfileOverview()}
 
       {showPrivateKeyWarning && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -3067,7 +3069,7 @@ function ProfilePageContent() {
                 Stop Tracking Wallet
               </h3>
               <button
-                onClick={() => setStopTrackingModal({open: false, walletAddress: null, isActive: false})}
+                onClick={() => setStopTrackingModal({ open: false, walletAddress: null, isActive: false })}
                 className="text-white/60 hover:text-white transition-colors"
               >
                 <X size={24} />
@@ -3122,7 +3124,7 @@ function ProfilePageContent() {
               </motion.button>
 
               <motion.button
-                onClick={() => setStopTrackingModal({open: false, walletAddress: null, isActive: false})}
+                onClick={() => setStopTrackingModal({ open: false, walletAddress: null, isActive: false })}
                 disabled={walletTrackerLoading}
                 className="w-full px-4 py-3 bg-gray-600/20 border border-gray-600/50 text-gray-400 rounded-lg hover:bg-gray-600/30 transition-colors duration-300 font-orbitron font-semibold disabled:opacity-50"
                 whileHover={{ scale: 1.02 }}
