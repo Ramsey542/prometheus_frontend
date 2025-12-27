@@ -1,12 +1,12 @@
 import { config } from '../lib/config';
 import { tokenInterceptor } from './tokenInterceptor';
-import { 
-  TrackedWallet, 
-  TrackedWalletCreate, 
-  TrackedWalletListCreate, 
-  CopyTradingLog, 
+import {
+  TrackedWallet,
+  TrackedWalletCreate,
+  TrackedWalletListCreate,
+  CopyTradingLog,
   CopyTradingStats,
-  WalletStats 
+  WalletStats
 } from '../store/types/auth';
 
 class WalletTrackerApiError extends Error {
@@ -31,7 +31,7 @@ export const walletTrackerApi = {
   async startTrackingWallet(walletData: TrackedWalletCreate, coin: string = 'sol'): Promise<TrackedWallet> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -54,7 +54,7 @@ export const walletTrackerApi = {
   async stopTrackingWallet(walletAddress: string, coin: string = 'sol', disableTpSl: boolean = false): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -74,7 +74,7 @@ export const walletTrackerApi = {
   async deleteTrackedWallet(walletAddress: string, coin: string = 'sol'): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -94,7 +94,7 @@ export const walletTrackerApi = {
   async getTrackedWallets(page: number = 1, limit: number = 10, coin: string = 'sol'): Promise<{ wallets: TrackedWallet[], total: number, page: number, totalPages: number }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -116,7 +116,7 @@ export const walletTrackerApi = {
   async getAllLogs(page: number = 1, limit: number = 10, coin: string = 'sol'): Promise<{ logs: CopyTradingLog[], total_count: number, page: number, limit: number, total_pages: number }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -136,7 +136,7 @@ export const walletTrackerApi = {
   async getCopyTradingStats(coin: string = 'sol'): Promise<CopyTradingStats> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -148,7 +148,7 @@ export const walletTrackerApi = {
           'Content-Type': 'application/json',
         },
       });
-      
+
 
       return await handleResponse(response);
     });
@@ -157,7 +157,7 @@ export const walletTrackerApi = {
   async getTrackedWalletSettings(walletAddress: string, coin: string = 'sol'): Promise<any> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -176,7 +176,7 @@ export const walletTrackerApi = {
   async updateTrackedWalletSettings(walletAddress: string, settings: any, coin: string = 'sol'): Promise<any> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
@@ -197,7 +197,7 @@ export const walletTrackerApi = {
   async withdraw(coin: string, destination: string, amount: number): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
-      
+
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }

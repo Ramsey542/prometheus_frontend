@@ -49,16 +49,16 @@ export default function AdminLogs() {
       const searchValue = searchTerm !== undefined ? searchTerm : search
       const offset = reset ? 0 : currentOffset
       const page = Math.floor(offset / limit) + 1
-      
+
       const data = await walletTrackerApi.getAdminLogs(page, limit, searchValue || undefined, sortBy, sortOrder)
       const newLogs = data.logs || []
-      
+
       if (reset) {
         setLogs(newLogs)
       } else {
         setLogs(prev => [...prev, ...newLogs])
       }
-      
+
       setTotal(data.total || 0)
       setHasMore(newLogs.length === limit && (offset + limit) < (data.total || 0))
       setCurrentOffset(offset + newLogs.length)
@@ -197,21 +197,19 @@ export default function AdminLogs() {
                     {log.id}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`font-orbitron font-semibold ${
-                      log.event_type === 'user_purchase' ? 'text-blue-400' :
-                      log.event_type === 'user_sell' ? 'text-orange-400' :
-                      log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
-                      'text-gray-400'
-                    }`}>
+                    <span className={`font-orbitron font-semibold ${log.event_type === 'user_purchase' ? 'text-blue-400' :
+                        log.event_type === 'user_sell' ? 'text-orange-400' :
+                          log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
+                            'text-gray-400'
+                      }`}>
                       {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`font-orbitron font-semibold ${
-                      log.status === 'success' ? 'text-green-400' :
-                      log.status === 'failed' ? 'text-red-400' :
-                      'text-yellow-400'
-                    }`}>
+                    <span className={`font-orbitron font-semibold ${log.status === 'success' ? 'text-green-400' :
+                        log.status === 'failed' ? 'text-red-400' :
+                          'text-yellow-400'
+                      }`}>
                       {log.status?.toUpperCase() || 'UNKNOWN'}
                     </span>
                   </td>
