@@ -113,7 +113,7 @@ export const walletTrackerApi = {
 
 
 
-  async getAllLogs(page: number = 1, limit: number = 10, coin: string = 'sol'): Promise<{ logs: CopyTradingLog[], total_count: number, page: number, limit: number, total_pages: number }> {
+  async getAllLogs(page: number = 1, limit: number = 10, coin: string = 'sol', filters?: { event_type?: string, status?: string, side?: string, wallet_address?: string }): Promise<{ logs: CopyTradingLog[], total_count: number, page: number, limit: number, total_pages: number }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
 
@@ -121,7 +121,15 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallets/logs/${coin}?page=${page}&limit=${limit}`, {
+      let url = `${config.apiBaseUrl}/copy-trading/wallets/logs/${coin}?page=${page}&limit=${limit}`;
+      if (filters) {
+        if (filters.event_type && filters.event_type !== 'all') url += `&event_type=${filters.event_type}`;
+        if (filters.status && filters.status !== 'all') url += `&status=${filters.status}`;
+        if (filters.side && filters.side !== 'all') url += `&side=${filters.side}`;
+        if (filters.wallet_address && filters.wallet_address !== 'all') url += `&wallet_address=${filters.wallet_address}`;
+      }
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

@@ -118,6 +118,10 @@ function ProfilePageContent() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [initialLogsLoading, setInitialLogsLoading] = useState(false)
   const [coinSwitching, setCoinSwitching] = useState(false)
+  const [logTypeFilter, setLogTypeFilter] = useState<string>('all')
+  const [logStatusFilter, setLogStatusFilter] = useState<string>('all')
+  const [logSideFilter, setLogSideFilter] = useState<string>('all')
+  const [logWalletFilter, setLogWalletFilter] = useState<string>('all')
   const [balanceRefreshing, setBalanceRefreshing] = useState(false)
   const [tradeAmountUpdating, setTradeAmountUpdating] = useState(false)
   const [tradeAmountValue, setTradeAmountValue] = useState<string>('')
@@ -199,6 +203,10 @@ function ProfilePageContent() {
       setWalletsPage(1)
       setWalletsTotalPages(1)
       setWalletsTotal(0)
+      setLogTypeFilter('all')
+      setLogStatusFilter('all')
+      setLogSideFilter('all')
+      setLogWalletFilter('all')
 
       const fetchData = async () => {
         await Promise.all([
@@ -250,7 +258,13 @@ function ProfilePageContent() {
         }
       })
     }
-  }, [user, currentSection, copyTradingStats])
+  }, [user, currentSection, copyTradingStats?.wallet_stats])
+
+  useEffect(() => {
+    if (user && currentSection === 'tracker-logs' && !coinSwitching) {
+      fetchAllLogs(1)
+    }
+  }, [logTypeFilter, logStatusFilter, logSideFilter, logWalletFilter])
 
   const fetchTrackedWallets = async (page: number = 1) => {
     try {
@@ -449,7 +463,14 @@ function ProfilePageContent() {
       }
       setWalletTrackerError(null)
 
-      const response = await walletTrackerApi.getAllLogs(page, 10, selectedCoin)
+      const filters = {
+        event_type: logTypeFilter,
+        status: logStatusFilter,
+        side: logSideFilter,
+        wallet_address: logWalletFilter
+      }
+
+      const response = await walletTrackerApi.getAllLogs(page, 10, selectedCoin, filters)
       if (response && typeof response === 'object' && 'logs' in response) {
         setTrackerLogs(response.logs || [])
         setLogsTotalPages(response.total_pages || 1)
@@ -1938,11 +1959,71 @@ function ProfilePageContent() {
 
         {/* Account Logs Section */}
         <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4 md:mb-6">
             <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
               <FileText size={20} />
               Account Event Logs ({logsTotal})
             </h3>
+
+            {/* Filters Bar */}
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full lg:w-auto">
+              {/* Event Type Filter */}
+              <div className="flex-1 lg:flex-none">
+                <select
+                  value={logTypeFilter}
+                  onChange={(e) => setLogTypeFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors"
+                >
+                  <option value="all">All Types</option>
+                  <option value="user_purchase">User Purchase</option>
+                  <option value="user_sell">User Sell</option>
+                  <option value="tracked_wallet_activity">Tracked Wallet Activity</option>
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex-1 lg:flex-none">
+                <select
+                  value={logStatusFilter}
+                  onChange={(e) => setLogStatusFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors"
+                >
+                  <option value="all">All Status</option>
+                  <option value="success">Success</option>
+                  <option value="failed">Failed</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+
+              {/* Side Filter */}
+              <div className="flex-1 lg:flex-none">
+                <select
+                  value={logSideFilter}
+                  onChange={(e) => setLogSideFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors"
+                >
+                  <option value="all">All Sides</option>
+                  <option value="BUY">BUY</option>
+                  <option value="SELL">SELL</option>
+                </select>
+              </div>
+
+              {/* Wallet Filter */}
+              <div className="flex-1 lg:flex-none min-w-[140px]">
+                <select
+                  value={logWalletFilter}
+                  onChange={(e) => setLogWalletFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors max-w-full lg:max-w-[180px]"
+                >
+                  <option value="all">All Wallets</option>
+                  {copyTradingStats?.wallet_stats?.map(w => (
+                    <option key={w.wallet_address} value={w.wallet_address}>
+                      {walletSettings[w.wallet_address]?.custom_name || formatWalletAddress(w.wallet_address)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Filters */}
