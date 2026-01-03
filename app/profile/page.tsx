@@ -1965,6 +1965,65 @@ function ProfilePageContent() {
               Account Event Logs ({logsTotal})
             </h3>
 
+            {/* Filters Bar */}
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full lg:w-auto">
+              {/* Event Type Filter */}
+              <div className="flex-1 lg:flex-none">
+                <select
+                  value={logTypeFilter}
+                  onChange={(e) => setLogTypeFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors"
+                >
+                  <option value="all">All Types</option>
+                  <option value="user_purchase">User Purchase</option>
+                  <option value="user_sell">User Sell</option>
+                  <option value="tracked_wallet_activity">Tracked Wallet Activity</option>
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex-1 lg:flex-none">
+                <select
+                  value={logStatusFilter}
+                  onChange={(e) => setLogStatusFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors"
+                >
+                  <option value="all">All Status</option>
+                  <option value="success">Success</option>
+                  <option value="failed">Failed</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+
+              {/* Side Filter */}
+              <div className="flex-1 lg:flex-none">
+                <select
+                  value={logSideFilter}
+                  onChange={(e) => setLogSideFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors"
+                >
+                  <option value="all">All Sides</option>
+                  <option value="BUY">BUY</option>
+                  <option value="SELL">SELL</option>
+                </select>
+              </div>
+
+              {/* Wallet Filter */}
+              <div className="flex-1 lg:flex-none min-w-[140px]">
+                <select
+                  value={logWalletFilter}
+                  onChange={(e) => setLogWalletFilter(e.target.value)}
+                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors max-w-full lg:max-w-[180px]"
+                >
+                  <option value="all">All Wallets</option>
+                  {copyTradingStats?.wallet_stats?.map(w => (
+                    <option key={w.wallet_address} value={w.wallet_address}>
+                      {walletSettings[w.wallet_address]?.custom_name || formatWalletAddress(w.wallet_address)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Filters */}
@@ -2011,8 +2070,8 @@ function ProfilePageContent() {
                         )
                       }}
                       className={`px-3 py-2 rounded-lg border text-xs font-orbitron font-semibold tracking-wide transition-all duration-300 flex items-center gap-2 ${filterEventTypes.includes(type.id)
-                        ? `${type.color} shadow-[0_0_10px_rgba(0,0,0,0.3)] scale-105`
-                        : 'bg-void-black/50 border-white/10 text-white/40 hover:border-white/20'
+                          ? `${type.color} shadow-[0_0_10px_rgba(0,0,0,0.3)] scale-105`
+                          : 'bg-void-black/50 border-white/10 text-white/40 hover:border-white/20'
                         }`}
                     >
                       {filterEventTypes.includes(type.id) && <CheckCircle size={12} />}
