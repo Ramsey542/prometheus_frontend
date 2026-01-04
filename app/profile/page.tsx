@@ -34,6 +34,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileLayout from '../../components/ProfileLayout'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
 import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats } from '../../store/types/auth'
+import { authApi } from '@/services/authApi'
 import { config } from '../../lib/config'
 
 const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boolean = false, tokenDecimals?: number | null): string => {
@@ -158,6 +159,29 @@ function ProfilePageContent() {
   const [showPrivateKeyWarning, setShowPrivateKeyWarning] = useState(false)
   const [filterWallet, setFilterWallet] = useState<string>('')
   const [filterEventTypes, setFilterEventTypes] = useState<string[]>([])
+  const [isDebugMode, setIsDebugMode] = useState(false)
+  const [debugModeLoading, setDebugModeLoading] = useState(false)
+
+  const handleToggleDebugMode = async () => {
+    if (!profile?.is_admin) return
+    try {
+      setDebugModeLoading(true)
+      const result = await authApi.toggleDebugMode()
+      setIsDebugMode(result.is_debug_mode)
+      dispatch(getProfile(selectedCoin))
+    } catch (err: any) {
+      setWalletTrackerError(err.message || 'Failed to toggle debug mode')
+    } finally {
+      setDebugModeLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (profile?.is_debug_mode !== undefined) {
+      setIsDebugMode(profile.is_debug_mode)
+    }
+  }, [profile?.is_debug_mode])
+
   const currentSection = searchParams.get('section') || 'overview'
   useEffect(() => {
     if (user) {
@@ -1006,11 +1030,32 @@ function ProfilePageContent() {
 
       {/* Tracked Wallets Section */}
       <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
-        <div className="flex items-start justify-between mb-4 md:mb-6">
+        <div className="flex items-center justify-between mb-4 md:mb-6">
           <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
             <Wallet size={20} />
             Tracked Wallets ({walletsTotal})
           </h3>
+          {profile?.is_admin && (
+            <div className="flex items-center gap-3 bg-void-black/50 px-4 py-2 rounded-lg border border-red-500/20">
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] md:text-xs font-orbitron font-bold text-red-500 tracking-tighter uppercase">Debug Mode</span>
+                <span className="text-[8px] text-white/40 font-space-grotesk">No trades executed</span>
+              </div>
+              <motion.button
+                onClick={handleToggleDebugMode}
+                disabled={debugModeLoading}
+                className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${isDebugMode ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-gray-700'
+                  }`}
+                whileTap={{ scale: 0.95 }}
+              >
+                <motion.div
+                  className="w-4 h-4 bg-white rounded-full shadow-lg"
+                  animate={{ x: isDebugMode ? 24 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              </motion.button>
+            </div>
+          )}
         </div>
         <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
           <p className="text-xs text-yellow-400 font-space-grotesk">

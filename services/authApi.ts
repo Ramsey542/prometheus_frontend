@@ -31,10 +31,10 @@ export const authApi = {
     });
 
     const data = await handleResponse(response);
-    
+
     localStorage.setItem('access_token', data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
-    
+
     return data;
   },
 
@@ -48,27 +48,27 @@ export const authApi = {
     });
 
     const data = await handleResponse(response);
-    
+
     localStorage.setItem('access_token', data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
     if (data.wallet) {
       localStorage.setItem('wallet', JSON.stringify(data.wallet));
     }
-    
+
 
     const user = {
-      id: 'temp-id', 
+      id: 'temp-id',
       username: payload.username,
-      email: 'temp@email.com' 
+      email: 'temp@email.com'
     };
     localStorage.setItem('user', JSON.stringify(user));
-    
+
     return data;
   },
 
   async logout(): Promise<void> {
     const accessToken = localStorage.getItem('access_token');
-    
+
     if (accessToken) {
       try {
         await fetch(`${config.apiBaseUrl}/auth/logout`, {
@@ -82,7 +82,7 @@ export const authApi = {
         console.warn('Logout request failed:', error);
       }
     }
-    
+
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
@@ -108,7 +108,7 @@ export const authApi = {
 
   async refreshToken(): Promise<TokenPair> {
     const refreshToken = localStorage.getItem('refresh_token');
-    
+
     if (!refreshToken) {
       throw new AuthApiError('No refresh token found', 401);
     }
@@ -122,22 +122,39 @@ export const authApi = {
     });
 
     const data = await handleResponse(response);
-    
+
     localStorage.setItem('access_token', data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
-    
+
     return data;
   },
 
   async getProfile(coin: 'sol' | 'bnb' = 'sol'): Promise<UserProfile> {
     const accessToken = localStorage.getItem('access_token');
-   
+
     if (!accessToken) {
       throw new AuthApiError('No access token found', 401);
     }
 
     const response = await fetch(`${config.apiBaseUrl}/auth/profile/coin/${coin}`, {
       method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return await handleResponse(response);
+  },
+
+  async toggleDebugMode(): Promise<{ is_debug_mode: boolean; message: string }> {
+    const accessToken = localStorage.getItem('access_token');
+
+    if (!accessToken) {
+      throw new AuthApiError('No access token found', 401);
+    }
+
+    const response = await fetch(`${config.apiBaseUrl}/auth/debug-mode`, {
+      method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
@@ -156,13 +173,13 @@ export const authApi = {
     });
 
     const data = await handleResponse(response);
-    
+
     localStorage.setItem('access_token', data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
     if (data.wallet) {
       localStorage.setItem('wallet', JSON.stringify(data.wallet));
     }
-    
+
     return data;
   },
 
@@ -192,7 +209,7 @@ export const authApi = {
 
   async get(url: string): Promise<any> {
     const accessToken = localStorage.getItem('access_token');
-    
+
     if (!accessToken) {
       throw new AuthApiError('No access token found', 401);
     }
@@ -210,7 +227,7 @@ export const authApi = {
 
   async post(url: string, payload: any): Promise<any> {
     const accessToken = localStorage.getItem('access_token');
-    
+
     if (!accessToken) {
       throw new AuthApiError('No access token found', 401);
     }
@@ -229,7 +246,7 @@ export const authApi = {
 
   async put(url: string, payload: any): Promise<any> {
     const accessToken = localStorage.getItem('access_token');
-    
+
     if (!accessToken) {
       throw new AuthApiError('No access token found', 401);
     }

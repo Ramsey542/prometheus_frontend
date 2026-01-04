@@ -57,6 +57,8 @@ export interface UserProfile {
   portfolio_value: string;
   active_mirrors: number;
   failed_trades?: number;
+  is_admin?: boolean;
+  is_debug_mode?: boolean;
 }
 
 export interface TrackedWallet {
