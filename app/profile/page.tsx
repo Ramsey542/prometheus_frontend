@@ -1967,19 +1967,6 @@ function ProfilePageContent() {
 
             {/* Filters Bar */}
             <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full lg:w-auto">
-              {/* Event Type Filter */}
-              <div className="flex-1 lg:flex-none">
-                <select
-                  value={logTypeFilter}
-                  onChange={(e) => setLogTypeFilter(e.target.value)}
-                  className="w-full lg:w-auto bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white text-xs font-orbitron focus:border-molten-gold outline-none transition-colors"
-                >
-                  <option value="all">All Types</option>
-                  <option value="user_purchase">User Purchase</option>
-                  <option value="user_sell">User Sell</option>
-                  <option value="tracked_wallet_activity">Tracked Wallet Activity</option>
-                </select>
-              </div>
 
               {/* Status Filter */}
               <div className="flex-1 lg:flex-none">
@@ -2026,70 +2013,6 @@ function ProfilePageContent() {
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Wallet Filter */}
-              <div className="space-y-2">
-                <label className="text-xs font-orbitron text-molten-gold uppercase tracking-wider">Filter by Wallet</label>
-                <div className="relative">
-                  <select
-                    value={filterWallet}
-                    onChange={(e) => setFilterWallet(e.target.value)}
-                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2.5 text-white font-space-grotesk focus:border-molten-gold focus:outline-none appearance-none cursor-pointer"
-                  >
-                    <option value="">All Wallets</option>
-                    {trackedWallets.map(wallet => (
-                      <option key={wallet.wallet_address} value={wallet.wallet_address}>
-                        {walletSettings[wallet.wallet_address]?.custom_name
-                          ? `${walletSettings[wallet.wallet_address]?.custom_name} (${wallet.wallet_address.slice(0, 4)}...${wallet.wallet_address.slice(-4)})`
-                          : formatWalletAddress(wallet.wallet_address)}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-molten-gold pointer-events-none" size={16} />
-                </div>
-              </div>
-
-              {/* Event Type Filter */}
-              <div className="space-y-2">
-                <label className="text-xs font-orbitron text-molten-gold uppercase tracking-wider">Filter by Event Type</label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { id: 'user_purchase', label: 'User Purchase', color: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
-                    { id: 'user_sell', label: 'User Sell', color: 'text-orange-400 bg-orange-500/10 border-orange-500/30' },
-                    { id: 'tracked_wallet_activity', label: 'Wallet Activity', color: 'text-green-400 bg-green-500/10 border-green-500/30' }
-                  ].map(type => (
-                    <button
-                      key={type.id}
-                      onClick={() => {
-                        setFilterEventTypes(prev =>
-                          prev.includes(type.id)
-                            ? prev.filter(t => t !== type.id)
-                            : [...prev, type.id]
-                        )
-                      }}
-                      className={`px-3 py-2 rounded-lg border text-xs font-orbitron font-semibold tracking-wide transition-all duration-300 flex items-center gap-2 ${filterEventTypes.includes(type.id)
-                          ? `${type.color} shadow-[0_0_10px_rgba(0,0,0,0.3)] scale-105`
-                          : 'bg-void-black/50 border-white/10 text-white/40 hover:border-white/20'
-                        }`}
-                    >
-                      {filterEventTypes.includes(type.id) && <CheckCircle size={12} />}
-                      {type.label}
-                    </button>
-                  ))}
-                  {filterEventTypes.length > 0 && (
-                    <button
-                      onClick={() => setFilterEventTypes([])}
-                      className="px-3 py-2 rounded-lg text-xs font-orbitron font-semibold tracking-wide text-white/40 hover:text-white transition-colors"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
 
           {(initialLogsLoading || coinSwitching) ? (
             <div className="text-center py-12">
