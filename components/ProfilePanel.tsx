@@ -1,21 +1,27 @@
 'use client'
+import CreateWalletModal from './CreateWalletModal'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  User, 
-  Mail, 
-  Wallet, 
-  Settings, 
-  LogOut, 
-  Copy, 
-  Eye, 
+import {
+  User,
+  Mail,
+  Wallet,
+  Settings,
+  LogOut,
+  Copy,
+  Eye,
   EyeOff,
   Shield,
   Activity,
-  TrendingUp
+  TrendingUp,
+  Plus,
+  Check,
+  ChevronDown,
+  Info
 } from 'lucide-react'
+import Image from 'next/image'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
-import { logout } from '../store/slices/authSlice'
+import { logout, selectWallet } from '../store/slices/authSlice'
 import { useState } from 'react'
 
 interface ProfilePanelProps {
@@ -25,8 +31,11 @@ interface ProfilePanelProps {
 
 export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
   const dispatch = useAppDispatch()
-  const { user, wallet } = useAppSelector((state) => state.auth)
+  const { user, wallet, profile, selectedCoin } = useAppSelector((state) => state.auth)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
+  const [isAddWalletOpen, setIsAddWalletOpen] = useState(false)
+
+  const [isWalletListOpen, setIsWalletListOpen] = useState(false)
 
   const handleLogout = async () => {
     await dispatch(logout())
@@ -37,8 +46,20 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
     navigator.clipboard.writeText(text)
   }
 
-  const formatWalletAddress = (address: string) => {
+  const formatWalletAddress = (address?: string) => {
+    if (!address) return 'Not set'
     return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+
+
+  const handleSelectWallet = async (id: string | number) => {
+    try {
+      const blockchain = selectedCoin === 'sol' ? 'solana' : 'bnb'
+      await dispatch(selectWallet({ walletId: id.toString(), blockchain })).unwrap()
+    } catch (err) {
+      console.error('Failed to select wallet:', err)
+    }
   }
 
   return (
@@ -53,7 +74,7 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
             onClick={onClose}
           />
-          
+
           {/* Profile Panel */}
           <motion.div
             initial={{ opacity: 0, x: -300, scale: 0.95 }}
@@ -112,19 +133,73 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
                       <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
                         Wallet Address
                       </span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <button
+                          onClick={() => setIsWalletListOpen(!isWalletListOpen)}
+                          className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
+                        >
+                          <ChevronDown size={14} className={`transform transition-transform ${isWalletListOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        <button
+                          onClick={() => setIsAddWalletOpen(true)}
+                          className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
                     </div>
+
+                    {isWalletListOpen && profile?.wallets && (
+                      <div className="mb-4 space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                        {profile.wallets.map((w) => {
+                          const blockchain = selectedCoin === 'sol' ? 'solana' : 'bnb';
+                          const isActive = blockchain === 'solana' ? w.is_active_sol : w.is_active_bnb;
+                          return (
+                            <div
+                              key={w.id}
+                              onClick={() => handleSelectWallet(w.id)}
+                              className={`p-2 rounded border cursor-pointer transition-all duration-300 flex items-center justify-between ${isActive
+                                ? 'bg-molten-gold/20 border-molten-gold/50'
+                                : 'bg-void-black/30 border-white/5 hover:border-molten-gold/30'
+                                }`}
+                            >
+                              <div className="flex flex-col">
+                                <span className="text-[10px] text-molten-gold/60 font-orbitron uppercase">
+                                  {w.name || 'Unnamed Wallet'}
+                                </span>
+                                <span className="text-xs text-white/80 font-space-grotesk">
+                                  {formatWalletAddress(selectedCoin === 'sol' ? w.solana_public_key : w.bnb_public_key)}
+                                </span>
+                              </div>
+                              {isActive && <Check size={12} className="text-molten-gold" />}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-2">
                       <p className="text-white font-space-grotesk flex-1">
-                        {formatWalletAddress(wallet.solana_public_key)}
+                        {selectedCoin === 'sol'
+                          ? formatWalletAddress(wallet.solana_public_key)
+                          : formatWalletAddress(wallet.bnb_public_key)
+                        }
                       </p>
                       <button
-                        onClick={() => copyToClipboard(wallet.solana_public_key)}
+                        onClick={() => copyToClipboard(selectedCoin === 'sol' ? wallet.solana_public_key : wallet.bnb_public_key || '')}
                         className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                       >
                         <Copy size={14} />
                       </button>
+                      <button
+                        onClick={() => setIsAddWalletOpen(true)}
+                        className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 ml-1"
+                        title="Add New Wallet"
+                      >
+                        <Plus size={14} />
+                      </button>
                     </div>
-                    
+
                     {/* Private Key (Hidden by default) */}
                     <div className="mt-3 pt-3 border-t border-molten-gold/10">
                       <div className="flex items-center gap-3 mb-2">
@@ -141,14 +216,16 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-white font-space-grotesk flex-1">
-                          {showPrivateKey 
-                            ? formatWalletAddress(wallet.solana_private_key)
+                          {showPrivateKey
+                            ? (selectedCoin === 'sol'
+                              ? formatWalletAddress(wallet.solana_private_key)
+                              : formatWalletAddress(wallet.bnb_private_key))
                             : '••••••••••••••••'
                           }
                         </p>
                         {showPrivateKey && (
                           <button
-                            onClick={() => copyToClipboard(wallet.solana_private_key)}
+                            onClick={() => copyToClipboard(selectedCoin === 'sol' ? wallet.solana_private_key : wallet.bnb_private_key || '')}
                             className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                           >
                             <Copy size={14} />
@@ -165,11 +242,14 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
                     <div className="flex items-center gap-3 mb-3">
                       <TrendingUp size={16} className="text-molten-gold" />
                       <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
-                        SOL Balance
+                        {selectedCoin.toUpperCase()} Balance
                       </span>
                     </div>
                     <p className="text-2xl font-orbitron font-bold text-molten-gold">
-                      {parseFloat(wallet.solana_balance).toFixed(4)} SOL
+                      {selectedCoin === 'sol'
+                        ? parseFloat(wallet.solana_balance).toFixed(4)
+                        : parseFloat(wallet.bnb_balance || '0').toFixed(4)
+                      } {selectedCoin.toUpperCase()}
                     </p>
                   </div>
                 )}
@@ -199,8 +279,8 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
                   <Settings size={18} />
                   <span className="font-space-grotesk font-medium">Account Settings</span>
                 </button>
-                
-                <button 
+
+                <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300"
                 >
@@ -212,6 +292,12 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
           </motion.div>
         </>
       )}
+
+      {/* Add Wallet Modal */}
+      <CreateWalletModal
+        isOpen={isAddWalletOpen}
+        onClose={() => setIsAddWalletOpen(false)}
+      />
     </AnimatePresence>
   )
 }

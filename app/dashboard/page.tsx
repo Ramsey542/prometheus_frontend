@@ -2,12 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, Plus, Trash2, Copy } from 'lucide-react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { config } from '../../lib/config'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store/index'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
+import { createWallet, selectWallet, getProfile } from '../../store/slices/authSlice'
+import { Wallet, Info, Check } from 'lucide-react'
+import { AppDispatch } from '../../store/index'
+import CreateWalletModal from '../../components/CreateWalletModal'
 
 interface TakeProfitLevel {
   profit_percentage: number
@@ -64,6 +69,14 @@ export default function DashboardPage() {
   const [showAllTP, setShowAllTP] = useState(false)
   const [showAllSL, setShowAllSL] = useState(false)
   const [tpSlIsActive, setTpSlIsActive] = useState(true)
+  const [isAddWalletOpen, setIsAddWalletOpen] = useState(false)
+  const [isWalletListOpen, setIsWalletListOpen] = useState(false)
+
+
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+  }
 
   const swapStrategies = [
     { value: 'none', label: 'None' },
@@ -142,7 +155,8 @@ export default function DashboardPage() {
     }
   }
 
-  const profile = useSelector((state: RootState) => state.auth.profile)
+  const { profile, selectedCoin, wallet } = useSelector((state: RootState) => state.auth)
+  const dispatch = useDispatch<AppDispatch>()
   const router = useRouter()
 
   useEffect(() => {
@@ -153,7 +167,6 @@ export default function DashboardPage() {
 
   const fetchSettings = async () => {
     try {
-      setInitialLoading(true)
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -222,6 +235,21 @@ export default function DashboardPage() {
     }
   }
 
+
+
+
+
+  const handleSelectWallet = async (id: string | number) => {
+    try {
+      const blockchain = selectedCoin === 'sol' ? 'solana' : 'bnb'
+      await dispatch(selectWallet({ walletId: id.toString(), blockchain })).unwrap()
+      // Re-fetch settings for the new active wallet
+      fetchSettings()
+    } catch (err) {
+      console.error('Failed to select wallet:', err)
+    }
+  }
+
   if (initialLoading) {
     return (
       <DashboardLayout>
@@ -241,6 +269,101 @@ export default function DashboardPage() {
         <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6">
           Wallet Settings
         </h1>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Active Wallet Card */}
+          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-6 relative group min-h-[180px] flex flex-col justify-between z-20">
+            <div className="relative z-10 w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-orbitron font-semibold text-white">Active Wallet</h3>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsWalletListOpen(!isWalletListOpen);
+                  }}
+                  className="px-3 py-1 text-xs font-orbitron font-bold bg-molten-gold/10 text-molten-gold border border-molten-gold/30 rounded-full hover:bg-molten-gold/20 transition-all"
+                >
+                  {isWalletListOpen ? 'Close List' : 'Switch'}
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-orbitron text-molten-gold/60 uppercase tracking-widest">Address</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm md:text-base font-space-grotesk text-white font-medium truncate">
+                      {selectedCoin === 'sol' ? wallet?.solana_public_key : wallet?.bnb_public_key || 'Not connected'}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(selectedCoin === 'sol' ? wallet?.solana_public_key || '' : wallet?.bnb_public_key || '')}
+                      className="text-white/20 hover:text-molten-gold transition-colors"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-orbitron text-molten-gold/60 uppercase tracking-widest">Balance</span>
+                  <span className="text-xl md:text-2xl font-space-grotesk text-molten-gold font-bold">
+                    {selectedCoin === 'sol' ? `${wallet?.solana_balance || '0'} SOL` : `${wallet?.bnb_balance || '0'} BNB`}
+                  </span>
+                </div>
+              </div>
+
+              {isWalletListOpen && profile?.wallets && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-[calc(100%+0.5rem)] left-0 right-0 bg-void-black/95 backdrop-blur-xl border border-molten-gold/20 rounded-lg p-2 shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar"
+                >
+                  {profile.wallets.map((w) => {
+                    const blockchain = selectedCoin === 'sol' ? 'solana' : 'bnb';
+                    const isActive = blockchain === 'solana' ? w.is_active_sol : w.is_active_bnb;
+                    return (
+                      <div
+                        key={w.id}
+                        onClick={() => {
+                          handleSelectWallet(w.id);
+                          setIsWalletListOpen(false);
+                        }}
+                        className={`p-3 rounded-lg border cursor-pointer transition-all duration-300 flex items-center justify-between mb-1 last:mb-0 ${isActive
+                          ? 'bg-molten-gold/20 border-molten-gold/50'
+                          : 'bg-white/5 border-transparent hover:border-molten-gold/30 hover:bg-white/10'
+                          }`}
+                      >
+                        <div className="flex flex-col overflow-hidden">
+                          <span className={`text-xs font-orbitron uppercase truncate mb-0.5 ${isActive ? 'text-molten-gold' : 'text-white'}`}>
+                            {w.name || 'Unnamed Wallet'}
+                          </span>
+                          <span className="text-[10px] text-white/50 font-mono truncate">
+                            {selectedCoin === 'sol' ? w.solana_public_key : w.bnb_public_key}
+                          </span>
+                        </div>
+                        {isActive && <Check size={14} className="text-molten-gold shrink-0 ml-2" />}
+                      </div>
+                    )
+                  })}
+                </motion.div>
+              )}
+            </div>
+          </div>
+
+          {/* Add Wallet Card */}
+          <div
+            onClick={() => setIsAddWalletOpen(true)}
+            className="bg-molten-gold/5 border border-dashed border-molten-gold/40 rounded-lg p-6 flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-molten-gold/10 hover:border-molten-gold transition-all duration-300 group min-h-[180px] relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-molten-gold/0 to-molten-gold/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="w-16 h-16 rounded-full bg-molten-gold/10 border border-molten-gold/20 flex items-center justify-center group-hover:scale-110 group-hover:border-molten-gold/50 transition-all duration-300 relative z-10">
+              <Plus size={32} className="text-molten-gold/80 group-hover:text-molten-gold" />
+            </div>
+            <div className="text-center relative z-10">
+              <h3 className="text-lg font-orbitron font-bold text-white group-hover:text-molten-gold transition-colors">Add New Wallet</h3>
+              <p className="text-sm text-white/40 font-space-grotesk mt-1">Create more SOL or BNB wallets</p>
+            </div>
+          </div>
+        </div>
 
         {success && (
           <motion.div
@@ -796,22 +919,25 @@ export default function DashboardPage() {
               </motion.div>
             )}
           </div>
-
-          <motion.button
-            onClick={handleSave}
-            disabled={loading}
-            className="w-full py-3 md:py-4 bg-gradient-to-r from-molten-gold to-yellow-500 text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm md:text-base"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-void-black border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <CheckCircle size={20} />
-            )}
-            {loading ? 'Saving...' : 'Save Settings'}
-          </motion.button>
         </div>
+
+        <motion.button
+          onClick={handleSave}
+          disabled={loading}
+          className={`w-full py-4 rounded-lg font-orbitron font-bold tracking-widest transition-all duration-300 ${loading ? 'bg-molten-gold/50 cursor-not-allowed' : 'bg-molten-gold text-void-black hover:brightness-110 shadow-lg shadow-molten-gold/20'
+            }`}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+        >
+          {loading ? 'SYNCING SETTINGS...' : 'SAVE SETTINGS'}
+        </motion.button>
+
+        {/* Add Wallet Modal */}
+        {/* Add Wallet Modal */}
+        <CreateWalletModal
+          isOpen={isAddWalletOpen}
+          onClose={() => setIsAddWalletOpen(false)}
+        />
       </div>
     </DashboardLayout>
   )

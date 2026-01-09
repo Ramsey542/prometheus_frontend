@@ -7,9 +7,15 @@ export interface User {
 export interface Wallet {
   id: string;
   user_id: string;
+  name?: string;
+  is_active_sol: boolean;
+  is_active_bnb: boolean;
   solana_public_key: string;
   solana_private_key: string;
   solana_balance: string;
+  bnb_public_key?: string;
+  bnb_private_key?: string;
+  bnb_balance?: string;
 }
 
 export interface TokenPair {
@@ -59,6 +65,16 @@ export interface UserProfile {
   failed_trades?: number;
   is_admin?: boolean;
   is_debug_mode?: boolean;
+  wallets: Wallet[];
+}
+
+export interface CreateWalletRequest {
+  blockchain: 'solana' | 'bnb';
+  name?: string;
+}
+
+export interface SelectWalletRequest {
+  blockchain: 'solana' | 'bnb';
 }
 
 export interface TrackedWallet {

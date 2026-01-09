@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { AuthState, SignupRequest, LoginRequest, TokenPair, User, Wallet, UserProfile, VerifyEmailRequest, PasswordResetRequest, PasswordResetConfirm } from '../types/auth';
+import { AuthState, SignupRequest, LoginRequest, TokenPair, User, Wallet, UserProfile, VerifyEmailRequest, PasswordResetRequest, PasswordResetConfirm, CreateWalletRequest } from '../types/auth';
 import { authApi } from '../../services/authApi';
 
 const initialState: AuthState = {
@@ -104,20 +104,20 @@ export const loginWithProfile = createAsyncThunk(
   async (payload: LoginRequest, { dispatch, rejectWithValue }) => {
     try {
       const loginResult = await dispatch(login(payload));
-      
+
       if (login.fulfilled.match(loginResult)) {
         const profileResult = await dispatch(getProfile('sol'));
-        
+
         if (getProfile.fulfilled.match(profileResult)) {
           const profile = profileResult.payload;
-          
+
           const user = {
-            id: profile.username, 
+            id: profile.username,
             username: profile.username,
             email: profile.email
           };
           localStorage.setItem('user', JSON.stringify(user));
-          
+
           return {
             login: loginResult.payload,
             profile: profileResult.payload,
@@ -146,7 +146,7 @@ export const initializeAuth = createAsyncThunk(
     try {
       const accessToken = localStorage.getItem('access_token');
       const refreshToken = localStorage.getItem('refresh_token');
-      
+
       if (accessToken && refreshToken) {
         try {
           const profileResult = await dispatch(getProfile('sol'));
@@ -207,6 +207,34 @@ export const resetPassword = createAsyncThunk(
       return response;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Password reset failed');
+    }
+  }
+);
+
+export const createWallet = createAsyncThunk(
+  'auth/createWallet',
+  async (payload: CreateWalletRequest, { rejectWithValue, dispatch, getState }) => {
+    try {
+      const response = await authApi.createWallet(payload);
+      const state = getState() as { auth: AuthState };
+      await dispatch(getProfile(state.auth.selectedCoin));
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to create wallet');
+    }
+  }
+);
+
+export const selectWallet = createAsyncThunk(
+  'auth/selectWallet',
+  async ({ walletId, blockchain }: { walletId: string; blockchain: 'solana' | 'bnb' }, { rejectWithValue, dispatch, getState }) => {
+    try {
+      const response = await authApi.selectWallet(walletId, { blockchain });
+      const state = getState() as { auth: AuthState };
+      await dispatch(getProfile(state.auth.selectedCoin));
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.message || 'Failed to select wallet');
     }
   }
 );
@@ -296,6 +324,11 @@ const authSlice = createSlice({
       .addCase(getProfile.fulfilled, (state, action) => {
         state.isLoading = false;
         state.profile = action.payload;
+        // Find the active wallet for the selected coin and update state.wallet
+        const blockchain = state.selectedCoin === 'sol' ? 'solana' : 'bnb';
+        state.wallet = action.payload.wallets.find((w: Wallet) =>
+          blockchain === 'solana' ? w.is_active_sol : w.is_active_bnb
+        ) || null;
         state.error = null;
       })
       .addCase(getProfile.rejected, (state, action) => {
@@ -349,13 +382,7 @@ const authSlice = createSlice({
             username: action.payload.profile.username,
             email: action.payload.profile.email
           } : null;
-          state.wallet = action.payload.profile ? {
-            id: action.payload.profile.username,
-            user_id: action.payload.profile.username,
-            solana_public_key: action.payload.profile.public_address,
-            solana_private_key: action.payload.profile.private_key,
-            solana_balance: action.payload.profile.sol_balance
-          } : null;
+          state.wallet = action.payload.profile?.wallets.find((w: Wallet) => w.is_active_sol) || null;
           state.isAuthenticated = true;
           state.error = null;
         }

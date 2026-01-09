@@ -36,6 +36,7 @@ import { walletTrackerApi } from '../../services/walletTrackerApi'
 import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats } from '../../store/types/auth'
 import { authApi } from '@/services/authApi'
 import { config } from '../../lib/config'
+import CreateWalletModal from '../../components/CreateWalletModal'
 
 const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boolean = false, tokenDecimals?: number | null): string => {
   if (!amount) return 'N/A'
@@ -102,6 +103,7 @@ function ProfilePageContent() {
   const searchParams = useSearchParams()
   const { user, wallet, profile, isLoading, error, selectedCoin } = useAppSelector((state) => state.auth)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
+  const [isAddWalletOpen, setIsAddWalletOpen] = useState(false)
   const [trackedWallets, setTrackedWallets] = useState<TrackedWallet[]>([])
   const [newWalletAddress, setNewWalletAddress] = useState('')
   const [walletTrackerLoading, setWalletTrackerLoading] = useState(false)
@@ -2755,6 +2757,15 @@ function ProfilePageContent() {
                     <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
                       Public Address
                     </span>
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={() => setIsAddWalletOpen(true)}
+                        className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
+                        title="Add New Wallet"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="text-white font-space-grotesk flex-1">
@@ -3269,6 +3280,10 @@ function ProfilePageContent() {
           </motion.div>
         </div>
       )}
+      <CreateWalletModal
+        isOpen={isAddWalletOpen}
+        onClose={() => setIsAddWalletOpen(false)}
+      />
     </ProfileLayout>
   )
 }

@@ -262,4 +262,34 @@ export const authApi = {
 
     return await handleResponse(response);
   },
+
+  async createWallet(payload: any): Promise<any> {
+    const accessToken = localStorage.getItem('access_token');
+    if (!accessToken) throw new AuthApiError('No access token found', 401);
+
+    const response = await fetch(`${config.apiBaseUrl}/auth/wallets`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(response);
+  },
+
+  async selectWallet(walletId: string, payload: any): Promise<any> {
+    const accessToken = localStorage.getItem('access_token');
+    if (!accessToken) throw new AuthApiError('No access token found', 401);
+
+    const response = await fetch(`${config.apiBaseUrl}/auth/wallets/${walletId}/select`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(response);
+  },
 };
