@@ -163,6 +163,7 @@ function ProfilePageContent() {
   const [filterEventTypes, setFilterEventTypes] = useState<string[]>([])
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [debugModeLoading, setDebugModeLoading] = useState(false)
+  const [isWalletListOpen, setIsWalletListOpen] = useState(false)
 
   const handleToggleDebugMode = async () => {
     if (!profile?.is_admin) return
@@ -542,6 +543,18 @@ function ProfilePageContent() {
       setWalletTrackerError(errorMessage)
     } finally {
       setBalanceRefreshing(false)
+    }
+  }
+
+  const handleSelectWallet = async (walletId: number) => {
+    try {
+      const blockchain = selectedCoin === 'sol' ? 'solana' : 'bnb'
+      await authApi.selectWallet(walletId.toString(), { blockchain })
+      await dispatch(getProfile(selectedCoin))
+      setIsWalletListOpen(false)
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to switch wallet'
+      setWalletTrackerError(errorMessage)
     }
   }
 
@@ -1409,10 +1422,28 @@ function ProfilePageContent() {
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Buy Dip Timeout (seconds)</label>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="block text-sm font-orbitron text-molten-gold font-semibold">Buy Dip Timeout (seconds)</label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-white/60 font-space-grotesk">Indefinite</span>
+                                <input
+                                  type="checkbox"
+                                  checked={walletSettings[showWalletSettings].buy_dip_timeout <= -1}
+                                  onChange={(e) => setWalletSettings(prev => ({
+                                    ...prev,
+                                    [showWalletSettings]: {
+                                      ...prev[showWalletSettings],
+                                      buy_dip_timeout: e.target.checked ? -1 : 300
+                                    }
+                                  }))}
+                                  className="w-4 h-4 rounded border-molten-gold/20 bg-void-black/50 text-molten-gold focus:ring-molten-gold focus:ring-offset-0"
+                                />
+                              </div>
+                            </div>
                             <input
                               type="number"
-                              value={walletSettings[showWalletSettings].buy_dip_timeout || 300}
+                              value={walletSettings[showWalletSettings].buy_dip_timeout <= -1 ? '' : (walletSettings[showWalletSettings].buy_dip_timeout || 300)}
+                              disabled={walletSettings[showWalletSettings].buy_dip_timeout <= -1}
                               onChange={(e) => setWalletSettings(prev => ({
                                 ...prev,
                                 [showWalletSettings]: {
@@ -1420,7 +1451,8 @@ function ProfilePageContent() {
                                   buy_dip_timeout: parseInt(e.target.value) || 0
                                 }
                               }))}
-                              className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                              className={`w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300 ${walletSettings[showWalletSettings].buy_dip_timeout <= -1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              placeholder={walletSettings[showWalletSettings].buy_dip_timeout <= -1 ? "Infinite" : "300"}
                               min="0"
                               step="1"
                             />
@@ -1476,10 +1508,28 @@ function ProfilePageContent() {
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Dip Recovery Timeout (seconds)</label>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery Timeout (seconds)</label>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-white/60 font-space-grotesk">Indefinite</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={walletSettings[showWalletSettings].dip_recovery_timeout <= -1}
+                                    onChange={(e) => setWalletSettings(prev => ({
+                                      ...prev,
+                                      [showWalletSettings]: {
+                                        ...prev[showWalletSettings],
+                                        dip_recovery_timeout: e.target.checked ? -1 : 600
+                                      }
+                                    }))}
+                                    className="w-4 h-4 rounded border-molten-gold/20 bg-void-black/50 text-molten-gold focus:ring-molten-gold focus:ring-offset-0"
+                                  />
+                                </div>
+                              </div>
                               <input
                                 type="number"
-                                value={walletSettings[showWalletSettings].dip_recovery_timeout || 600}
+                                value={walletSettings[showWalletSettings].dip_recovery_timeout <= -1 ? '' : (walletSettings[showWalletSettings].dip_recovery_timeout || 600)}
+                                disabled={walletSettings[showWalletSettings].dip_recovery_timeout <= -1}
                                 onChange={(e) => setWalletSettings(prev => ({
                                   ...prev,
                                   [showWalletSettings]: {
@@ -1487,7 +1537,8 @@ function ProfilePageContent() {
                                     dip_recovery_timeout: parseInt(e.target.value) || 0
                                   }
                                 }))}
-                                className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                                className={`w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300 ${walletSettings[showWalletSettings].dip_recovery_timeout <= -1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                placeholder={walletSettings[showWalletSettings].dip_recovery_timeout <= -1 ? "Infinite" : "600"}
                                 min="0"
                                 step="1"
                               />
@@ -2755,9 +2806,16 @@ function ProfilePageContent() {
                   <div className="flex items-center gap-3 mb-3">
                     <Wallet size={16} className="text-molten-gold" />
                     <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
-                      Public Address
+                      Active Wallet
                     </span>
                     <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={() => setIsWalletListOpen(!isWalletListOpen)}
+                        className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
+                        title="Switch Wallet"
+                      >
+                        <ChevronDown size={16} className={`transform transition-transform ${isWalletListOpen ? 'rotate-180' : ''}`} />
+                      </button>
                       <button
                         onClick={() => setIsAddWalletOpen(true)}
                         className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
@@ -2767,6 +2825,35 @@ function ProfilePageContent() {
                       </button>
                     </div>
                   </div>
+
+                  {isWalletListOpen && profile?.wallets && profile.wallets.length > 0 && (
+                    <div className="mb-4 space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {profile.wallets.map((w: any) => {
+                        const isActive = selectedCoin === 'sol' ? w.is_active_sol : w.is_active_bnb;
+                        return (
+                          <div
+                            key={w.id}
+                            onClick={() => handleSelectWallet(w.id)}
+                            className={`p-3 rounded border cursor-pointer transition-all duration-300 flex items-center justify-between ${isActive
+                              ? 'bg-molten-gold/20 border-molten-gold/50'
+                              : 'bg-void-black/30 border-white/5 hover:border-molten-gold/30'
+                              }`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-xs text-molten-gold/60 font-orbitron uppercase">
+                                {w.name || 'Unnamed Wallet'}
+                              </span>
+                              <span className="text-sm text-white/80 font-space-grotesk">
+                                {formatWalletAddress(selectedCoin === 'sol' ? w.solana_public_key : w.bnb_public_key)}
+                              </span>
+                            </div>
+                            {isActive && <CheckCircle size={14} className="text-molten-gold" />}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
                     <p className="text-white font-space-grotesk flex-1">
                       {formatWalletAddress(profile?.public_address || '')}
