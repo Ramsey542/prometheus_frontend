@@ -164,6 +164,7 @@ function ProfilePageContent() {
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [debugModeLoading, setDebugModeLoading] = useState(false)
   const [isWalletListOpen, setIsWalletListOpen] = useState(false)
+  const [walletPerfPage, setWalletPerfPage] = useState(0)
 
   const handleToggleDebugMode = async () => {
     if (!profile?.is_admin) return
@@ -521,6 +522,21 @@ function ProfilePageContent() {
     } finally {
       setLogsLoading(false)
       setInitialLogsLoading(false)
+    }
+  }
+
+  const handleManualRefresh = async () => {
+    try {
+      setStatsLoading(true)
+      await Promise.all([
+        fetchCopyTradingStats(),
+        fetchTrackedWallets(1),
+        fetchAllLogs(1)
+      ])
+    } catch (err) {
+      console.error('Refresh failed:', err)
+    } finally {
+      setStatsLoading(false)
     }
   }
 
@@ -1869,10 +1885,20 @@ function ProfilePageContent() {
   const renderTrackerLogs = () => {
     return (
       <div className="max-w-6xl mx-auto space-y-4 md:space-y-8">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between">
           <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold">
             Tracker Logs
           </h1>
+          <motion.button
+            onClick={handleManualRefresh}
+            disabled={statsLoading}
+            className="p-2 bg-molten-gold/10 border border-molten-gold/20 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-all duration-300 disabled:opacity-50"
+            title="Refresh all logs and stats"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <RefreshCw size={20} className={statsLoading ? 'animate-spin' : ''} />
+          </motion.button>
         </div>
 
         {/* Copy Trading Statistics Section */}
@@ -1976,7 +2002,7 @@ function ProfilePageContent() {
               {/* Refresh Button */}
               <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4 flex items-center justify-center">
                 <motion.button
-                  onClick={fetchCopyTradingStats}
+                  onClick={handleManualRefresh}
                   disabled={statsLoading}
                   className="px-4 py-2 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   whileHover={{ scale: 1.02 }}
@@ -2003,54 +2029,81 @@ function ProfilePageContent() {
         {/* Wallet Stats Section */}
         {copyTradingStats && copyTradingStats.wallet_stats && copyTradingStats.wallet_stats.length > 0 && (
           <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-6">
-            <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-6 flex items-center gap-3">
-              <TrendingUp size={20} />
-              Wallet Performance Overview
-            </h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-orbitron font-bold text-molten-gold flex items-center gap-3">
+                <TrendingUp size={20} />
+                Wallet Performance Overview
+              </h3>
+              {copyTradingStats.wallet_stats.length > 6 && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setWalletPerfPage(prev => Math.max(0, prev - 1))}
+                    disabled={walletPerfPage === 0}
+                    className="p-1 hover:text-molten-gold transition-colors disabled:opacity-30 flex items-center gap-1"
+                  >
+                    <ChevronLeft size={24} />
+                    <span className="text-xs font-orbitron hidden sm:inline">Prev</span>
+                  </button>
+                  <span className="text-white/60 font-orbitron text-sm min-w-[60px] text-center">
+                    {walletPerfPage + 1} / {Math.ceil(copyTradingStats.wallet_stats.length / 6)}
+                  </span>
+                  <button
+                    onClick={() => setWalletPerfPage(prev => Math.min(Math.ceil(copyTradingStats.wallet_stats.length / 6) - 1, prev + 1))}
+                    disabled={walletPerfPage >= Math.ceil(copyTradingStats.wallet_stats.length / 6) - 1}
+                    className="p-1 hover:text-molten-gold transition-colors disabled:opacity-30 flex items-center gap-1"
+                  >
+                    <span className="text-xs font-orbitron hidden sm:inline">Next</span>
+                    <ChevronRight size={24} />
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {copyTradingStats.wallet_stats.map((wallet, index) => (
-                <motion.div
-                  key={wallet.wallet_address}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <Wallet size={20} className="text-molten-gold flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-orbitron font-bold text-white text-sm truncate">
-                          {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
-                        </p>
-                        {walletSettings[wallet.wallet_address]?.custom_name && (
-                          <p className="text-white/60 font-space-grotesk font-mono text-xs truncate">
-                            {formatWalletAddress(wallet.wallet_address)}
+              {copyTradingStats.wallet_stats
+                .slice(walletPerfPage * 6, (walletPerfPage + 1) * 6)
+                .map((wallet, index) => (
+                  <motion.div
+                    key={wallet.wallet_address}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <Wallet size={20} className="text-molten-gold flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-orbitron font-bold text-white text-sm truncate">
+                            {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
                           </p>
-                        )}
+                          {walletSettings[wallet.wallet_address]?.custom_name && (
+                            <p className="text-white/60 font-space-grotesk font-mono text-xs truncate">
+                              {formatWalletAddress(wallet.wallet_address)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className={`px-2 py-1 rounded-full text-xs font-orbitron font-bold flex-shrink-0 ${wallet.is_active
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                        }`}>
+                        {wallet.is_active ? 'ACTIVE' : 'INACTIVE'}
                       </div>
                     </div>
-                    <div className={`px-2 py-1 rounded-full text-xs font-orbitron font-bold flex-shrink-0 ${wallet.is_active
-                      ? 'bg-green-500/20 text-green-400 border border-green-500/50'
-                      : 'bg-red-500/20 text-red-400 border border-red-500/50'
-                      }`}>
-                      {wallet.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center">
-                      <div className="text-sm font-orbitron text-molten-gold tracking-wide mb-1">MATCHES</div>
-                      <div className="text-xl font-orbitron font-bold text-white">{wallet.total_matches}</div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center">
+                        <div className="text-sm font-orbitron text-molten-gold tracking-wide mb-1">MATCHES</div>
+                        <div className="text-xl font-orbitron font-bold text-white">{wallet.total_matches}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm font-orbitron text-blue-400 tracking-wide mb-1">SUCCESS RATE</div>
+                        <div className="text-xl font-orbitron font-bold text-white">{wallet.success_rate.toFixed(1)}%</div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-sm font-orbitron text-blue-400 tracking-wide mb-1">SUCCESS RATE</div>
-                      <div className="text-xl font-orbitron font-bold text-white">{wallet.success_rate.toFixed(1)}%</div>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                ))}
             </div>
           </div>
         )}
