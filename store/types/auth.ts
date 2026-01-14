@@ -121,6 +121,7 @@ export interface CopyTradingLog {
   tracked_wallet_address?: string | null;
   target_token: string | null;
   token_name: string | null;
+  token_symbol: string | null;
   base_token: string | null;
   base_token_name: string | null;
   token_decimals: number | null;

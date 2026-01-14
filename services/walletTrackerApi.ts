@@ -289,7 +289,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async generatePnlImage(tokenAddress: string, tokenName: string, sent: string, received: string, pnl: number | null | undefined, transactionSignature: string | null, coin: string = 'sol'): Promise<Blob> {
+  async generatePnlImage(tokenAddress: string, tokenSymbol: string, sent: string, received: string, pnl: number | null | undefined, transactionSignature: string | null, coin: string = 'sol'): Promise<Blob> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
@@ -302,7 +302,7 @@ export const walletTrackerApi = {
         },
         body: JSON.stringify({
           token_address: tokenAddress,
-          token_name: tokenName,
+          token_symbol: tokenSymbol,
           sent: sent,
           received: received,
           pnl: pnl,

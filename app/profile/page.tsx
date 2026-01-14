@@ -936,7 +936,7 @@ function ProfilePageContent() {
       setPnlImageModal({ open: true, imageUrl: null, loading: true })
       const blob = await walletTrackerApi.generatePnlImage(
         log.target_token,
-        log.token_name,
+        log.token_symbol || log.token_name || 'Token',
         log.amount_in,
         log.amount_out,
         log.pnl ?? 0,
@@ -1183,13 +1183,18 @@ function ProfilePageContent() {
                           >
                             <Copy size={14} />
                           </button>
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="flex flex-col flex-1 min-w-0">
                             <p
                               className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default"
                               title={wallet.wallet_address}
                             >
                               {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
                             </p>
+                            {walletSettings[wallet.wallet_address]?.custom_name && (
+                              <p className="text-[10px] text-white/40 font-space-grotesk mt-0.5">
+                                {formatWalletAddress(wallet.wallet_address)}
+                              </p>
+                            )}
                           </div>
                           {copiedKey === `tracked-${wallet.id}` && (
                             <span className="text-xs text-molten-gold">Copied</span>
