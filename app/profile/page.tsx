@@ -25,7 +25,8 @@ import {
   RefreshCw,
   Share2,
   Download,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { logout, getProfile } from '../../store/slices/authSlice'
@@ -1184,12 +1185,35 @@ function ProfilePageContent() {
                             <Copy size={14} />
                           </button>
                           <div className="flex flex-col flex-1 min-w-0">
-                            <p
-                              className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default"
-                              title={wallet.wallet_address}
-                            >
-                              {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p
+                                className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default truncate"
+                                title={wallet.wallet_address}
+                              >
+                                {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
+                              </p>
+                              <div className="flex items-center gap-2 ml-2">
+                                <a
+                                  href={`https://gmgn.ai/${selectedCoin === 'sol' ? 'sol' : 'bsc'}/address/${wallet.wallet_address}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-molten-gold/60 hover:text-molten-gold transition-colors font-orbitron flex items-center gap-0.5"
+                                >
+                                  GMGN <ExternalLink size={8} />
+                                </a>
+                                <a
+                                  href={selectedCoin === 'sol'
+                                    ? `https://solscan.io/account/${wallet.wallet_address}`
+                                    : `https://bscscan.com/address/${wallet.wallet_address}`
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-molten-gold/60 hover:text-molten-gold transition-colors font-orbitron flex items-center gap-0.5"
+                                >
+                                  {selectedCoin === 'sol' ? 'SOLSCAN' : 'BSCSCAN'} <ExternalLink size={8} />
+                                </a>
+                              </div>
+                            </div>
                             {walletSettings[wallet.wallet_address]?.custom_name && (
                               <p className="text-[10px] text-white/40 font-space-grotesk mt-0.5">
                                 {formatWalletAddress(wallet.wallet_address)}
@@ -2079,9 +2103,32 @@ function ProfilePageContent() {
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <Wallet size={20} className="text-molten-gold flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="font-orbitron font-bold text-white text-sm truncate">
-                            {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-orbitron font-bold text-white text-sm truncate">
+                              {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`https://gmgn.ai/${selectedCoin === 'sol' ? 'sol' : 'bsc'}/address/${wallet.wallet_address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-molten-gold/60 hover:text-molten-gold transition-colors font-orbitron flex items-center gap-0.5"
+                              >
+                                GMGN <ExternalLink size={8} />
+                              </a>
+                              <a
+                                href={selectedCoin === 'sol'
+                                  ? `https://solscan.io/account/${wallet.wallet_address}`
+                                  : `https://bscscan.com/address/${wallet.wallet_address}`
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-molten-gold/60 hover:text-molten-gold transition-colors font-orbitron flex items-center gap-0.5"
+                              >
+                                {selectedCoin === 'sol' ? 'SOLSCAN' : 'BSCSCAN'} <ExternalLink size={8} />
+                              </a>
+                            </div>
+                          </div>
                           {walletSettings[wallet.wallet_address]?.custom_name && (
                             <p className="text-white/60 font-space-grotesk font-mono text-xs truncate">
                               {formatWalletAddress(wallet.wallet_address)}
