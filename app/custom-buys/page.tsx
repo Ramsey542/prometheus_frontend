@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import DashboardLayout from '../../components/DashboardLayout'
 import { RefreshCw, ExternalLink, XCircle, CheckCircle, Settings, Trash2, Plus, TrendingUp, TrendingDown } from 'lucide-react'
@@ -65,7 +66,7 @@ export default function CustomBuysPage() {
 
   const tokensPerPage = 20
 
-  const fetchTokenBalances = async () => {
+  const fetchTokenBalances = useCallback(async () => {
     try {
       setRefreshing(true)
       setError(null)
@@ -104,21 +105,21 @@ export default function CustomBuysPage() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
-
-  useEffect(() => {
-    fetchTokenBalances()
-    fetchAvailableSounds()
   }, [selectedCoin, currentPage])
 
-  const fetchAvailableSounds = async () => {
+  const fetchAvailableSounds = useCallback(async () => {
     try {
       const sounds = await walletTrackerApi.getNotificationSounds()
       setAvailableSounds(sounds)
     } catch (err) {
       console.error('Failed to fetch sounds:', err)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchTokenBalances()
+    fetchAvailableSounds()
+  }, [fetchTokenBalances, fetchAvailableSounds])
 
   const testHearSound = (soundFile: string) => {
     if (playingSound) return
@@ -441,10 +442,13 @@ export default function CustomBuysPage() {
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             {token.logo_uri && !failedImages.has(token.logo_uri) ? (
-                              <img
+                              <Image
                                 src={token.logo_uri}
                                 alt={token.token_symbol || 'Token'}
+                                width={32}
+                                height={32}
                                 className="w-8 h-8 rounded-full object-cover"
+                                unoptimized
                                 onError={() => {
                                   setFailedImages(prev => new Set(prev).add(token.logo_uri!))
                                 }}
@@ -877,7 +881,7 @@ export default function CustomBuysPage() {
                 <div className="flex items-center justify-between p-4 bg-molten-gold/5 border border-molten-gold/20 rounded-lg">
                   <div>
                     <h3 className="text-sm font-orbitron font-bold text-molten-gold">TP/SL Status</h3>
-                    <p className="text-xs text-white/60 font-space-grotesk">Global toggle for this position's SL/TP monitoring</p>
+                    <p className="text-xs text-white/60 font-space-grotesk">Global toggle for this position&apos;s SL/TP monitoring</p>
                   </div>
                   <button
                     onClick={() => setTpSlIsActive(!tpSlIsActive)}
