@@ -41,6 +41,11 @@ interface WalletSettings {
   stop_loss_levels?: StopLossLevel[]
   trailing_stop_percentage?: number
   trailing_stop_sell_percentage?: number
+  entry_on_first_swap: boolean
+  buy_once_per_token: boolean
+  mirror_sells_enabled: boolean
+  swap_notifications_enabled: boolean
+  swap_notification_sound: string
 }
 
 export default function DashboardPage() {
@@ -56,7 +61,12 @@ export default function DashboardPage() {
     slippage: 1,
     max_buys_per_mirror_per_hour: 1,
     max_buys_per_mirror_per_day: 1,
-    max_buys_per_token_per_day: 1
+    max_buys_per_token_per_day: 1,
+    entry_on_first_swap: false,
+    buy_once_per_token: false,
+    mirror_sells_enabled: true,
+    swap_notifications_enabled: true,
+    swap_notification_sound: 'success.mp3'
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -71,6 +81,8 @@ export default function DashboardPage() {
   const [tpSlIsActive, setTpSlIsActive] = useState(true)
   const [isAddWalletOpen, setIsAddWalletOpen] = useState(false)
   const [isWalletListOpen, setIsWalletListOpen] = useState(false)
+  const [availableSounds, setAvailableSounds] = useState<string[]>([])
+  const [playingSound, setPlayingSound] = useState<string | null>(null)
 
 
 
@@ -79,8 +91,7 @@ export default function DashboardPage() {
   }
 
   const swapStrategies = [
-    { value: 'none', label: 'None' },
-    { value: 'fixed_buys', label: 'Constant Size' }
+    { value: 'fixed_buys', label: 'Constant Size' },
   ]
 
   const calculateTotalSellPercentage = (levels: TakeProfitLevel[] | StopLossLevel[]): number => {
@@ -162,8 +173,34 @@ export default function DashboardPage() {
   useEffect(() => {
     if (profile) {
       fetchSettings()
+      fetchAvailableSounds()
     }
   }, [profile])
+
+  const fetchAvailableSounds = async () => {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/sounds`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setAvailableSounds(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch sounds:', err)
+    }
+  }
+
+  const testHearSound = (soundFile: string) => {
+    if (playingSound) return
+    setPlayingSound(soundFile)
+    const audio = new Audio(`/sounds/${soundFile}`)
+    audio.play().finally(() => {
+      setTimeout(() => setPlayingSound(null), 2000)
+    })
+  }
 
   const fetchSettings = async () => {
     try {
@@ -210,6 +247,11 @@ export default function DashboardPage() {
         take_profit_levels: settings.take_profit_levels,
         stop_loss_levels: settings.stop_loss_levels,
         tp_sl_is_active: tpSlIsActive,
+        entry_on_first_swap: settings.entry_on_first_swap,
+        buy_once_per_token: settings.buy_once_per_token,
+        mirror_sells_enabled: settings.mirror_sells_enabled,
+        swap_notifications_enabled: settings.swap_notifications_enabled,
+        swap_notification_sound: settings.swap_notification_sound,
       }
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings`, {
         method: 'PUT',
@@ -918,6 +960,122 @@ export default function DashboardPage() {
                 </div>
               </motion.div>
             )}
+          </div>
+
+          {/* Trading Filters Section */}
+          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+            <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-4">Trading Filters</h3>
+            <div className="space-y-6">
+              {/* Entry on first swap */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">First Purchase Only</h4>
+                  <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Only entry on the first purchase swap of a mirror wallet</p>
+                </div>
+                <motion.button
+                  onClick={() => setSettings(prev => ({ ...prev, entry_on_first_swap: !prev.entry_on_first_swap }))}
+                  className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.entry_on_first_swap ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    className="w-4 h-4 bg-white rounded-full"
+                    animate={{ x: settings.entry_on_first_swap ? 24 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </motion.button>
+              </div>
+
+              {/* Buy once per token */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Buy Once Per Token</h4>
+                  <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Never buy the same token twice</p>
+                </div>
+                <motion.button
+                  onClick={() => setSettings(prev => ({ ...prev, buy_once_per_token: !prev.buy_once_per_token }))}
+                  className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.buy_once_per_token ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    className="w-4 h-4 bg-white rounded-full"
+                    animate={{ x: settings.buy_once_per_token ? 24 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </motion.button>
+              </div>
+
+              {/* Mirror Sells Toggle */}
+              <div className={`flex items-center justify-between ${!tpSlIsActive ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
+                <div>
+                  <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Mirror Sells</h4>
+                  <p className="text-white/40 font-space-grotesk text-xs md:text-sm">When TP/SL is active, disable this to ignore mirror wallet sells</p>
+                </div>
+                <motion.button
+                  onClick={() => setSettings(prev => ({ ...prev, mirror_sells_enabled: !prev.mirror_sells_enabled }))}
+                  className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.mirror_sells_enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    className="w-4 h-4 bg-white rounded-full"
+                    animate={{ x: settings.mirror_sells_enabled ? 24 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </motion.button>
+              </div>
+            </div>
+          </div>
+          {/* Notification Settings */}
+          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+            <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-4">Notification Settings</h3>
+            <div className="space-y-6">
+              {/* Notifications Toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Swap Notifications</h4>
+                  <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Receive sound alerts when a swap is executed</p>
+                </div>
+                <motion.button
+                  onClick={() => setSettings(prev => ({ ...prev, swap_notifications_enabled: !prev.swap_notifications_enabled }))}
+                  className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.swap_notifications_enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    className="w-4 h-4 bg-white rounded-full"
+                    animate={{ x: settings.swap_notifications_enabled ? 24 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </motion.button>
+              </div>
+
+              {/* Notification Sound Selection */}
+              {settings.swap_notifications_enabled && (
+                <div className="space-y-4">
+                  <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide uppercase">
+                    Notification Sound
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <select
+                      value={settings.swap_notification_sound}
+                      onChange={(e) => setSettings(prev => ({ ...prev, swap_notification_sound: e.target.value }))}
+                      className="flex-1 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300 min-w-0"
+                    >
+                      {availableSounds.map(sound => (
+                        <option key={sound} value={sound}>{sound}</option>
+                      ))}
+                    </select>
+                    <motion.button
+                      onClick={() => testHearSound(settings.swap_notification_sound)}
+                      disabled={playingSound !== null}
+                      className="px-4 py-2 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300 flex items-center justify-center gap-2 font-orbitron font-semibold text-xs disabled:opacity-50"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {playingSound === settings.swap_notification_sound ? 'Playing...' : 'Test Hear'}
+                    </motion.button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

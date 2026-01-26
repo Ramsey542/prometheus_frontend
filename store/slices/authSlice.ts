@@ -112,7 +112,7 @@ export const loginWithProfile = createAsyncThunk(
           const profile = profileResult.payload;
 
           const user = {
-            id: profile.username,
+            id: profile.id.toString(),
             username: profile.username,
             email: profile.email
           };
@@ -378,7 +378,7 @@ const authSlice = createSlice({
           state.tokens = action.payload.tokens;
           state.profile = action.payload.profile;
           state.user = action.payload.profile ? {
-            id: action.payload.profile.username,
+            id: action.payload.profile.id.toString(),
             username: action.payload.profile.username,
             email: action.payload.profile.email
           } : null;

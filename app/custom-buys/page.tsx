@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import DashboardLayout from '../../components/DashboardLayout'
-import { RefreshCw, ExternalLink, XCircle, CheckCircle } from 'lucide-react'
+import { RefreshCw, ExternalLink, XCircle, CheckCircle, Settings, Trash2, Plus, TrendingUp, TrendingDown } from 'lucide-react'
 import { useAppSelector } from '../../store/hooks'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
 
@@ -29,6 +29,7 @@ interface TrackedPositionInfo {
     target_price: number
   }>
   decimals_adjusted: boolean
+  mirror_address: string | null
 }
 
 export default function CustomBuysPage() {
@@ -38,7 +39,7 @@ export default function CustomBuysPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [hideLowBalances, setHideLowBalances] = useState(false)
+  const [hideLowBalances, setHideLowBalances] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalBalance, setTotalBalance] = useState(0)
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
@@ -51,6 +52,16 @@ export default function CustomBuysPage() {
   const [transactionSignature, setTransactionSignature] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [trackedPositions, setTrackedPositions] = useState<Record<string, TrackedPositionInfo>>({})
+  const [tpSlModal, setTpSlModal] = useState<{ open: boolean; token: TokenBalance | null; mirrorAddress: string | null }>({ open: false, token: null, mirrorAddress: null })
+  const [tpSlSettings, setTpSlSettings] = useState<any>(null)
+  const [savingTpSl, setSavingTpSl] = useState(false)
+  const [tpSlSuccess, setTpSlSuccess] = useState<string | null>(null)
+  const [tpSlError, setTpSlError] = useState<string | null>(null)
+  const [tpValidationErrors, setTpValidationErrors] = useState<string | null>(null)
+  const [slValidationErrors, setSlValidationErrors] = useState<string | null>(null)
+  const [tpSlIsActive, setTpSlIsActive] = useState(false)
+  const [availableSounds, setAvailableSounds] = useState<string[]>([])
+  const [playingSound, setPlayingSound] = useState<string | null>(null)
 
   const tokensPerPage = 20
 
@@ -60,14 +71,14 @@ export default function CustomBuysPage() {
       setError(null)
       setLoading(true)
       const offset = (currentPage - 1) * tokensPerPage
-      
+
       const [tokenResponse, positionsResponse] = await Promise.all([
         walletTrackerApi.getTokenBalances(selectedCoin, offset, tokensPerPage),
         walletTrackerApi.getTrackedPositions(selectedCoin)
       ])
-      
+
       let tokenList: TokenBalance[] = []
-      
+
       if (tokenResponse.token_balances && Array.isArray(tokenResponse.token_balances)) {
         tokenList = tokenResponse.token_balances
       } else if (Array.isArray(tokenResponse)) {
@@ -77,7 +88,7 @@ export default function CustomBuysPage() {
       } else if (tokenResponse.data && Array.isArray(tokenResponse.data)) {
         tokenList = tokenResponse.data
       }
-      
+
       setTokens(tokenList)
       setTrackedPositions(positionsResponse || {})
       if (typeof tokenResponse?.total_count === 'number') {
@@ -97,11 +108,30 @@ export default function CustomBuysPage() {
 
   useEffect(() => {
     fetchTokenBalances()
+    fetchAvailableSounds()
   }, [selectedCoin, currentPage])
+
+  const fetchAvailableSounds = async () => {
+    try {
+      const sounds = await walletTrackerApi.getNotificationSounds()
+      setAvailableSounds(sounds)
+    } catch (err) {
+      console.error('Failed to fetch sounds:', err)
+    }
+  }
+
+  const testHearSound = (soundFile: string) => {
+    if (playingSound) return
+    setPlayingSound(soundFile)
+    const audio = new Audio(`/sounds/${soundFile}`)
+    audio.play().finally(() => {
+      setTimeout(() => setPlayingSound(null), 2000)
+    })
+  }
 
   useEffect(() => {
     let filtered = tokens
-    
+
     if (hideLowBalances) {
       filtered = tokens.filter(token => {
         if (token.balance_usd) {
@@ -179,6 +209,140 @@ export default function CustomBuysPage() {
     setSellAmount(amount)
   }
 
+  const fetchTpSlSettings = async (mirrorAddress: string) => {
+    try {
+      setLoading(true)
+      const settings = await walletTrackerApi.getTrackedWalletSettings(mirrorAddress, selectedCoin)
+      setTpSlSettings({
+        ...settings,
+        take_profit_levels: settings.take_profit_levels && settings.take_profit_levels.length > 0
+          ? settings.take_profit_levels
+          : [{ profit_percentage: 0, sell_percentage: 0 }],
+        stop_loss_levels: settings.stop_loss_levels && settings.stop_loss_levels.length > 0
+          ? settings.stop_loss_levels
+          : [{ loss_percentage: 0, sell_percentage: 0 }],
+        swap_notifications_enabled: settings.swap_notifications_enabled ?? true,
+        swap_notification_sound: settings.swap_notification_sound ?? 'success.mp3'
+      })
+      setTpSlIsActive(settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : true)
+    } catch (err: any) {
+      console.error('Failed to fetch TP/SL settings:', err)
+      setTpSlError(err.message || 'Failed to fetch settings')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateTpSl = async () => {
+    if (!tpSlModal.mirrorAddress || !tpSlSettings) return
+
+    if (tpValidationErrors || slValidationErrors) {
+      setTpSlError('Please fix validation errors before saving')
+      return
+    }
+
+    try {
+      setSavingTpSl(true)
+      setTpSlError(null)
+      setTpSlSuccess(null)
+
+      const normalized = {
+        ...tpSlSettings,
+        take_profit_levels: tpSlSettings.take_profit_levels.filter((l: any) => l.profit_percentage > 0 && l.sell_percentage > 0),
+        stop_loss_levels: tpSlSettings.stop_loss_levels.filter((l: any) => l.loss_percentage > 0 && l.sell_percentage > 0),
+        tp_sl_is_active: tpSlIsActive,
+        swap_notifications_enabled: tpSlSettings.swap_notifications_enabled,
+        swap_notification_sound: tpSlSettings.swap_notification_sound
+      }
+
+      await walletTrackerApi.updateTrackedWalletSettings(tpSlModal.mirrorAddress, normalized, selectedCoin)
+      setTpSlSuccess('TP/SL settings updated successfully')
+      setTimeout(() => {
+        setTpSlModal({ open: false, token: null, mirrorAddress: null })
+        setTpSlSuccess(null)
+        fetchTokenBalances()
+      }, 2000)
+    } catch (err: any) {
+      setTpSlError(err.message || 'Failed to update settings')
+    } finally {
+      setSavingTpSl(false)
+    }
+  }
+
+  const calculateTotalSellPercentage = (levels: any[]): number => {
+    return levels.reduce((sum, level) => sum + (level.sell_percentage || 0), 0)
+  }
+
+  const handleEditTpSl = (token: TokenBalance) => {
+    const position = trackedPositions[token.token_address.toLowerCase()]
+    if (position && position.mirror_address) {
+      setTpSlModal({ open: true, token, mirrorAddress: position.mirror_address })
+      fetchTpSlSettings(position.mirror_address)
+    }
+  }
+
+  const addTakeProfitLevel = () => {
+    setTpSlSettings((prev: any) => ({
+      ...prev,
+      take_profit_levels: [...prev.take_profit_levels, { profit_percentage: 0, sell_percentage: 0 }]
+    }))
+  }
+
+  const removeTakeProfitLevel = (index: number) => {
+    setTpSlSettings((prev: any) => ({
+      ...prev,
+      take_profit_levels: prev.take_profit_levels.filter((_: any, i: number) => i !== index)
+    }))
+  }
+
+  const updateTakeProfitLevel = (index: number, field: string, value: string) => {
+    const numValue = value === '' ? 0 : parseFloat(value) || 0
+    const updated = [...tpSlSettings.take_profit_levels]
+    updated[index] = { ...updated[index], [field]: numValue }
+
+    setTpSlSettings((prev: any) => ({ ...prev, take_profit_levels: updated }))
+
+    const total = calculateTotalSellPercentage(updated)
+    if (total > 100) {
+      setTpValidationErrors('Total sell percentage cannot exceed 100%')
+    } else if (total > 0 && total < 100) {
+      setTpValidationErrors('Total sell percentage must be 100% if targets exist')
+    } else {
+      setTpValidationErrors(null)
+    }
+  }
+
+  const addStopLossLevel = () => {
+    setTpSlSettings((prev: any) => ({
+      ...prev,
+      stop_loss_levels: [...prev.stop_loss_levels, { loss_percentage: 0, sell_percentage: 0 }]
+    }))
+  }
+
+  const removeStopLossLevel = (index: number) => {
+    setTpSlSettings((prev: any) => ({
+      ...prev,
+      stop_loss_levels: prev.stop_loss_levels.filter((_: any, i: number) => i !== index)
+    }))
+  }
+
+  const updateStopLossLevel = (index: number, field: string, value: string) => {
+    const numValue = value === '' ? 0 : parseFloat(value) || 0
+    const updated = [...tpSlSettings.stop_loss_levels]
+    updated[index] = { ...updated[index], [field]: numValue }
+
+    setTpSlSettings((prev: any) => ({ ...prev, stop_loss_levels: updated }))
+
+    const total = calculateTotalSellPercentage(updated)
+    if (total > 100) {
+      setSlValidationErrors('Total sell percentage cannot exceed 100%')
+    } else if (total > 0 && total < 100) {
+      setSlValidationErrors('Total sell percentage must be 100% if targets exist')
+    } else {
+      setSlValidationErrors(null)
+    }
+  }
+
   const getDexScreenerUrl = (tokenAddress: string) => {
     if (selectedCoin === 'sol') {
       return `https://dexscreener.com/solana/${tokenAddress}`
@@ -198,9 +362,9 @@ export default function CustomBuysPage() {
               <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold mb-2">
                 Held Tokens
               </h1>
-            <p className="text-sm text-white/60 font-space-grotesk">
-              Total Balance: <span className="text-molten-gold font-bold">${totalBalance.toFixed(4)} USD</span>
-            </p>
+              <p className="text-sm text-white/60 font-space-grotesk">
+                Total Balance: <span className="text-molten-gold font-bold">${totalBalance.toFixed(4)} USD</span>
+              </p>
             </div>
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -270,7 +434,7 @@ export default function CustomBuysPage() {
                       <motion.tr
                         key={token.token_address}
                         initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+                        animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05 }}
                         className="border-b border-molten-gold/10 hover:bg-molten-gold/5 transition-colors duration-200"
                       >
@@ -409,6 +573,17 @@ export default function CustomBuysPage() {
                             >
                               Sell
                             </motion.button>
+                            <motion.button
+                              onClick={() => handleEditTpSl(token)}
+                              disabled={!trackedPositions[token.token_address.toLowerCase()]?.mirror_address}
+                              className="px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold text-xs font-orbitron font-semibold rounded hover:bg-molten-gold/20 transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              title={!trackedPositions[token.token_address.toLowerCase()]?.mirror_address ? "No mirrored position found" : "Edit TP/SL"}
+                            >
+                              <Settings size={12} />
+                              Edit TP/SL
+                            </motion.button>
                             <motion.a
                               href={getDexScreenerUrl(token.token_address)}
                               target="_blank"
@@ -513,7 +688,7 @@ export default function CustomBuysPage() {
                 <label className="block text-sm font-orbitron font-semibold text-white mb-2">
                   Sell Amount
                 </label>
-              <input
+                <input
                   type="number"
                   value={sellAmount}
                   onChange={(e) => setSellAmount(e.target.value)}
@@ -544,24 +719,24 @@ export default function CustomBuysPage() {
                 <p className="text-xs text-white/60 mt-1">
                   Balance: {parseFloat(sellModal.token.balance || '0').toFixed(4)}
                 </p>
-            </div>
+              </div>
 
               <div>
                 <label className="block text-sm font-orbitron font-semibold text-white mb-2">
                   Slippage (%)
                 </label>
-              <input
-                type="number"
-                value={slippage}
-                onChange={(e) => setSlippage(e.target.value)}
+                <input
+                  type="number"
+                  value={slippage}
+                  onChange={(e) => setSlippage(e.target.value)}
                   className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none"
-                placeholder="1.0"
-                min="1"
-                max="100"
-                step="0.1"
+                  placeholder="1.0"
+                  min="1"
+                  max="100"
+                  step="0.1"
                   disabled={selling}
-              />
-            </div>
+                />
+              </div>
 
               <div className="flex gap-3 pt-2">
                 <motion.button
@@ -573,24 +748,280 @@ export default function CustomBuysPage() {
                     setSellSuccess(null)
                     setTransactionSignature(null)
                   }}
-                disabled={selling}
+                  disabled={selling}
                   className="flex-1 px-4 py-2 bg-void-black/50 border border-white/20 text-white rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
                   Cancel
                 </motion.button>
-              <motion.button
-                onClick={handleSell}
+                <motion.button
+                  onClick={handleSell}
                   disabled={selling || !sellAmount || !slippage}
                   className="flex-1 px-4 py-2 bg-red-500/20 border border-red-500/40 text-red-300 font-orbitron font-bold rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
                   {selling ? 'Processing...' : 'Sell'}
-              </motion.button>
+                </motion.button>
+              </div>
             </div>
-          </div>
+          </motion.div>
+        </div>
+      )}
+
+      {tpSlModal.open && tpSlModal.token && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-orbitron font-bold text-molten-gold">
+                TP/SL Settings: {tpSlModal.token.token_symbol || 'Token'}
+              </h2>
+              <button
+                onClick={() => setTpSlModal({ open: false, token: null, mirrorAddress: null })}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            {tpSlError && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg mb-4"
+              >
+                <div className="flex items-center gap-2 text-red-400">
+                  <XCircle size={16} />
+                  <span className="text-sm font-orbitron font-bold">{tpSlError}</span>
+                </div>
+              </motion.div>
+            )}
+
+            {tpSlSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg mb-4"
+              >
+                <div className="flex items-center gap-2 text-green-400">
+                  <CheckCircle size={16} />
+                  <span className="text-sm font-orbitron font-bold">{tpSlSuccess}</span>
+                </div>
+              </motion.div>
+            )}
+
+            {!tpSlSettings ? (
+              <div className="text-center py-12">
+                <RefreshCw size={32} className="animate-spin text-molten-gold mx-auto mb-4" />
+                <p className="text-white/60 font-space-grotesk">Fetching settings...</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Notification Settings */}
+                <div className="bg-molten-gold/5 border border-molten-gold/20 rounded-lg p-4">
+                  <h3 className="text-lg font-orbitron font-semibold text-white mb-4">Notification Settings</h3>
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-orbitron font-semibold text-white mb-1">Swap Notifications</h4>
+                        <p className="text-white/40 font-space-grotesk text-xs">Receive sound alert when this position is partially or fully closed by TP/SL</p>
+                      </div>
+                      <motion.button
+                        onClick={() => setTpSlSettings((prev: any) => ({ ...prev, swap_notifications_enabled: !prev.swap_notifications_enabled }))}
+                        className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${tpSlSettings.swap_notifications_enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <motion.div
+                          className="w-4 h-4 bg-white rounded-full"
+                          animate={{ x: tpSlSettings.swap_notifications_enabled ? 24 : 0 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        />
+                      </motion.button>
+                    </div>
+
+                    {tpSlSettings.swap_notifications_enabled && (
+                      <div className="space-y-3">
+                        <label className="block text-xs font-orbitron text-molten-gold tracking-wide uppercase">
+                          Notification Sound
+                        </label>
+                        <div className="flex gap-3">
+                          <select
+                            value={tpSlSettings.swap_notification_sound}
+                            onChange={(e) => setTpSlSettings((prev: any) => ({ ...prev, swap_notification_sound: e.target.value }))}
+                            className="flex-1 bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          >
+                            {availableSounds.map(sound => (
+                              <option key={sound} value={sound}>{sound}</option>
+                            ))}
+                          </select>
+                          <motion.button
+                            onClick={() => testHearSound(tpSlSettings.swap_notification_sound)}
+                            disabled={playingSound !== null}
+                            className="px-4 py-2 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300 flex items-center justify-center gap-2 font-orbitron font-bold text-xs disabled:opacity-50"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            {playingSound === tpSlSettings.swap_notification_sound ? 'Playing...' : 'Test Hear'}
+                          </motion.button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-molten-gold/5 border border-molten-gold/20 rounded-lg">
+                  <div>
+                    <h3 className="text-sm font-orbitron font-bold text-molten-gold">TP/SL Status</h3>
+                    <p className="text-xs text-white/60 font-space-grotesk">Global toggle for this position's SL/TP monitoring</p>
+                  </div>
+                  <button
+                    onClick={() => setTpSlIsActive(!tpSlIsActive)}
+                    className={`px-4 py-2 rounded-lg font-orbitron font-bold text-xs transition-all duration-300 ${tpSlIsActive ? 'bg-green-500/20 text-green-400 border border-green-500/50' : 'bg-red-500/20 text-red-400 border border-red-500/50'}`}
+                  >
+                    {tpSlIsActive ? 'ACTIVE' : 'INACTIVE'}
+                  </button>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-4 border-b border-molten-gold/20 pb-2">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp size={18} className="text-green-400" />
+                        <h3 className="text-sm font-orbitron font-bold text-green-400">Take Profit</h3>
+                      </div>
+                      <button
+                        onClick={addTakeProfitLevel}
+                        className="p-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {tpSlSettings.take_profit_levels.map((level: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-3 p-3 bg-void-black/50 border border-molten-gold/10 rounded-lg group">
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[10px] text-white/40 font-orbitron uppercase">Profit %</label>
+                            <input
+                              type="number"
+                              value={level.profit_percentage || ''}
+                              onChange={(e) => updateTakeProfitLevel(idx, 'profit_percentage', e.target.value)}
+                              className="w-full bg-transparent border-none text-white font-space-grotesk text-sm focus:ring-0 p-0"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div className="w-px h-8 bg-molten-gold/20" />
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[10px] text-white/40 font-orbitron uppercase">Sell %</label>
+                            <input
+                              type="number"
+                              value={level.sell_percentage || ''}
+                              onChange={(e) => updateTakeProfitLevel(idx, 'sell_percentage', e.target.value)}
+                              className="w-full bg-transparent border-none text-white font-space-grotesk text-sm focus:ring-0 p-0"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <button
+                            onClick={() => removeTakeProfitLevel(idx)}
+                            className="text-red-400/50 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {tpValidationErrors && (
+                      <p className="text-[10px] text-red-400 font-space-grotesk">{tpValidationErrors}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-4 border-b border-molten-gold/20 pb-2">
+                      <div className="flex items-center gap-2">
+                        <TrendingDown size={18} className="text-red-400" />
+                        <h3 className="text-sm font-orbitron font-bold text-red-400">Stop Loss</h3>
+                      </div>
+                      <button
+                        onClick={addStopLossLevel}
+                        className="p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {tpSlSettings.stop_loss_levels.map((level: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-3 p-3 bg-void-black/50 border border-molten-gold/10 rounded-lg group">
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[10px] text-white/40 font-orbitron uppercase">Loss %</label>
+                            <input
+                              type="number"
+                              value={level.loss_percentage || ''}
+                              onChange={(e) => updateStopLossLevel(idx, 'loss_percentage', e.target.value)}
+                              className="w-full bg-transparent border-none text-white font-space-grotesk text-sm focus:ring-0 p-0"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div className="w-px h-8 bg-molten-gold/20" />
+                          <div className="flex-1 space-y-1">
+                            <label className="text-[10px] text-white/40 font-orbitron uppercase">Sell %</label>
+                            <input
+                              type="number"
+                              value={level.sell_percentage || ''}
+                              onChange={(e) => updateStopLossLevel(idx, 'sell_percentage', e.target.value)}
+                              className="w-full bg-transparent border-none text-white font-space-grotesk text-sm focus:ring-0 p-0"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <button
+                            onClick={() => removeStopLossLevel(idx)}
+                            className="text-red-400/50 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {slValidationErrors && (
+                      <p className="text-[10px] text-red-400 font-space-grotesk">{slValidationErrors}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <motion.button
+                    onClick={() => setTpSlModal({ open: false, token: null, mirrorAddress: null })}
+                    disabled={savingTpSl}
+                    className="flex-1 px-4 py-3 bg-void-black/50 border border-white/20 text-white font-orbitron font-bold rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    onClick={handleUpdateTpSl}
+                    disabled={savingTpSl || !!tpValidationErrors || !!slValidationErrors}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-molten-gold to-yellow-600 text-void-black font-orbitron font-bold rounded-lg hover:from-yellow-600 hover:to-molten-gold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    {savingTpSl ? (
+                      <>
+                        <RefreshCw size={18} className="animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Settings'
+                    )}
+                  </motion.button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </div>
       )}

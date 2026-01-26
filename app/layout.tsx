@@ -3,14 +3,15 @@ import { Orbitron, Space_Grotesk } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import AuthInitializer from '../components/AuthInitializer'
+import { NotificationSound } from '../components/NotificationSound'
 
-const orbitron = Orbitron({ 
+const orbitron = Orbitron({
   subsets: ['latin'],
   variable: '--font-orbitron',
   weight: ['400', '700', '900']
 })
 
-const spaceGrotesk = Space_Grotesk({ 
+const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   variable: '--font-space-grotesk',
   weight: ['300', '400', '500', '600', '700']
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body className={`${orbitron.variable} ${spaceGrotesk.variable} antialiased`}>
         <Providers>
           <AuthInitializer />
+          <NotificationSound />
           {children}
         </Providers>
       </body>

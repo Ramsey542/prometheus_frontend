@@ -49,6 +49,27 @@ export const walletTrackerApi = {
     });
   },
 
+  async bulkStartTrackingWallets(walletData: TrackedWalletListCreate, coin: string = 'sol'): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+
+      if (!accessToken) {
+        throw new WalletTrackerApiError('No access token found', 401);
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/track/wallet/${coin}/bulk`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(walletData),
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
 
 
   async stopTrackingWallet(walletAddress: string, coin: string = 'sol', disableTpSl: boolean = false): Promise<{ message: string }> {
@@ -273,7 +294,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async getTrackedPositions(coin: string = 'sol'): Promise<Record<string, { tp_sl_active: boolean; buy_price: number; remaining_amount: number; targets: Array<{ type: string; percentage: number; sell_percentage: number; target_price: number }>; decimals_adjusted: boolean }>> {
+  async getTrackedPositions(coin: string = 'sol'): Promise<Record<string, { tp_sl_active: boolean; buy_price: number; remaining_amount: number; targets: Array<{ type: string; percentage: number; sell_percentage: number; target_price: number }>; decimals_adjusted: boolean; mirror_address: string | null }>> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
@@ -375,6 +396,56 @@ export const walletTrackerApi = {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async getNotificationSounds(): Promise<string[]> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/sounds`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async getWalletSettings(coin: string = 'sol'): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${coin}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async updateWalletSettings(settings: any, coin: string = 'sol'): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${coin}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings),
       });
 
       return await handleResponse(response);

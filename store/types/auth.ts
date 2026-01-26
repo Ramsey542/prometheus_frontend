@@ -50,6 +50,7 @@ export interface PasswordResetConfirm {
 }
 
 export interface UserProfile {
+  id: number;
   username: string;
   email: string;
   trade_amount: number;
@@ -100,6 +101,11 @@ export interface TrackedWallet {
   dip_recovery_timeout?: number;
   is_default?: boolean;
   slippage?: number;
+  entry_on_first_swap?: boolean;
+  buy_once_per_token?: boolean;
+  mirror_sells_enabled?: boolean;
+  swap_notifications_enabled?: boolean;
+  swap_notification_sound?: string;
 }
 
 export interface TrackedWalletCreate {
@@ -145,6 +151,9 @@ export interface CopyTradingLog {
   tp_sl_trigger_value?: number | null;
   tp_sl_trigger_price?: number | null;
   tp_sl_buy_price?: number | null;
+  entry_on_first_swap?: boolean;
+  buy_once_per_token?: boolean;
+  mirror_sells_enabled?: boolean;
 }
 
 export interface WalletStats {
