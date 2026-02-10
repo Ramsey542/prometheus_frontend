@@ -209,7 +209,6 @@ export default function DashboardPage() {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
       })
-      console.log('the response', response)
       if (response.ok) {
         const data = await response.json()
         setSettings({
@@ -253,7 +252,8 @@ export default function DashboardPage() {
         swap_notifications_enabled: settings.swap_notifications_enabled,
         swap_notification_sound: settings.swap_notification_sound,
       }
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings`, {
+      console.log('the selected coin is', selectedCoin)
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,

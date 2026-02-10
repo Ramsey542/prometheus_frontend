@@ -418,38 +418,6 @@ export const walletTrackerApi = {
     });
   },
 
-  async getWalletSettings(coin: string = 'sol'): Promise<any> {
-    return tokenInterceptor.makeAuthenticatedRequest(async () => {
-      const accessToken = localStorage.getItem('access_token');
-      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${coin}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
-
-      return await handleResponse(response);
-    });
-  },
-
-  async updateWalletSettings(settings: any, coin: string = 'sol'): Promise<any> {
-    return tokenInterceptor.makeAuthenticatedRequest(async () => {
-      const accessToken = localStorage.getItem('access_token');
-      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
-
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${coin}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(settings),
-      });
-
-      return await handleResponse(response);
-    });
-  },
 };
 

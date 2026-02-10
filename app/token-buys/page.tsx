@@ -46,7 +46,7 @@ export default function TokenBuysPage() {
   const [buySuccess, setBuySuccess] = useState<string | null>(null)
   const [buyError, setBuyError] = useState<string | null>(null)
   const [transactionSignature, setTransactionSignature] = useState<string | null>(null)
-  
+
   const [tpslSettings, setTpslSettings] = useState<WalletSettings>({
     swap_strategy: 'none',
     buy_the_dip: false,
@@ -119,7 +119,7 @@ export default function TokenBuysPage() {
       if (data.transaction_signature) {
         setTransactionSignature(data.transaction_signature)
       }
-      
+
       setTokenAddress('')
       setAmount('')
     } catch (error: any) {
@@ -282,11 +282,10 @@ export default function TokenBuysPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`px-3 py-1.5 text-sm font-orbitron font-semibold rounded-lg ${
-                tpslSettings.tp_sl_is_active 
-                  ? 'bg-green-500/20 text-green-400 border border-green-500/40' 
+              <span className={`px-3 py-1.5 text-sm font-orbitron font-semibold rounded-lg ${tpslSettings.tp_sl_is_active
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/40'
                   : 'bg-gray-500/20 text-gray-400 border border-gray-500/40'
-              }`}>
+                }`}>
                 {tpslSettings.tp_sl_is_active ? 'Active' : 'Inactive'}
               </span>
             </div>
@@ -301,8 +300,8 @@ export default function TokenBuysPage() {
               <Settings size={16} className="flex-shrink-0 mt-0.5" />
               <div className="text-sm font-space-grotesk">
                 <span className="font-semibold">Note:</span> TP/SL settings are managed in the{' '}
-                <a 
-                  href="/dashboard" 
+                <a
+                  href="/dashboard"
                   className="text-molten-gold hover:text-yellow-400 underline transition-colors font-semibold"
                 >
                   Controls Page
