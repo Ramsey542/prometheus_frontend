@@ -34,7 +34,7 @@ interface TrackedPositionInfo {
 }
 
 export default function CustomBuysPage() {
-  const { selectedCoin } = useAppSelector((s) => s.auth)
+  const { selectedCoin, wallet } = useAppSelector((s) => s.auth)
   const [tokens, setTokens] = useState<TokenBalance[]>([])
   const [filteredTokens, setFilteredTokens] = useState<TokenBalance[]>([])
   const [loading, setLoading] = useState(true)
@@ -346,9 +346,11 @@ export default function CustomBuysPage() {
 
   const getDexScreenerUrl = (tokenAddress: string) => {
     if (selectedCoin === 'sol') {
-      return `https://dexscreener.com/solana/${tokenAddress}`
+      const maker = wallet?.solana_public_key ? `?maker=${wallet.solana_public_key}` : ''
+      return `https://dexscreener.com/solana/${tokenAddress}${maker}`
     } else {
-      return `https://dexscreener.com/bsc/${tokenAddress}`
+      const maker = wallet?.bnb_public_key ? `?maker=${wallet.bnb_public_key}` : ''
+      return `https://dexscreener.com/bsc/${tokenAddress}${maker}`
     }
   }
 
