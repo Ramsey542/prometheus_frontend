@@ -72,6 +72,18 @@ const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boole
 
     return `${wholeStr}.${trimmedFractional}`
   } catch {
+    const num = parseFloat(amount)
+    if (!isNaN(num)) {
+      const decimals = isToken && tokenDecimals !== null && tokenDecimals !== undefined
+        ? tokenDecimals
+        : (coin === 'sol' ? 9 : 18)
+      const maxDisplayDecimals = decimals === 18 ? 8 : decimals === 9 ? 6 : 4
+      return num.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: maxDisplayDecimals,
+        useGrouping: false
+      })
+    }
     return amount
   }
 }
@@ -2985,7 +2997,7 @@ function ProfilePageContent() {
                           <div>
                             <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Fee Amount</p>
                             <p className="text-white font-space-grotesk font-mono text-sm">
-                              {log.fee_amount} {selectedCoin.toUpperCase()}
+                              {formatAmount(log.fee_amount, selectedCoin, false)} {selectedCoin.toUpperCase()}
                             </p>
                           </div>
                         )}
