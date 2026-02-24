@@ -2985,7 +2985,7 @@ function ProfilePageContent() {
                           <div>
                             <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Fee Amount</p>
                             <p className="text-white font-space-grotesk font-mono text-sm">
-                              {formatAmount(log.fee_amount, selectedCoin, false)} {selectedCoin.toUpperCase()}
+                              {log.fee_amount} {selectedCoin.toUpperCase()}
                             </p>
                           </div>
                         )}
