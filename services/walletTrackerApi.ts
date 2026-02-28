@@ -402,7 +402,48 @@ export const walletTrackerApi = {
     });
   },
 
+  async getAdminUsers(page: number = 1, limit: number = 20, search?: string): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      if (search) params.append('search', search);
+
+      const response = await fetch(`${config.apiBaseUrl}/admin/users?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async getAdminUserStats(userId: number): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/admin/users/${userId}/stats`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
   async getNotificationSounds(): Promise<string[]> {
+
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);

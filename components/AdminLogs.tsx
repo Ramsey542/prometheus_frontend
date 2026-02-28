@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Search, ChevronRight, AlertCircle } from 'lucide-react'
+import { Search, ChevronRight, AlertCircle, ExternalLink } from 'lucide-react'
 import { walletTrackerApi } from '../services/walletTrackerApi'
 
 interface LogEntry {
@@ -15,6 +15,7 @@ interface LogEntry {
   token_name: string | null
   status: string | null
   error_message: string | null
+  coin_type?: string
   created_at: string
   [key: string]: any
 }
@@ -183,6 +184,9 @@ export default function AdminLogs() {
                     Created At {getSortIcon('created_at')}
                   </div>
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-orbitron font-semibold text-molten-gold uppercase tracking-wider">
+                  Signature
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-molten-gold/10">
@@ -198,17 +202,17 @@ export default function AdminLogs() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`font-orbitron font-semibold ${log.event_type === 'user_purchase' ? 'text-blue-400' :
-                        log.event_type === 'user_sell' ? 'text-orange-400' :
-                          log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
-                            'text-gray-400'
+                      log.event_type === 'user_sell' ? 'text-orange-400' :
+                        log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
+                          'text-gray-400'
                       }`}>
                       {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`font-orbitron font-semibold ${log.status === 'success' ? 'text-green-400' :
-                        log.status === 'failed' ? 'text-red-400' :
-                          'text-yellow-400'
+                      log.status === 'failed' ? 'text-red-400' :
+                        'text-yellow-400'
                       }`}>
                       {log.status?.toUpperCase() || 'UNKNOWN'}
                     </span>
@@ -238,6 +242,26 @@ export default function AdminLogs() {
                   </td>
                   <td className="px-4 py-3 text-sm text-white/60 font-space-grotesk">
                     {log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-space-grotesk font-mono">
+                    {log.transaction_signature ? (
+                      <a
+                        href={log.coin_type === 'bnb'
+                          ? `https://bscscan.com/tx/${log.transaction_signature}`
+                          : `https://solscan.io/tx/${log.transaction_signature}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-molten-gold hover:text-white transition-colors group"
+                      >
+                        <span className="truncate max-w-[100px] block">
+                          {log.transaction_signature.slice(0, 8)}...
+                        </span>
+                        <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </a>
+                    ) : (
+                      <span className="text-white/20">N/A</span>
+                    )}
                   </td>
                 </motion.tr>
               ))}
