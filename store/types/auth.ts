@@ -130,6 +130,7 @@ export interface CopyTradingLog {
   target_token: string | null;
   token_name: string | null;
   token_symbol: string | null;
+  token_logo_uri: string | null;
   base_token: string | null;
   base_token_name: string | null;
   token_decimals: number | null;

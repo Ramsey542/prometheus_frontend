@@ -2894,6 +2894,18 @@ function ProfilePageContent() {
                         <div>
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Target Token</p>
                           <div className="flex items-center gap-2">
+                            {log.token_logo_uri ? (
+                              <img
+                                src={log.token_logo_uri}
+                                alt={log.token_symbol || 'token'}
+                                className="w-6 h-6 rounded-full flex-shrink-0 object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-molten-gold/20 border border-molten-gold/30 flex-shrink-0" />
+                            )}
                             <p className="text-white font-space-grotesk font-mono text-sm truncate flex-1">
                               {log.target_token || 'N/A'}
                             </p>
@@ -2907,6 +2919,17 @@ function ProfilePageContent() {
                             )}
                             {log.target_token && copiedKey === `log-target-${log.id}` && (
                               <span className="text-xs text-molten-gold">Copied</span>
+                            )}
+                            {log.target_token && (
+                              <a
+                                href={`https://dexscreener.com/${selectedCoin === 'sol' ? 'solana' : 'bsc'}/${log.target_token}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
+                                title="View on DexScreener"
+                              >
+                                <ExternalLink size={14} />
+                              </a>
                             )}
                           </div>
                           {/* PnL Display for successful user_sell */}
