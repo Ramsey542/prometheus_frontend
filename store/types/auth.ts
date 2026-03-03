@@ -106,6 +106,8 @@ export interface TrackedWallet {
   mirror_sells_enabled?: boolean;
   swap_notifications_enabled?: boolean;
   swap_notification_sound?: string;
+  sol_trade_amount?: number | null;
+  bnb_trade_amount?: number | null;
 }
 
 export interface TrackedWalletCreate {
@@ -139,6 +141,7 @@ export interface CopyTradingLog {
   copied_wallet: string | null;
   error_message: string | null;
   event_data: string | null;
+  dex_name: string | null;
   created_at: string;
   pnl?: number | null;
   is_active?: boolean;

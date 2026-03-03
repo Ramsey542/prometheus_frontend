@@ -863,6 +863,7 @@ function ProfilePageContent() {
       const settings = walletSettings[walletAddress]
       const normalized = {
         ...settings,
+        swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : (settings.swap_strategy || 'fixed_buys'),
         custom_name: settings.custom_name || '',
         slippage: settings.slippage === '' ? 0 : settings.slippage,
         max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
@@ -873,7 +874,9 @@ function ProfilePageContent() {
         tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
         entry_on_first_swap: settings.entry_on_first_swap ?? false,
         buy_once_per_token: settings.buy_once_per_token ?? false,
-        mirror_sells_enabled: settings.mirror_sells_enabled ?? true
+        mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
+        sol_trade_amount: settings.sol_trade_amount,
+        bnb_trade_amount: settings.bnb_trade_amount
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
 
@@ -914,6 +917,7 @@ function ProfilePageContent() {
       const settings = walletSettings[walletAddress] || {}
       const normalized = {
         ...settings,
+        swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : (settings.swap_strategy || 'fixed_buys'),
         custom_name: customNameValue.trim() || '',
         slippage: settings.slippage === '' ? 0 : settings.slippage,
         max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
@@ -924,7 +928,9 @@ function ProfilePageContent() {
         tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
         entry_on_first_swap: settings.entry_on_first_swap ?? false,
         buy_once_per_token: settings.buy_once_per_token ?? false,
-        mirror_sells_enabled: settings.mirror_sells_enabled ?? true
+        mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
+        sol_trade_amount: settings.sol_trade_amount,
+        bnb_trade_amount: settings.bnb_trade_amount
       }
 
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
@@ -1532,7 +1538,7 @@ function ProfilePageContent() {
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
                     <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Buy Strategy</h4>
                     <select
-                      value={walletSettings[showWalletSettings].swap_strategy || 'none'}
+                      value={walletSettings[showWalletSettings].swap_strategy === 'none' ? 'fixed_buys' : (walletSettings[showWalletSettings].swap_strategy || 'fixed_buys')}
                       onChange={(e) => setWalletSettings(prev => ({
                         ...prev,
                         [showWalletSettings]: {
@@ -1542,7 +1548,6 @@ function ProfilePageContent() {
                       }))}
                       className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
                     >
-                      <option value="none">None</option>
                       <option value="fixed_buys">Constant Size</option>
                     </select>
                   </div>
@@ -1743,6 +1748,59 @@ function ProfilePageContent() {
                         )}
                       </motion.div>
                     )}
+                  </div>
+
+                  {/* Custom Trade Amount */}
+                  <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                    <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Trade Amount</h4>
+                    <div className="flex flex-col gap-4">
+                      {selectedCoin === 'sol' ? (
+                        <div>
+                          <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide uppercase">
+                            SOL Amount to Buy
+                          </label>
+                          <input
+                            type="number"
+                            value={walletSettings[showWalletSettings].sol_trade_amount === 0 || walletSettings[showWalletSettings].sol_trade_amount ? walletSettings[showWalletSettings].sol_trade_amount : ''}
+                            onChange={(e) => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                sol_trade_amount: e.target.value === '' ? null : parseFloat(e.target.value)
+                              }
+                            }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="0"
+                            step="0.001"
+                            placeholder="Default SOL amount"
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide uppercase">
+                            BNB Amount to Buy
+                          </label>
+                          <input
+                            type="number"
+                            value={walletSettings[showWalletSettings].bnb_trade_amount === 0 || walletSettings[showWalletSettings].bnb_trade_amount ? walletSettings[showWalletSettings].bnb_trade_amount : ''}
+                            onChange={(e) => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                bnb_trade_amount: e.target.value === '' ? null : parseFloat(e.target.value)
+                              }
+                            }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="0"
+                            step="0.001"
+                            placeholder="Default BNB amount"
+                          />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-white/40 mt-1 font-space-grotesk italic">
+                        If set, this will override your global {selectedCoin.toUpperCase()} trade amount for this specific wallet.
+                      </p>
+                    </div>
                   </div>
 
                   {/* Slippage Settings */}
@@ -2797,7 +2855,7 @@ function ProfilePageContent() {
                       )}
 
                       {/* Transaction Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Status</p>
                           <p className={`font-orbitron font-bold ${log.status === 'success' ? 'text-green-400' : log.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
@@ -2812,6 +2870,27 @@ function ProfilePageContent() {
                             </p>
                           </div>
                         )}
+                        <div>
+                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">DEX</p>
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={`/dex-icons/${log.dex_name?.toLowerCase().includes('raydium') ? 'raydium' :
+                                log.dex_name?.toLowerCase().includes('meteora') ? 'meteora' :
+                                  log.dex_name?.toLowerCase().includes('jupiter') ? 'jupiter' :
+                                    'pumpfun'
+                                }.png`}
+                              alt={log.dex_name || 'Pumpfun'}
+                              className="w-6 h-6 rounded-full"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/dex-icons/pumpfun.png';
+                                (e.target as HTMLImageElement).onerror = null;
+                              }}
+                            />
+                            <p className="text-white font-orbitron font-bold">
+                              {log.dex_name || 'Pumpfun'}
+                            </p>
+                          </div>
+                        </div>
                         <div>
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Target Token</p>
                           <div className="flex items-center gap-2">
