@@ -2922,7 +2922,7 @@ function ProfilePageContent() {
                             )}
                             {log.target_token && (
                               <a
-                                href={`https://dexscreener.com/${selectedCoin === 'sol' ? 'solana' : 'bsc'}/${log.target_token}`}
+                                href={`https://dexscreener.com/${selectedCoin === 'sol' ? 'solana' : 'bsc'}/${log.target_token}${profile?.public_address ? `?maker=${profile.public_address}` : ''}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
