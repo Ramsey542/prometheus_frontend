@@ -97,6 +97,7 @@ export interface TrackedWallet {
   max_dip_percentage?: number;
   buy_dip_timeout?: number;
   dip_recovery?: boolean;
+  custom_name?: string;
   dip_recovery_percentage?: number;
   dip_recovery_timeout?: number;
   is_default?: boolean;
@@ -127,6 +128,7 @@ export interface CopyTradingLog {
   transaction_signature: string | null;
   wallet_address: string | null;
   tracked_wallet_address?: string | null;
+  wallet_name?: string | null;
   target_token: string | null;
   token_name: string | null;
   token_symbol: string | null;

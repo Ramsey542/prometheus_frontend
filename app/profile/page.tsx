@@ -899,7 +899,7 @@ function ProfilePageContent() {
     if (!walletSettings[walletAddress]) {
       await fetchWalletSettings(walletAddress)
     }
-    const currentName = walletSettings[walletAddress]?.custom_name || ''
+    const currentName = walletSettings[walletAddress]?.custom_name || trackedWallets.find(w => w.wallet_address === walletAddress)?.custom_name || ''
     setCustomNameValue(currentName)
     setEditingCustomName(walletAddress)
   }
@@ -1347,7 +1347,7 @@ function ProfilePageContent() {
                                 className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default truncate"
                                 title={wallet.wallet_address}
                               >
-                                {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
+                                {walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name || formatWalletAddress(wallet.wallet_address)}
                               </p>
                               <div className="flex items-center gap-2 ml-2">
                                 <a
@@ -1371,7 +1371,7 @@ function ProfilePageContent() {
                                 </a>
                               </div>
                             </div>
-                            {walletSettings[wallet.wallet_address]?.custom_name && (
+                            {(walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name) && (
                               <p className="text-[10px] text-white/40 font-space-grotesk mt-0.5">
                                 {formatWalletAddress(wallet.wallet_address)}
                               </p>
@@ -2694,7 +2694,7 @@ function ProfilePageContent() {
                             <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
                               <span className="hidden sm:inline text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
                               <span className="text-xs font-space-grotesk font-mono text-white">
-                                {walletSettings[trackedWalletAddr]?.custom_name || formatWalletAddress(trackedWalletAddr)}
+                                {walletSettings[trackedWalletAddr]?.custom_name || log.wallet_name || formatWalletAddress(trackedWalletAddr)}
                               </span>
                               <button
                                 onClick={() => copyToClipboard(trackedWalletAddr || '', `log-tracked-${log.id}`)}
