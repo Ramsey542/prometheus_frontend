@@ -1746,6 +1746,37 @@ function ProfilePageContent() {
                             </div>
                           </motion.div>
                         )}
+
+                        <div className="flex items-center justify-between col-span-2 mt-4 pt-4 border-t border-molten-gold/10">
+                          <div className="flex items-center gap-2">
+                            <label className="block text-sm font-orbitron text-molten-gold font-semibold">One BTD Event at a Time</label>
+                            <div className="group relative">
+                              <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                <span className="text-xs text-molten-gold">?</span>
+                              </div>
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                If enabled, only one BTD event will be tracked for this token within its timeout period. Subsequent swaps for the same token will be ignored if the previous BTD event's timeout hasn't expired yet.
+                              </div>
+                            </div>
+                          </div>
+                          <motion.button
+                            onClick={() => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                one_btd_at_a_time: !prev[showWalletSettings].one_btd_at_a_time
+                              }
+                            }))}
+                            className={`w-10 h-5 rounded-full p-1 transition-all duration-300 ${walletSettings[showWalletSettings].one_btd_at_a_time ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <motion.div
+                              className="w-3 h-3 bg-white rounded-full"
+                              animate={{ x: walletSettings[showWalletSettings].one_btd_at_a_time ? 16 : 0 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                            />
+                          </motion.button>
+                        </div>
                       </motion.div>
                     )}
                   </div>
