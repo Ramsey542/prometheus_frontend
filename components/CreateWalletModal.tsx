@@ -37,6 +37,7 @@ export default function CreateWalletModal({ isOpen, onClose, initialChain = 'sol
             handleClose()
         }
         return () => clearTimeout(timer)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [createdWallet, countdown])
 
     const copyToClipboard = (text: string) => {

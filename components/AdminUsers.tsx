@@ -46,6 +46,7 @@ export default function AdminUsers() {
 
     useEffect(() => {
         fetchUsers()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, search])
 
     const fetchUsers = async () => {
@@ -200,8 +201,8 @@ export default function AdminUsers() {
                             key={i}
                             onClick={() => setPage(i + 1)}
                             className={`w-10 h-10 rounded-lg font-orbitron font-bold transition-all duration-300 ${page === i + 1
-                                    ? 'bg-molten-gold text-void-black shadow-[0_0_10px_rgba(255,215,0,0.3)]'
-                                    : 'bg-void-black/50 border border-molten-gold/20 text-white/40 hover:border-molten-gold/50'
+                                ? 'bg-molten-gold text-void-black shadow-[0_0_10px_rgba(255,215,0,0.3)]'
+                                : 'bg-void-black/50 border border-molten-gold/20 text-white/40 hover:border-molten-gold/50'
                                 }`}
                         >
                             {i + 1}
@@ -306,8 +307,8 @@ export default function AdminUsers() {
                                                         <tr key={trade.id} className="hover:bg-white/5 transition-colors">
                                                             <td className="px-4 py-3">
                                                                 <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${trade.event_type === 'user_purchase'
-                                                                        ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                                                        : 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                                                                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                                                    : 'bg-orange-500/10 border-orange-500/30 text-orange-400'
                                                                     }`}>
                                                                     {trade.event_type === 'user_purchase' ? 'BUY' : 'SELL'}
                                                                 </span>

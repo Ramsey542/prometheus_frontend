@@ -177,6 +177,7 @@ export default function DashboardPage() {
       fetchSettings()
       fetchAvailableSounds()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
 
   const fetchAvailableSounds = async () => {
@@ -686,7 +687,7 @@ export default function DashboardPage() {
                           <span className="text-xs text-molten-gold">?</span>
                         </div>
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                          If enabled, only one BTD event will be tracked for this token within its timeout period. Subsequent swaps for the same token will be ignored if the previous BTD event's timeout hasn't expired yet.
+                          If enabled, only one BTD event will be tracked for this token within its timeout period. Subsequent swaps for the same token will be ignored if the previous BTD event&apos;s timeout hasn&apos;t expired yet.
                         </div>
                       </div>
                     </div>

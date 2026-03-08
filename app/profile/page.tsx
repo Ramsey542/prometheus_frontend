@@ -266,12 +266,14 @@ function ProfilePageContent() {
 
       fetchData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentSection, selectedCoin])
 
   useEffect(() => {
     if (copyTradingStats && trackedWallets && trackedWallets.length > 0) {
       fetchTrackedWallets()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copyTradingStats])
 
   useEffect(() => {
@@ -282,6 +284,7 @@ function ProfilePageContent() {
         }
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentSection, trackedWallets])
 
   useEffect(() => {
@@ -295,6 +298,7 @@ function ProfilePageContent() {
         }
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentSection, trackerLogs])
 
   useEffect(() => {
@@ -305,12 +309,14 @@ function ProfilePageContent() {
         }
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentSection, copyTradingStats?.wallet_stats])
 
   useEffect(() => {
     if (user && currentSection === 'tracker-logs' && !coinSwitching) {
       fetchAllLogs(1)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logTypeFilter, logStatusFilter, logSideFilter, logWalletFilter])
 
   const fetchTrackedWallets = async (page: number = 1) => {
@@ -1755,7 +1761,7 @@ function ProfilePageContent() {
                                 <span className="text-xs text-molten-gold">?</span>
                               </div>
                               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                                If enabled, only one BTD event will be tracked for this token within its timeout period. Subsequent swaps for the same token will be ignored if the previous BTD event's timeout hasn't expired yet.
+                                If enabled, only one BTD event will be tracked for this token within its timeout period. Subsequent swaps for the same token will be ignored if the previous BTD event&apos;s timeout hasn&apos;t expired yet.
                               </div>
                             </div>
                           </div>
@@ -2904,6 +2910,7 @@ function ProfilePageContent() {
                         <div>
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">DEX</p>
                           <div className="flex items-center gap-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={`/dex-icons/${log.dex_name?.toLowerCase().includes('raydium') ? 'raydium' :
                                 log.dex_name?.toLowerCase().includes('meteora') ? 'meteora' :
@@ -2926,14 +2933,17 @@ function ProfilePageContent() {
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Target Token</p>
                           <div className="flex items-center gap-2">
                             {log.token_logo_uri ? (
-                              <img
-                                src={log.token_logo_uri}
-                                alt={log.token_symbol || 'token'}
-                                className="w-6 h-6 rounded-full flex-shrink-0 object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                              />
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={log.token_logo_uri}
+                                  alt={log.token_symbol || 'token'}
+                                  className="w-6 h-6 rounded-full flex-shrink-0 object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              </>
                             ) : (
                               <div className="w-6 h-6 rounded-full bg-molten-gold/20 border border-molten-gold/30 flex-shrink-0" />
                             )}
@@ -3829,6 +3839,7 @@ function ProfilePageContent() {
             ) : pnlImageModal.imageUrl ? (
               <div className="space-y-4">
                 <div className="bg-void-black/50 rounded-lg p-4 flex items-center justify-center overflow-auto max-h-[60vh]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={pnlImageModal.imageUrl}
                     alt="PnL Trade Result"

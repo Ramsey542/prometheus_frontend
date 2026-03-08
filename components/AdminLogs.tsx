@@ -36,6 +36,7 @@ export default function AdminLogs() {
 
   useEffect(() => {
     fetchLogs(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, sortOrder])
 
   const fetchLogs = async (reset: boolean = false, searchTerm?: string) => {
