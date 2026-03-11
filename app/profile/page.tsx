@@ -184,6 +184,10 @@ function ProfilePageContent() {
   const [bulkProcessing, setBulkProcessing] = useState(false)
   const [availableSounds, setAvailableSounds] = useState<string[]>([])
   const [playingSound, setPlayingSound] = useState<string | null>(null)
+  const [showTrackingOptions, setShowTrackingOptions] = useState<{ open: boolean; type: 'single' | 'bulk' }>({ open: false, type: 'single' })
+  const [selectedTrackingType, setSelectedTrackingType] = useState<string>('both')
+  const [defaultTrackingType, setDefaultTrackingType] = useState<string>('both')
+  const [isUpdatingTrackingType, setIsUpdatingTrackingType] = useState(false)
 
   const handleToggleDebugMode = async () => {
     if (!profile?.is_admin) return
@@ -209,8 +213,71 @@ function ProfilePageContent() {
   useEffect(() => {
     if (user) {
       dispatch(getProfile(selectedCoin))
+      fetchDefaultSettings()
     }
   }, [dispatch, user, selectedCoin])
+
+  const fetchDefaultSettings = async () => {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setDefaultTrackingType(data.tracking_type || 'both')
+      }
+    } catch (err) {
+      console.error('Failed to fetch default settings:', err)
+    }
+  }
+
+  const handleUpdateGlobalTrackingType = async (type: string) => {
+    try {
+      setIsUpdatingTrackingType(true)
+      // First fetch current settings to avoid overwriting with defaults if possible
+      const currentResp = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      })
+      let currentSettings = {}
+      if (currentResp.ok) {
+        currentSettings = await currentResp.json()
+      }
+
+      const payload = {
+        ...currentSettings,
+        tracking_type: type,
+        coin_type: selectedCoin
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (response.ok) {
+        setDefaultTrackingType(type)
+        setTrackedWallets(prev => prev.map(w =>
+          w.is_default ? { ...w, tracking_type: type } : w
+        ))
+        setWalletTrackerSuccess('Default tracking type updated successfully!')
+      } else {
+        const errorData = await response.json()
+        setWalletTrackerError(errorData.detail || 'Failed to update default tracking type')
+      }
+    } catch (err: any) {
+      setWalletTrackerError(err.message || 'Failed to update default tracking type')
+    } finally {
+      setIsUpdatingTrackingType(false)
+    }
+  }
 
   useEffect(() => {
     if (user && profile && currentSection === 'overview') {
@@ -337,6 +404,7 @@ function ProfilePageContent() {
               successful_trades: walletStats.successful_trades,
               failed_trades: walletStats.failed_trades,
               total_volume_traded: walletStats.total_volume_traded,
+              total_pnl: walletStats.total_pnl,
               success_rate: walletStats.success_rate
             }
           }
@@ -385,10 +453,14 @@ function ProfilePageContent() {
     }
   }
 
-  const handleAddWallet = async (e: React.FormEvent) => {
+  const handleAddWallet = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newWalletAddress.trim()) return
+    setSelectedTrackingType(defaultTrackingType)
+    setShowTrackingOptions({ open: true, type: 'single' })
+  }
 
+  const submitAddWallet = async () => {
     try {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
@@ -396,7 +468,8 @@ function ProfilePageContent() {
 
       const walletData: TrackedWalletCreate = {
         wallet_address: newWalletAddress.trim(),
-        is_active: true
+        is_active: true,
+        tracking_type: selectedTrackingType
       }
 
       await walletTrackerApi.startTrackingWallet(walletData, selectedCoin)
@@ -413,6 +486,15 @@ function ProfilePageContent() {
       }
     } finally {
       setWalletTrackerLoading(false)
+      setShowTrackingOptions({ open: false, type: 'single' })
+    }
+  }
+
+  const handleConfirmTrackingType = async () => {
+    if (showTrackingOptions.type === 'single') {
+      await submitAddWallet()
+    } else {
+      await handleBulkSubmit()
     }
   }
 
@@ -464,7 +546,8 @@ function ProfilePageContent() {
 
       const response = await walletTrackerApi.bulkStartTrackingWallets({
         wallets: bulkWallets,
-        is_active: true
+        is_active: true,
+        tracking_type: selectedTrackingType
       }, selectedCoin)
 
       if (response.success) {
@@ -745,7 +828,8 @@ function ProfilePageContent() {
           buy_once_per_token: settings.buy_once_per_token ?? false,
           mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
           swap_notifications_enabled: settings.swap_notifications_enabled ?? true,
-          swap_notification_sound: settings.swap_notification_sound ?? 'success.mp3'
+          swap_notification_sound: settings.swap_notification_sound ?? 'success.mp3',
+          tracking_type: settings.tracking_type ?? 'both'
         }
       }))
       setTpSlIsActive(prev => ({
@@ -882,9 +966,16 @@ function ProfilePageContent() {
         buy_once_per_token: settings.buy_once_per_token ?? false,
         mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
         sol_trade_amount: settings.sol_trade_amount,
-        bnb_trade_amount: settings.bnb_trade_amount
+        bnb_trade_amount: settings.bnb_trade_amount,
+        tracking_type: settings.tracking_type ?? 'both'
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
+
+      setTrackedWallets(prev => prev.map(w =>
+        w.wallet_address === walletAddress
+          ? { ...w, tracking_type: settings.tracking_type, custom_name: settings.custom_name, is_default: false }
+          : w
+      ))
 
       setWalletSettingsSuccess('Wallet settings updated successfully!')
       setTimeout(() => setWalletSettingsSuccess(null), 5000)
@@ -936,10 +1027,17 @@ function ProfilePageContent() {
         buy_once_per_token: settings.buy_once_per_token ?? false,
         mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
         sol_trade_amount: settings.sol_trade_amount,
-        bnb_trade_amount: settings.bnb_trade_amount
+        bnb_trade_amount: settings.bnb_trade_amount,
+        tracking_type: settings.tracking_type ?? 'both'
       }
 
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
+
+      setTrackedWallets(prev => prev.map(w =>
+        w.wallet_address === walletAddress
+          ? { ...w, custom_name: customNameValue.trim() || '' }
+          : w
+      ))
 
       // Update local state
       setWalletSettings(prev => ({
@@ -1349,12 +1447,31 @@ function ProfilePageContent() {
                           </button>
                           <div className="flex flex-col flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <p
-                                className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default truncate"
-                                title={wallet.wallet_address}
-                              >
-                                {walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name || formatWalletAddress(wallet.wallet_address)}
-                              </p>
+                              <div className="flex flex-col">
+                                <p
+                                  className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default truncate"
+                                  title={wallet.wallet_address}
+                                >
+                                  {walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name || formatWalletAddress(wallet.wallet_address)}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {(walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name) && (
+                                    <p className="text-[10px] text-white/40 font-mono italic truncate" title={wallet.wallet_address}>
+                                      {formatWalletAddress(wallet.wallet_address)}
+                                    </p>
+                                  )}
+                                  {selectedCoin === 'sol' && (
+                                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-orbitron font-bold uppercase border ${wallet.tracking_type === 'launches'
+                                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                      : wallet.tracking_type === 'swaps'
+                                        ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                                        : 'bg-molten-gold/10 border-molten-gold/30 text-molten-gold'
+                                      }`}>
+                                      {wallet.tracking_type === 'launches' ? 'Launches' : wallet.tracking_type === 'swaps' ? 'Swaps' : 'Full Track'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                               <div className="flex items-center gap-2 ml-2">
                                 <a
                                   href={`https://gmgn.ai/${selectedCoin === 'sol' ? 'sol' : 'bsc'}/address/${wallet.wallet_address}`}
@@ -1377,19 +1494,14 @@ function ProfilePageContent() {
                                 </a>
                               </div>
                             </div>
-                            {(walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name) && (
-                              <p className="text-[10px] text-white/40 font-space-grotesk mt-0.5">
-                                {formatWalletAddress(wallet.wallet_address)}
-                              </p>
-                            )}
-                          </div>
+                            </div>
                           {copiedKey === `tracked-${wallet.id}` && (
                             <span className="text-xs text-molten-gold">Copied</span>
                           )}
                         </>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 text-xs md:text-sm">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4 text-xs md:text-sm">
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase">Matches</p>
                         <p className="text-white font-orbitron font-bold">{wallet.total_matches}</p>
@@ -1405,6 +1517,12 @@ function ProfilePageContent() {
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase">Volume</p>
                         <p className="text-white font-orbitron font-bold">{(wallet.total_volume_traded || 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase">Profit/Loss</p>
+                        <p className={`font-orbitron font-bold ${ (wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {(wallet.total_pnl || 0).toFixed(4)} SOL
+                        </p>
                       </div>
                     </div>
                     <p className="text-white/40 font-space-grotesk text-xs mt-2">
@@ -2215,6 +2333,43 @@ function ProfilePageContent() {
                     )}
                   </div>
 
+                  {/* Tracking Type Settings */}
+                  {selectedCoin === 'sol' && (
+                    <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                      <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Tracking Activities</h4>
+                      <p className="text-white/40 font-space-grotesk mb-4 text-xs italic">
+                        Select which type of activities to track for this specific wallet.
+                      </p>
+                      <div className="space-y-2">
+                        {[
+                          { id: 'launches', label: 'Monitor Launches Only' },
+                          { id: 'swaps', label: 'Monitor Swaps Only' },
+                          { id: 'both', label: 'Monitor Both (Swaps + Launches)' }
+                        ].map((option) => (
+                          <button
+                            key={option.id}
+                            onClick={() => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                tracking_type: option.id
+                              }
+                            }))}
+                            className={`w-full px-4 py-2 rounded-lg border text-left transition-all duration-300 flex items-center justify-between ${walletSettings[showWalletSettings].tracking_type === option.id
+                              ? 'bg-molten-gold/10 border-molten-gold text-molten-gold'
+                              : 'bg-void-black/50 border-white/10 text-white/60 hover:border-molten-gold/30'
+                              }`}
+                          >
+                            <span className="font-orbitron font-semibold text-xs tracking-wider">
+                              {option.label}
+                            </span>
+                            {walletSettings[showWalletSettings].tracking_type === option.id && <CheckCircle size={14} />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Notification Settings Section */}
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
                     <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Notification Settings</h4>
@@ -2447,6 +2602,17 @@ function ProfilePageContent() {
                 </div>
               </div>
 
+              {/* Total PnL */}
+              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
+                <div className="flex items-center gap-2 md:gap-3 mb-2">
+                  <TrendingUp size={18} className={`md:w-5 md:h-5 ${ (copyTradingStats.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+                  <span className={`text-xs md:text-sm font-orbitron tracking-wide ${ (copyTradingStats.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>TOTAL PNL</span>
+                </div>
+                <div className={`text-xl md:text-2xl font-orbitron font-bold ${ (copyTradingStats.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {(copyTradingStats.total_pnl || 0).toFixed(4)} {selectedCoin.toUpperCase()}
+                </div>
+              </div>
+
               {/* Total Matches */}
               <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-2">
@@ -2604,6 +2770,12 @@ function ProfilePageContent() {
                       <div className="text-center">
                         <div className="text-sm font-orbitron text-blue-400 tracking-wide mb-1">SUCCESS RATE</div>
                         <div className="text-xl font-orbitron font-bold text-white">{wallet.success_rate.toFixed(1)}%</div>
+                      </div>
+                      <div className="text-center col-span-2 border-t border-molten-gold/10 pt-2">
+                        <div className="text-sm font-orbitron text-molten-gold tracking-wide mb-1">TOTAL PNL</div>
+                        <div className={`text-xl font-orbitron font-bold ${ (wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {(wallet.total_pnl || 0).toFixed(4)} SOL
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -3420,6 +3592,39 @@ function ProfilePageContent() {
                   </div>
                 )}
               </div>
+
+              {selectedCoin === 'sol' && (
+                <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Activity size={16} className="text-molten-gold" />
+                    <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
+                      Default Tracking Type
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'launches', label: 'Launches' },
+                      { id: 'swaps', label: 'Swaps' },
+                      { id: 'both', label: 'Both' }
+                    ].map((type) => (
+                      <button
+                        key={type.id}
+                        disabled={isUpdatingTrackingType}
+                        onClick={() => handleUpdateGlobalTrackingType(type.id)}
+                        className={`px-2 py-2 rounded-lg border font-orbitron font-bold text-[10px] transition-all duration-300 ${defaultTrackingType === type.id
+                            ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_10px_rgba(255,184,0,0.2)]'
+                            : 'bg-void-black/40 text-white/40 border-white/5 hover:border-molten-gold/30 hover:text-white/60'
+                          } ${isUpdatingTrackingType ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-white/20 font-space-grotesk mt-2">
+                    Affects newly tracked wallets.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -3670,7 +3875,7 @@ function ProfilePageContent() {
                   <p className="text-green-400 font-orbitron text-sm">Withdrawal successful.</p>
                   <div className="mt-2 text-sm text-white/80 font-space-grotesk">
                     <div>Signature: <span className="font-mono break-all">{withdrawSuccess.transaction_signature}</span></div>
-                    <div>Amount: {withdrawSuccess.amount_sol} SOL</div>
+                    <div>Amount: {withdrawSuccess.amount} {selectedCoin.toUpperCase()}</div>
                     <a href={withdrawSuccess.explorer_url} target="_blank" rel="noopener noreferrer" className="text-molten-gold underline">View on Explorer</a>
                   </div>
                 </motion.div>
@@ -3952,6 +4157,77 @@ function ProfilePageContent() {
           </motion.div>
         </div>
       )}
+      {showTrackingOptions.open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-gradient-to-r from-void-black/95 to-black/90 backdrop-blur-md border border-molten-gold/30 rounded-lg p-6 w-full max-w-md shadow-2xl"
+          >
+            <h3 className="text-xl font-orbitron font-bold text-molten-gold mb-4">
+              Select Tracking Options
+            </h3>
+            <p className="text-white/60 font-space-grotesk mb-6 text-sm">
+              Choose what types of activities you want to track for this wallet. This helps you focus on specific trading events.
+            </p>
+
+            <div className="space-y-3 mb-8">
+              {[
+                { id: 'launches', label: 'Monitor Launches Only', desc: 'Track new token creations and liquidity events' },
+                { id: 'swaps', label: 'Monitor Swaps Only', desc: 'Track buy and sell transactions' },
+                { id: 'both', label: 'Monitor Both (Swaps + Launches)', desc: 'Full tracking of all activities' }
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => setSelectedTrackingType(option.id)}
+                  className={`w-full p-4 rounded-lg border text-left transition-all duration-300 ${selectedTrackingType === option.id
+                    ? 'bg-molten-gold/20 border-molten-gold shadow-[0_0_15px_rgba(255,183,0,0.2)]'
+                    : 'bg-void-black/50 border-white/10 hover:border-molten-gold/30'
+                    }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`font-orbitron font-bold text-sm ${selectedTrackingType === option.id ? 'text-molten-gold' : 'text-white'}`}>
+                      {option.label}
+                    </span>
+                    {selectedTrackingType === option.id && <CheckCircle size={16} className="text-molten-gold" />}
+                  </div>
+                  <p className="text-xs text-white/40 font-space-grotesk">{option.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowTrackingOptions({ open: false, type: 'single' })}
+                className="flex-1 py-3 border border-white/10 text-white font-orbitron font-bold rounded-lg hover:bg-white/5 transition-all text-sm"
+              >
+                Cancel
+              </button>
+              <motion.button
+                onClick={handleConfirmTrackingType}
+                disabled={walletTrackerLoading || bulkProcessing}
+                className="flex-1 py-3 bg-molten-gold text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 text-sm"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {(walletTrackerLoading || bulkProcessing) ? (
+                  <div className="w-5 h-5 border-2 border-void-black border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Plus size={18} />
+                )}
+                Confirm & Add
+              </motion.button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
       {showBulkUploadModal && (
         <motion.div
           initial={{ opacity: 0 }}

@@ -278,6 +278,23 @@ export const walletTrackerApi = {
     });
   },
 
+  async claimDust(coin: string, walletAddress: string, tokenAddresses: string[], slippage: number): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/claim-dust/${coin}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ wallet_address: walletAddress, token_addresses: tokenAddresses, slippage }),
+      });
+      return await handleResponse(response);
+    });
+  },
+
   async getTokenBalances(coin: string = 'sol', offset: number = 0, limit: number = 20): Promise<any> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');

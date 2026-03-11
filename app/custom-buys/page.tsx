@@ -63,6 +63,10 @@ export default function CustomBuysPage() {
   const [tpSlIsActive, setTpSlIsActive] = useState(false)
   const [availableSounds, setAvailableSounds] = useState<string[]>([])
   const [playingSound, setPlayingSound] = useState<string | null>(null)
+  const [claimerOpen, setClaimerOpen] = useState(false)
+  const [isClaiming, setIsClaiming] = useState(false)
+  const [claimerReport, setClaimerReport] = useState<any>(null)
+  const [claimerError, setClaimerError] = useState<string | null>(null)
 
   const tokensPerPage = 20
 
@@ -354,6 +358,40 @@ export default function CustomBuysPage() {
     }
   }
 
+  const handleClaimDust = async () => {
+    const dustTokens = tokens.filter(token => {
+      const usdValue = token.balance_usd || (parseFloat(token.balance || '0') * (token.price || 0))
+      return usdValue > 0 && usdValue < 0.1
+    })
+
+    if (dustTokens.length === 0) {
+      setError('No dust tokens found (< $0.1 USD)')
+      return
+    }
+
+    const walletAddress = selectedCoin === 'sol' ? wallet?.solana_public_key : wallet?.bnb_public_key
+    if (!walletAddress) {
+      setError('Active wallet not found')
+      return
+    }
+
+    try {
+      setIsClaiming(true)
+      setClaimerOpen(true)
+      setClaimerReport(null)
+      setClaimerError(null)
+
+      const tokenAddresses = dustTokens.map(t => t.token_address)
+      const res = await walletTrackerApi.claimDust(selectedCoin, walletAddress, tokenAddresses, 15)
+      setClaimerReport(res)
+      fetchTokenBalances()
+    } catch (err: any) {
+      setClaimerError(err.message || 'Dust claim failed')
+    } finally {
+      setIsClaiming(false)
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(totalCount / tokensPerPage))
 
   return (
@@ -382,6 +420,17 @@ export default function CustomBuysPage() {
                 />
                 <span className="text-sm text-white/80 font-space-grotesk">Hide &lt; $0.1 USD</span>
               </label>
+              <motion.button
+                onClick={handleClaimDust}
+                disabled={refreshing || loading || isClaiming}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 disabled:opacity-50"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                title="Sell all tokens worth < $0.1 USD"
+              >
+                <Trash2 size={16} />
+                Claim Dust
+              </motion.button>
               <motion.button
                 onClick={fetchTokenBalances}
                 disabled={refreshing || loading}
@@ -1028,6 +1077,115 @@ export default function CustomBuysPage() {
                 </div>
               </div>
             )}
+          </motion.div>
+        </div>
+      )}
+      {claimerOpen && (
+        <div className="fixed inset-0 bg-void-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-2xl bg-void-black/95 border border-molten-gold/30 rounded-xl overflow-hidden shadow-2xl shadow-molten-gold/20"
+          >
+            <div className="p-6 border-b border-molten-gold/20 flex items-center justify-between bg-gradient-to-r from-void-black to-black/40">
+              <div className="flex items-center gap-3">
+                <Trash2 size={24} className="text-red-400" />
+                <div>
+                  <h2 className="text-xl font-orbitron font-bold text-molten-gold">Dust Claim</h2>
+                  <p className="text-xs text-white/40 font-space-grotesk">Process of selling small balance tokens</p>
+                </div>
+              </div>
+              {!isClaiming && (
+                <button
+                  onClick={() => setClaimerOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
+                >
+                  <XCircle size={20} />
+                </button>
+              )}
+            </div>
+
+            <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {isClaiming ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-6">
+                  <div className="relative">
+                    <div className="w-20 h-20 border-4 border-molten-gold/20 border-t-molten-gold rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Trash2 size={32} className="text-molten-gold animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <h3 className="text-lg font-orbitron font-bold text-white">Claiming Dust...</h3>
+                    <p className="text-sm text-white/60 font-space-grotesk px-8">
+                      Selling tokens with balance less than $0.1 USD one by one. This may take a minute depending on the number of tokens.
+                    </p>
+                  </div>
+                </div>
+              ) : claimerError ? (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-3 mb-4">
+                  <XCircle size={20} className="text-red-400 shrink-0" />
+                  <p className="text-sm text-red-200 font-space-grotesk">{claimerError}</p>
+                </div>
+              ) : claimerReport ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-white/5 p-4 rounded-lg border border-white/10 text-center">
+                      <p className="text-[10px] font-orbitron text-white/40 mb-1 uppercase tracking-wider">Total</p>
+                      <p className="text-2xl font-orbitron font-black text-white">{claimerReport.total_tokens}</p>
+                    </div>
+                    <div className="bg-green-500/5 p-4 rounded-lg border border-green-500/20 text-center">
+                      <p className="text-[10px] font-orbitron text-green-400/40 mb-1 uppercase tracking-wider">Success</p>
+                      <p className="text-2xl font-orbitron font-black text-green-400">{claimerReport.successful_tokens}</p>
+                    </div>
+                    <div className="bg-red-500/5 p-4 rounded-lg border border-red-500/20 text-center">
+                      <p className="text-[10px] font-orbitron text-red-400/40 mb-1 uppercase tracking-wider">Failed</p>
+                      <p className="text-2xl font-orbitron font-black text-red-400">{claimerReport.failed_tokens}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-orbitron font-bold text-white mb-2">Detailed Results</h3>
+                    {claimerReport.results.map((result: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`p-1.5 rounded ${result.success ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                            {result.success ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                          </div>
+                          <div className="truncate">
+                            <p className="text-xs font-mono text-white/80 select-all">{result.token_address}</p>
+                            {!result.success && <p className="text-[10px] text-red-400/80 mt-1">{result.message}</p>}
+                          </div>
+                        </div>
+                        {result.success && result.transaction_signature && (
+                          <a
+                            href={selectedCoin === 'sol' ? `https://solscan.io/tx/${result.transaction_signature}` : `https://bscscan.com/tx/${result.transaction_signature}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 hover:bg-molten-gold/20 text-molten-gold rounded transition-all duration-300"
+                            title="View on Explorer"
+                          >
+                            <ExternalLink size={14} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="p-6 bg-void-black/80 border-t border-molten-gold/20">
+              {!isClaiming && (
+                <motion.button
+                  onClick={() => setClaimerOpen(false)}
+                  className="w-full py-3 bg-gradient-to-r from-molten-gold to-yellow-600 text-void-black font-orbitron font-bold rounded-lg hover:from-yellow-600 hover:to-molten-gold transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Close Report
+                </motion.button>
+              )}
+            </div>
           </motion.div>
         </div>
       )}

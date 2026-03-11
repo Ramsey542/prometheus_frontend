@@ -47,6 +47,7 @@ interface WalletSettings {
   mirror_sells_enabled: boolean
   swap_notifications_enabled: boolean
   swap_notification_sound: string
+  tracking_type: string
 }
 
 export default function DashboardPage() {
@@ -68,7 +69,8 @@ export default function DashboardPage() {
     buy_once_per_token: false,
     mirror_sells_enabled: true,
     swap_notifications_enabled: true,
-    swap_notification_sound: 'success.mp3'
+    swap_notification_sound: 'success.mp3',
+    tracking_type: 'both'
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -221,7 +223,8 @@ export default function DashboardPage() {
             : [{ profit_percentage: 0, sell_percentage: 0 }],
           stop_loss_levels: data.stop_loss_levels && data.stop_loss_levels.length > 0
             ? data.stop_loss_levels
-            : [{ loss_percentage: 0, sell_percentage: 0 }]
+            : [{ loss_percentage: 0, sell_percentage: 0 }],
+          tracking_type: data.tracking_type || 'both'
         })
         setTpSlIsActive(data.tp_sl_is_active !== undefined ? data.tp_sl_is_active : true)
       } else if (response.status === 401) {
@@ -254,6 +257,8 @@ export default function DashboardPage() {
         mirror_sells_enabled: settings.mirror_sells_enabled,
         swap_notifications_enabled: settings.swap_notifications_enabled,
         swap_notification_sound: settings.swap_notification_sound,
+        tracking_type: settings.tracking_type,
+        coin_type: selectedCoin
       }
       console.log('the selected coin is', selectedCoin)
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
@@ -1053,6 +1058,35 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Tracking Activities - Solana Only */}
+          {selectedCoin === 'sol' && (
+            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-4">Tracking Activities</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { id: 'launches', label: 'Launches' },
+                  { id: 'swaps', label: 'Swaps' },
+                  { id: 'both', label: 'Both' }
+                ].map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => setSettings(prev => ({ ...prev, tracking_type: type.id }))}
+                    className={`px-4 py-3 rounded-lg border font-orbitron font-bold text-xs transition-all duration-300 ${settings.tracking_type === type.id
+                        ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_15px_rgba(255,184,0,0.3)]'
+                        : 'bg-void-black/40 text-white/60 border-white/10 hover:border-molten-gold/50'
+                      }`}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] md:text-xs text-white/40 font-space-grotesk mt-3">
+                Select which activities to track for newly added wallets.
+              </p>
+            </div>
+          )}
+
           {/* Notification Settings */}
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
             <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-4">Notification Settings</h3>

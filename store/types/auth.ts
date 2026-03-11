@@ -87,6 +87,7 @@ export interface TrackedWallet {
   successful_trades: number;
   failed_trades: number;
   total_volume_traded: number;
+  total_pnl?: number;
   success_rate?: number;
   created_at: string;
   updated_at: string;
@@ -109,16 +110,19 @@ export interface TrackedWallet {
   swap_notification_sound?: string;
   sol_trade_amount?: number | null;
   bnb_trade_amount?: number | null;
+  tracking_type?: string;
 }
 
 export interface TrackedWalletCreate {
   wallet_address: string;
   is_active?: boolean;
+  tracking_type?: string;
 }
 
 export interface TrackedWalletListCreate {
   wallets: string[];
   is_active?: boolean;
+  tracking_type?: string;
 }
 
 export interface CopyTradingLog {
@@ -170,6 +174,7 @@ export interface WalletStats {
   failed_trades: number;
   success_rate: number;
   total_volume_traded: number;
+  total_pnl: number;
 }
 
 export interface CopyTradingStats {
@@ -180,6 +185,7 @@ export interface CopyTradingStats {
   failed_trades: number;
   success_rate: number;
   total_volume_traded: number;
+  total_pnl: number;
   wallet_stats: WalletStats[];
 }
 
