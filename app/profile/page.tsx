@@ -173,8 +173,6 @@ function ProfilePageContent() {
   const [statsError, setStatsError] = useState<string | null>(null)
   const [pnlImageModal, setPnlImageModal] = useState<{ open: boolean; imageUrl: string | null; loading: boolean }>({ open: false, imageUrl: null, loading: false })
   const [showPrivateKeyWarning, setShowPrivateKeyWarning] = useState(false)
-  const [filterWallet, setFilterWallet] = useState<string>('')
-  const [filterEventTypes, setFilterEventTypes] = useState<string[]>([])
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [debugModeLoading, setDebugModeLoading] = useState(false)
   const [isWalletListOpen, setIsWalletListOpen] = useState(false)
@@ -1494,7 +1492,7 @@ function ProfilePageContent() {
                                 </a>
                               </div>
                             </div>
-                            </div>
+                          </div>
                           {copiedKey === `tracked-${wallet.id}` && (
                             <span className="text-xs text-molten-gold">Copied</span>
                           )}
@@ -1520,7 +1518,7 @@ function ProfilePageContent() {
                       </div>
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase">Profit/Loss</p>
-                        <p className={`font-orbitron font-bold ${ (wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <p className={`font-orbitron font-bold ${(wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {(wallet.total_pnl || 0).toFixed(4)} SOL
                         </p>
                       </div>
@@ -2537,141 +2535,6 @@ function ProfilePageContent() {
           </motion.button>
         </div>
 
-        {/* Copy Trading Statistics Section */}
-        <div className="bg-gradient-to-r from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-molten-gold/20 rounded-lg p-4 md:p-6">
-          <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6 flex items-center gap-3">
-            <TrendingUp size={20} />
-            Copy Trading Statistics
-          </h3>
-
-          {statsLoading ? (
-            <div className="text-center py-8">
-              <div className="w-8 h-8 border-2 border-molten-gold border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-white/60 font-space-grotesk">Loading statistics...</p>
-            </div>
-          ) : statsError ? (
-            <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
-              <div className="flex items-center gap-2 text-red-400">
-                <XCircle size={20} />
-                <span className="font-orbitron font-bold">{statsError}</span>
-              </div>
-            </div>
-          ) : copyTradingStats ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-              {/* Total Tracked Wallets */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
-                <div className="flex items-center gap-2 md:gap-3 mb-2">
-                  <Wallet size={18} className="md:w-5 md:h-5 text-molten-gold" />
-                  <span className="text-xs md:text-sm font-orbitron text-molten-gold tracking-wide">TOTAL WALLETS</span>
-                </div>
-                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
-                  {copyTradingStats.total_tracked_wallets}
-                </div>
-              </div>
-
-              {/* Active Wallets */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
-                <div className="flex items-center gap-2 md:gap-3 mb-2">
-                  <Activity size={18} className="md:w-5 md:h-5 text-green-400" />
-                  <span className="text-xs md:text-sm font-orbitron text-green-400 tracking-wide">ACTIVE WALLETS</span>
-                </div>
-                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
-                  {copyTradingStats.active_wallets}
-                </div>
-              </div>
-
-              {/* Success Rate */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
-                <div className="flex items-center gap-2 md:gap-3 mb-2">
-                  <CheckCircle size={18} className="md:w-5 md:h-5 text-blue-400" />
-                  <span className="text-xs md:text-sm font-orbitron text-blue-400 tracking-wide">SUCCESS RATE</span>
-                </div>
-                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
-                  {copyTradingStats.success_rate.toFixed(1)}%
-                </div>
-              </div>
-
-              {/* Total Volume */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
-                <div className="flex items-center gap-2 md:gap-3 mb-2">
-                  <TrendingUp size={18} className="md:w-5 md:h-5 text-purple-400" />
-                  <span className="text-xs md:text-sm font-orbitron text-purple-400 tracking-wide">TOTAL VOLUME</span>
-                </div>
-                <div className="text-xl md:text-2xl font-orbitron font-bold text-white">
-                  {copyTradingStats.total_volume_traded.toLocaleString()} {selectedCoin.toUpperCase()}
-                </div>
-              </div>
-
-              {/* Total PnL */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-3 md:p-4">
-                <div className="flex items-center gap-2 md:gap-3 mb-2">
-                  <TrendingUp size={18} className={`md:w-5 md:h-5 ${ (copyTradingStats.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`} />
-                  <span className={`text-xs md:text-sm font-orbitron tracking-wide ${ (copyTradingStats.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>TOTAL PNL</span>
-                </div>
-                <div className={`text-xl md:text-2xl font-orbitron font-bold ${ (copyTradingStats.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {(copyTradingStats.total_pnl || 0).toFixed(4)} {selectedCoin.toUpperCase()}
-                </div>
-              </div>
-
-              {/* Total Matches */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <FileText size={20} className="text-yellow-400" />
-                  <span className="text-sm font-orbitron text-yellow-400 tracking-wide">TOTAL MATCHES</span>
-                </div>
-                <div className="text-2xl font-orbitron font-bold text-white">
-                  {copyTradingStats.total_matches}
-                </div>
-              </div>
-
-              {/* Successful Trades */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <CheckCircle size={20} className="text-green-400" />
-                  <span className="text-sm font-orbitron text-green-400 tracking-wide">SUCCESSFUL TRADES</span>
-                </div>
-                <div className="text-2xl font-orbitron font-bold text-white">
-                  {copyTradingStats.successful_trades}
-                </div>
-              </div>
-
-              {/* Failed Trades */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <XCircle size={20} className="text-red-400" />
-                  <span className="text-sm font-orbitron text-red-400 tracking-wide">FAILED TRADES</span>
-                </div>
-                <div className="text-2xl font-orbitron font-bold text-white">
-                  {copyTradingStats.failed_trades}
-                </div>
-              </div>
-
-              {/* Refresh Button */}
-              <div className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4 flex items-center justify-center">
-                <motion.button
-                  onClick={handleManualRefresh}
-                  disabled={statsLoading}
-                  className="px-4 py-2 bg-molten-gold text-void-black font-orbitron font-bold tracking-wider hover:brightness-110 transition duration-300 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {statsLoading ? (
-                    <div className="w-4 h-4 border-2 border-void-black border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <RefreshCw size={16} />
-                  )}
-                  Refresh
-                </motion.button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <TrendingUp size={48} className="text-molten-gold/40 mx-auto mb-4" />
-              <p className="text-white/60 font-space-grotesk">No statistics available</p>
-              <p className="text-white/40 font-space-grotesk text-sm mt-2">Start tracking wallets to see statistics</p>
-            </div>
-          )}
-        </div>
 
         {/* Wallet Stats Section */}
         {copyTradingStats && copyTradingStats.wallet_stats && copyTradingStats.wallet_stats.length > 0 && (
@@ -2773,7 +2636,7 @@ function ProfilePageContent() {
                       </div>
                       <div className="text-center col-span-2 border-t border-molten-gold/10 pt-2">
                         <div className="text-sm font-orbitron text-molten-gold tracking-wide mb-1">TOTAL PNL</div>
-                        <div className={`text-xl font-orbitron font-bold ${ (wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className={`text-xl font-orbitron font-bold ${(wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {(wallet.total_pnl || 0).toFixed(4)} SOL
                         </div>
                       </div>
@@ -2856,489 +2719,472 @@ function ProfilePageContent() {
             </div>
           ) : (
             <div className="space-y-4">
-              {trackerLogs && trackerLogs
-                .filter(log => {
-                  if (!log || !log.id) return false;
-
-                  // Filter by Wallet
-                  if (filterWallet) {
-                    const logWallet = log.tracked_wallet_address || log.copied_wallet || log.wallet_address;
-                    if (logWallet !== filterWallet) return false;
-                  }
-
-                  // Filter by Event Type
-                  if (filterEventTypes.length > 0) {
-                    if (!filterEventTypes.includes(log.event_type)) return false;
-                  }
-
-                  return true;
-                })
-                .map((log) => (
-                  <motion.div
-                    key={log.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4"
-                  >
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 mb-4">
-                      <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                        {log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
-                          <div className={`w-3 h-3 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'}`} />
-                        )}
-                        <span className={`text-xs md:text-sm font-orbitron font-semibold tracking-wider uppercase ${log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
-                          log.event_type === 'user_purchase' ? 'text-blue-400' :
-                            log.event_type === 'user_sell' ? 'text-orange-400' :
-                              log.event_type === 'admin_fee' ? 'text-purple-400' : 'text-gray-400'
-                          }`}>
-                          {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
-                        </span>
-                        {(() => {
-                          const trackedWalletAddr = log.event_type === 'tracked_wallet_activity'
-                            ? log.wallet_address
-                            : (log.tracked_wallet_address || log.copied_wallet)
-
-                          if (!trackedWalletAddr || trackedWalletAddr === 'manual_buy' || trackedWalletAddr === 'none') return null;
-
-                          return (
-                            <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
-                              <span className="hidden sm:inline text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
-                              <span className="text-xs font-space-grotesk font-mono text-white">
-                                {walletSettings[trackedWalletAddr]?.custom_name || log.wallet_name || formatWalletAddress(trackedWalletAddr)}
-                              </span>
-                              <button
-                                onClick={() => copyToClipboard(trackedWalletAddr || '', `log-tracked-${log.id}`)}
-                                className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
-                                title="Copy tracked wallet address"
-                              >
-                                <Copy size={12} />
-                              </button>
-                              {copiedKey === `log-tracked-${log.id}` && (
-                                <span className="text-xs text-molten-gold">Copied</span>
-                              )}
-                            </div>
-                          )
-                        })()
-                        }
-                        {(log.event_type === 'user_sell' || log.event_type === 'user_purchase') && (() => {
-                          let eData: any = {};
-                          try {
-                            eData = log.event_data ? JSON.parse(log.event_data) : {};
-                          } catch (e) {
-                            eData = {};
-                          }
-
-                          const isManual = eData.mirror_wallet_address === 'manual_buy';
-                          const isTpSl = eData.tp_sl_sell === true || log.is_tp_sl_sell;
-
-                          if (isTpSl) {
-                            const triggerType = eData.tp_sl_trigger_type || log.tp_sl_trigger_type;
-                            const triggerValue = eData.tp_sl_trigger_value || log.tp_sl_trigger_value;
-                            return (
-                              <div className="group relative">
-                                <span className={`px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide rounded-full ${triggerType === 'take_profit' ? 'text-green-200 border border-green-400/40 bg-green-500/10 shadow-[0_0_12px_rgba(74,222,128,0.5)]' : 'text-red-200 border border-red-400/40 bg-red-500/10 shadow-[0_0_12px_rgba(239,68,68,0.5)]'}`}>
-                                  Tp/Sl Trade {typeof triggerValue === 'number' && `(${triggerType === 'take_profit' ? '+' : '-'}${triggerValue}%)`}
-                                </span>
-                                <div className="absolute bottom-full left-0 mb-2 w-72 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20 font-space-grotesk space-y-2">
-                                  <p className={`font-orbitron font-semibold ${triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}`}>
-                                    {triggerType === 'take_profit' ? 'Take Profit Triggered' : 'Stop Loss Triggered'}
-                                  </p>
-                                  {(typeof log.tp_sl_buy_price === 'number' || typeof eData.tp_sl_buy_price === 'number') && (
-                                    <div className="flex justify-between border-b border-white/10 pb-1">
-                                      <span className="text-white/60">Buy Price:</span>
-                                      <span className="text-molten-gold">${(eData.tp_sl_buy_price || log.tp_sl_buy_price) < 0.0001 ? (eData.tp_sl_buy_price || log.tp_sl_buy_price).toExponential(4) : (eData.tp_sl_buy_price || log.tp_sl_buy_price).toFixed(8)}</span>
-                                    </div>
-                                  )}
-                                  {(typeof log.tp_sl_trigger_price === 'number' || typeof eData.tp_sl_trigger_price === 'number') && (
-                                    <div className="flex justify-between border-b border-white/10 pb-1">
-                                      <span className="text-white/60">Trigger Price:</span>
-                                      <span className={triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}>${(eData.tp_sl_trigger_price || log.tp_sl_trigger_price) < 0.0001 ? (eData.tp_sl_trigger_price || log.tp_sl_trigger_price).toExponential(4) : (eData.tp_sl_trigger_price || log.tp_sl_trigger_price).toFixed(8)}</span>
-                                    </div>
-                                  )}
-                                  {typeof triggerValue === 'number' && (
-                                    <div className="flex justify-between">
-                                      <span className="text-white/60">Target:</span>
-                                      <span className={triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}>{triggerType === 'take_profit' ? '+' : '-'}{triggerValue}%</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          if (isManual) {
-                            return (
-                              <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-cyan-200 border border-cyan-400/40 rounded-full bg-cyan-500/10 shadow-[0_0_12px_rgba(6,182,212,0.45)]">
-                                Manual Trade
-                              </span>
-                            );
-                          }
-
-                          if (eData.mirror_wallet_address) {
-                            return (
-                              <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-yellow-200 border border-yellow-400/40 rounded-full bg-yellow-500/10 shadow-[0_0_12px_rgba(234,179,8,0.45)]">
-                                Copy Trade
-                              </span>
-                            );
-                          }
-
-                          return null;
-                        })()}
-                        {log.tp_sl_is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
-                          <div className="group relative">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-lg shadow-green-400/50" />
-                              <span className="text-xs font-orbitron font-semibold text-green-400 glow-green">(TP/SL)</span>
-                            </div>
-                            <div className="absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl">
-                              <div className="space-y-3">
-                                <p className="text-molten-gold font-orbitron font-semibold mb-2">TP/SL is active for this trade</p>
-                                {log.current_price !== null && log.current_price !== undefined && (
-                                  <div>
-                                    <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
-                                    <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
-                                  </div>
-                                )}
-                                {log.take_profit_levels && log.take_profit_levels.length > 0 && (
-                                  <div>
-                                    <p className="text-molten-gold font-orbitron font-semibold mb-1">Take Profit Levels</p>
-                                    <div className="space-y-1">
-                                      {log.take_profit_levels.map((tp, idx) => (
-                                        <p key={idx} className="text-white font-space-grotesk">
-                                          {tp.profit_percentage}% profit → sell {tp.sell_percentage}%
-                                        </p>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {log.stop_loss_levels && log.stop_loss_levels.length > 0 && (
-                                  <div>
-                                    <p className="text-molten-gold font-orbitron font-semibold mb-1">Stop Loss Levels</p>
-                                    <div className="space-y-1">
-                                      {log.stop_loss_levels.map((sl, idx) => (
-                                        <p key={idx} className="text-white font-space-grotesk">
-                                          {sl.loss_percentage}% loss → sell {sl.sell_percentage}%
-                                        </p>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {log.is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
-                          <div className="group relative">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse shadow-lg shadow-green-400/50" />
-                              <span className="text-xs font-orbitron font-semibold text-green-400">ACTIVE</span>
-                            </div>
-                            <div className="absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl">
-                              <div className="space-y-2">
-                                {log.current_price !== null && log.current_price !== undefined && (
-                                  <div>
-                                    <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
-                                    <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-xs text-white/40 font-space-grotesk flex-shrink-0">
-                        {formatDate(log.created_at, true)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-4">
-                      {log.status === 'failed' && log.error_message && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <XCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1">
-                              <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error</p>
-                              <p className="text-red-300 font-space-grotesk text-sm">{log.error_message}</p>
-                            </div>
-                          </div>
-                        </div>
+              {trackerLogs && trackerLogs.map((log) => (
+                <motion.div
+                  key={log.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 mb-4">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                      {log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
+                        <div className={`w-3 h-3 rounded-full ${log.status === 'success' ? 'bg-green-400' : log.status === 'failed' ? 'bg-red-400' : 'bg-yellow-400'}`} />
                       )}
+                      <span className={`text-xs md:text-sm font-orbitron font-semibold tracking-wider uppercase ${log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
+                        log.event_type === 'user_purchase' ? 'text-blue-400' :
+                          log.event_type === 'user_sell' ? 'text-orange-400' :
+                            log.event_type === 'admin_fee' ? 'text-purple-400' : 'text-gray-400'
+                        }`}>
+                        {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
+                      </span>
+                      {(() => {
+                        const trackedWalletAddr = log.event_type === 'tracked_wallet_activity'
+                          ? log.wallet_address
+                          : (log.tracked_wallet_address || log.copied_wallet)
 
-                      {/* Transaction Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Status</p>
-                          <p className={`font-orbitron font-bold ${log.status === 'success' ? 'text-green-400' : log.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
-                            {log.status?.toUpperCase() || 'UNKNOWN'}
-                          </p>
-                        </div>
-                        {log.side && (
-                          <div>
-                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Side</p>
-                            <p className={`font-orbitron font-bold ${log.side === 'BUY' ? 'text-green-400' : log.side === 'SELL' ? 'text-red-400' : 'text-white'}`}>
-                              {log.side}
-                            </p>
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">DEX</p>
-                          <div className="flex items-center gap-2">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={`/dex-icons/${log.dex_name?.toLowerCase().includes('raydium') ? 'raydium' :
-                                log.dex_name?.toLowerCase().includes('meteora') ? 'meteora' :
-                                  log.dex_name?.toLowerCase().includes('jupiter') ? 'jupiter' :
-                                    'pumpfun'
-                                }.png`}
-                              alt={log.dex_name || 'Pumpfun'}
-                              className="w-6 h-6 rounded-full"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/dex-icons/pumpfun.png';
-                                (e.target as HTMLImageElement).onerror = null;
-                              }}
-                            />
-                            <p className="text-white font-orbitron font-bold">
-                              {log.dex_name || 'Pumpfun'}
-                            </p>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Target Token</p>
-                          <div className="flex items-center gap-2">
-                            {log.token_logo_uri ? (
-                              <>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={log.token_logo_uri}
-                                  alt={log.token_symbol || 'token'}
-                                  className="w-6 h-6 rounded-full flex-shrink-0 object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                  }}
-                                />
-                              </>
-                            ) : (
-                              <div className="w-6 h-6 rounded-full bg-molten-gold/20 border border-molten-gold/30 flex-shrink-0" />
-                            )}
-                            <p className="text-white font-space-grotesk font-mono text-sm truncate flex-1">
-                              {log.target_token || 'N/A'}
-                            </p>
-                            {log.target_token && (
-                              <button
-                                onClick={() => copyToClipboard(log.target_token || '', `log-target-${log.id}`)}
-                                className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
-                              >
-                                <Copy size={14} />
-                              </button>
-                            )}
-                            {log.target_token && copiedKey === `log-target-${log.id}` && (
+                        if (!trackedWalletAddr || trackedWalletAddr === 'manual_buy' || trackedWalletAddr === 'none') return null;
+
+                        return (
+                          <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-molten-gold/10 border border-molten-gold/30 rounded-lg">
+                            <span className="hidden sm:inline text-xs font-orbitron font-semibold text-molten-gold/80 tracking-wider uppercase">Copied Wallet:</span>
+                            <span className="text-xs font-space-grotesk font-mono text-white">
+                              {walletSettings[trackedWalletAddr]?.custom_name || log.wallet_name || formatWalletAddress(trackedWalletAddr)}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(trackedWalletAddr || '', `log-tracked-${log.id}`)}
+                              className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                              title="Copy tracked wallet address"
+                            >
+                              <Copy size={12} />
+                            </button>
+                            {copiedKey === `log-tracked-${log.id}` && (
                               <span className="text-xs text-molten-gold">Copied</span>
                             )}
-                            {log.target_token && (
-                              <a
-                                href={`https://dexscreener.com/${selectedCoin === 'sol' ? 'solana' : 'bsc'}/${log.target_token}${profile?.public_address ? `?maker=${profile.public_address}` : ''}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
-                                title="View on DexScreener"
-                              >
-                                <ExternalLink size={14} />
-                              </a>
-                            )}
                           </div>
-                          {/* PnL Display for successful user_sell */}
-                          {log.event_type === 'user_sell' && log.status === 'success' && log.pnl !== null && log.pnl !== undefined && (
-                            <div className="mt-3 pt-3 border-t border-molten-gold/10">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">PnL</p>
-                                  <p className={`font-orbitron font-bold text-sm ${log.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {log.pnl >= 0 ? '+' : ''}{log.pnl.toFixed(6)} {selectedCoin.toUpperCase()}
-                                  </p>
-                                </div>
-                                <motion.button
-                                  onClick={() => handleGeneratePnlImage(log)}
-                                  className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300"
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                >
-                                  <Share2 size={14} />
-                                  <span className="text-xs font-orbitron font-semibold">Share</span>
-                                </motion.button>
+                        )
+                      })()
+                      }
+                      {(log.event_type === 'user_sell' || log.event_type === 'user_purchase') && (() => {
+                        let eData: any = {};
+                        try {
+                          eData = log.event_data ? JSON.parse(log.event_data) : {};
+                        } catch (e) {
+                          eData = {};
+                        }
+
+                        const isManual = eData.mirror_wallet_address === 'manual_buy';
+                        const isTpSl = eData.tp_sl_sell === true || log.is_tp_sl_sell;
+
+                        if (isTpSl) {
+                          const triggerType = eData.tp_sl_trigger_type || log.tp_sl_trigger_type;
+                          const triggerValue = eData.tp_sl_trigger_value || log.tp_sl_trigger_value;
+                          return (
+                            <div className="group relative">
+                              <span className={`px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide rounded-full ${triggerType === 'take_profit' ? 'text-green-200 border border-green-400/40 bg-green-500/10 shadow-[0_0_12px_rgba(74,222,128,0.5)]' : 'text-red-200 border border-red-400/40 bg-red-500/10 shadow-[0_0_12px_rgba(239,68,68,0.5)]'}`}>
+                                Tp/Sl Trade {typeof triggerValue === 'number' && `(${triggerType === 'take_profit' ? '+' : '-'}${triggerValue}%)`}
+                              </span>
+                              <div className="absolute bottom-full left-0 mb-2 w-72 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20 font-space-grotesk space-y-2">
+                                <p className={`font-orbitron font-semibold ${triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}`}>
+                                  {triggerType === 'take_profit' ? 'Take Profit Triggered' : 'Stop Loss Triggered'}
+                                </p>
+                                {(typeof log.tp_sl_buy_price === 'number' || typeof eData.tp_sl_buy_price === 'number') && (
+                                  <div className="flex justify-between border-b border-white/10 pb-1">
+                                    <span className="text-white/60">Buy Price:</span>
+                                    <span className="text-molten-gold">${(eData.tp_sl_buy_price || log.tp_sl_buy_price) < 0.0001 ? (eData.tp_sl_buy_price || log.tp_sl_buy_price).toExponential(4) : (eData.tp_sl_buy_price || log.tp_sl_buy_price).toFixed(8)}</span>
+                                  </div>
+                                )}
+                                {(typeof log.tp_sl_trigger_price === 'number' || typeof eData.tp_sl_trigger_price === 'number') && (
+                                  <div className="flex justify-between border-b border-white/10 pb-1">
+                                    <span className="text-white/60">Trigger Price:</span>
+                                    <span className={triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}>${(eData.tp_sl_trigger_price || log.tp_sl_trigger_price) < 0.0001 ? (eData.tp_sl_trigger_price || log.tp_sl_trigger_price).toExponential(4) : (eData.tp_sl_trigger_price || log.tp_sl_trigger_price).toFixed(8)}</span>
+                                  </div>
+                                )}
+                                {typeof triggerValue === 'number' && (
+                                  <div className="flex justify-between">
+                                    <span className="text-white/60">Target:</span>
+                                    <span className={triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}>{triggerType === 'take_profit' ? '+' : '-'}{triggerValue}%</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          )}
+                          );
+                        }
+
+                        if (isManual) {
+                          return (
+                            <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-cyan-200 border border-cyan-400/40 rounded-full bg-cyan-500/10 shadow-[0_0_12px_rgba(6,182,212,0.45)]">
+                              Manual Trade
+                            </span>
+                          );
+                        }
+
+                        if (eData.mirror_wallet_address) {
+                          return (
+                            <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-yellow-200 border border-yellow-400/40 rounded-full bg-yellow-500/10 shadow-[0_0_12px_rgba(234,179,8,0.45)]">
+                              Copy Trade
+                            </span>
+                          );
+                        }
+
+                        return null;
+                      })()}
+                      {log.tp_sl_is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
+                        <div className="group relative">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-lg shadow-green-400/50" />
+                            <span className="text-xs font-orbitron font-semibold text-green-400 glow-green">(TP/SL)</span>
+                          </div>
+                          <div className="absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl">
+                            <div className="space-y-3">
+                              <p className="text-molten-gold font-orbitron font-semibold mb-2">TP/SL is active for this trade</p>
+                              {log.current_price !== null && log.current_price !== undefined && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
+                                  <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
+                                </div>
+                              )}
+                              {log.take_profit_levels && log.take_profit_levels.length > 0 && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Take Profit Levels</p>
+                                  <div className="space-y-1">
+                                    {log.take_profit_levels.map((tp, idx) => (
+                                      <p key={idx} className="text-white font-space-grotesk">
+                                        {tp.profit_percentage}% profit → sell {tp.sell_percentage}%
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {log.stop_loss_levels && log.stop_loss_levels.length > 0 && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Stop Loss Levels</p>
+                                  <div className="space-y-1">
+                                    {log.stop_loss_levels.map((sl, idx) => (
+                                      <p key={idx} className="text-white font-space-grotesk">
+                                        {sl.loss_percentage}% loss → sell {sl.sell_percentage}%
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {log.is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
+                        <div className="group relative">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse shadow-lg shadow-green-400/50" />
+                            <span className="text-xs font-orbitron font-semibold text-green-400">ACTIVE</span>
+                          </div>
+                          <div className="absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl">
+                            <div className="space-y-2">
+                              {log.current_price !== null && log.current_price !== undefined && (
+                                <div>
+                                  <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
+                                  <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xs text-white/40 font-space-grotesk flex-shrink-0">
+                      {formatDate(log.created_at, true)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {log.status === 'failed' && log.error_message && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <XCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error</p>
+                            <p className="text-red-300 font-space-grotesk text-sm">{log.error_message}</p>
+                          </div>
                         </div>
                       </div>
-                      {log.token_name && (
+                    )}
+
+                    {/* Transaction Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Status</p>
+                        <p className={`font-orbitron font-bold ${log.status === 'success' ? 'text-green-400' : log.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
+                          {log.status?.toUpperCase() || 'UNKNOWN'}
+                        </p>
+                      </div>
+                      {log.side && (
                         <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Token Name</p>
-                          <p className="text-white font-space-grotesk font-semibold text-sm">
-                            {log.token_name}
+                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Side</p>
+                          <p className={`font-orbitron font-bold ${log.side === 'BUY' ? 'text-green-400' : log.side === 'SELL' ? 'text-red-400' : 'text-white'}`}>
+                            {log.side}
                           </p>
                         </div>
                       )}
-
-                      {/* Transaction Signature */}
-                      {log.transaction_signature && (
-                        <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Transaction Signature</p>
-                          <div className="flex items-center gap-2">
-                            <p className="text-white font-space-grotesk font-mono text-sm truncate flex-1">
-                              {log.transaction_signature}
-                            </p>
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">DEX</p>
+                        <div className="flex items-center gap-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/dex-icons/${log.dex_name?.toLowerCase().includes('raydium') ? 'raydium' :
+                              log.dex_name?.toLowerCase().includes('meteora') ? 'meteora' :
+                                log.dex_name?.toLowerCase().includes('jupiter') ? 'jupiter' :
+                                  'pumpfun'
+                              }.png`}
+                            alt={log.dex_name || 'Pumpfun'}
+                            className="w-6 h-6 rounded-full"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/dex-icons/pumpfun.png';
+                              (e.target as HTMLImageElement).onerror = null;
+                            }}
+                          />
+                          <p className="text-white font-orbitron font-bold">
+                            {log.dex_name || 'Pumpfun'}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Target Token</p>
+                        <div className="flex items-center gap-2">
+                          {log.token_logo_uri ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={log.token_logo_uri}
+                                alt={log.token_symbol || 'token'}
+                                className="w-6 h-6 rounded-full flex-shrink-0 object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            </>
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-molten-gold/20 border border-molten-gold/30 flex-shrink-0" />
+                          )}
+                          <p className="text-white font-space-grotesk font-mono text-sm truncate flex-1">
+                            {log.target_token || 'N/A'}
+                          </p>
+                          {log.target_token && (
                             <button
-                              onClick={() => copyToClipboard(log.transaction_signature || '', `log-sig-${log.id}`)}
+                              onClick={() => copyToClipboard(log.target_token || '', `log-target-${log.id}`)}
                               className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
                             >
                               <Copy size={14} />
                             </button>
-                            {copiedKey === `log-sig-${log.id}` && (
-                              <span className="text-xs text-molten-gold">Copied</span>
-                            )}
-                          </div>
+                          )}
+                          {log.target_token && copiedKey === `log-target-${log.id}` && (
+                            <span className="text-xs text-molten-gold">Copied</span>
+                          )}
+                          {log.target_token && (
+                            <a
+                              href={`https://dexscreener.com/${selectedCoin === 'sol' ? 'solana' : 'bsc'}/${log.target_token}${profile?.public_address ? `?maker=${profile.public_address}` : ''}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
+                              title="View on DexScreener"
+                            >
+                              <ExternalLink size={14} />
+                            </a>
+                          )}
                         </div>
-                      )}
-
-                      {/* Amounts */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {log.amount_in && (() => {
-                          if (log.event_type === 'tracked_wallet_activity') {
-                            const isBuy = log.side === 'BUY'
-                            let targetToken: string | null | undefined
-                            let baseToken: string | null | undefined
-                            if (isBuy) {
-                              targetToken = log.target_token
-                              baseToken = log.base_token
-                            } else {
-                              targetToken = log.base_token
-                              baseToken = log.target_token
-                            }
-
-                            if (isBuy) {
-                              const isToken = true
-                              const tokenName = log.token_name || selectedCoin.toUpperCase()
-                              return (
-                                <div>
-                                  <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
-                                  <p className="text-white font-space-grotesk font-mono text-sm">
-                                    {formatAmount(log.amount_in, selectedCoin, isToken, log.token_decimals)}
-                                    {` ${tokenName}`}
-                                  </p>
-                                </div>
-                              )
-                            } else {
-                              const isToken = false
-                              const currencyName = log.base_token_name || selectedCoin.toUpperCase()
-                              return (
-                                <div>
-                                  <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
-                                  <p className="text-white font-space-grotesk font-mono text-sm">
-                                    {formatAmount(log.amount_in, selectedCoin, isToken, null)}
-                                    {` ${currencyName}`}
-                                  </p>
-                                </div>
-                              )
-                            }
-                          }
-
-                          const isBuyOperation = log.event_type === 'user_purchase'
-                          const isToken = !isBuyOperation
-                          return (
-                            <div>
-                              <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
-                              <p className="text-white font-space-grotesk font-mono text-sm">
-                                {formatAmount(log.amount_in, selectedCoin, isToken, isToken ? log.token_decimals : null)}
-                                {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
-                              </p>
+                        {/* PnL Display for successful user_sell */}
+                        {log.event_type === 'user_sell' && log.status === 'success' && log.pnl !== null && log.pnl !== undefined && (
+                          <div className="mt-3 pt-3 border-t border-molten-gold/10">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">PnL</p>
+                                <p className={`font-orbitron font-bold text-sm ${log.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {log.pnl >= 0 ? '+' : ''}{log.pnl.toFixed(6)} {selectedCoin.toUpperCase()}
+                                </p>
+                              </div>
+                              <motion.button
+                                onClick={() => handleGeneratePnlImage(log)}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300"
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                <Share2 size={14} />
+                                <span className="text-xs font-orbitron font-semibold">Share</span>
+                              </motion.button>
                             </div>
-                          )
-                        })()}
-
-                        {log.amount_out && (() => {
-                          if (log.event_type === 'tracked_wallet_activity') {
-                            const isBuy = log.side === 'BUY'
-                            let targetToken: string | null | undefined
-                            let baseToken: string | null | undefined
-
-                            if (isBuy) {
-                              targetToken = log.target_token
-                              baseToken = log.base_token
-                            } else {
-                              targetToken = log.base_token
-                              baseToken = log.target_token
-                            }
-
-                            if (isBuy) {
-                              const isToken = false
-                              const currencyName = log.base_token_name || selectedCoin.toUpperCase()
-                              return (
-                                <div>
-                                  <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
-                                  <p className="text-white font-space-grotesk font-mono text-sm">
-                                    {formatAmount(log.amount_out, selectedCoin, isToken, null)}
-                                    {` ${currencyName}`}
-                                  </p>
-                                </div>
-                              )
-                            } else {
-                              const isToken = true
-                              const tokenName = log.token_name || selectedCoin.toUpperCase()
-                              return (
-                                <div>
-                                  <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
-                                  <p className="text-white font-space-grotesk font-mono text-sm">
-                                    {formatAmount(log.amount_out, selectedCoin, isToken, log.token_decimals)}
-                                    {` ${tokenName}`}
-                                  </p>
-                                </div>
-                              )
-                            }
-                          }
-
-                          const isBuyOperation = log.event_type === 'user_purchase'
-                          const isToken = isBuyOperation
-                          return (
-                            <div>
-                              <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
-                              <p className="text-white font-space-grotesk font-mono text-sm">
-                                {formatAmount(log.amount_out, selectedCoin, isToken, isToken ? log.token_decimals : null)}
-                                {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
-                              </p>
-                            </div>
-                          )
-                        })()}
-
-                        {log.fee_amount && (
-                          <div>
-                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Fee Amount</p>
-                            <p className="text-white font-space-grotesk font-mono text-sm">
-                              {formatAmount(log.fee_amount, selectedCoin, false)} {selectedCoin.toUpperCase()}
-                            </p>
                           </div>
                         )}
                       </div>
+                    </div>
+                    {log.token_name && (
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Token Name</p>
+                        <p className="text-white font-space-grotesk font-semibold text-sm">
+                          {log.token_name}
+                        </p>
+                      </div>
+                    )}
 
-                      {/* Event Data - Only show for non-user purchase/sell events */}
-                      {log.event_data && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
-                        <div>
-                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Event Data</p>
-                          <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-3">
-                            <p className="text-white/80 font-space-grotesk text-sm font-mono break-all">
-                              {log.event_data}
+                    {/* Transaction Signature */}
+                    {log.transaction_signature && (
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Transaction Signature</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-white font-space-grotesk font-mono text-sm truncate flex-1">
+                            {log.transaction_signature}
+                          </p>
+                          <button
+                            onClick={() => copyToClipboard(log.transaction_signature || '', `log-sig-${log.id}`)}
+                            className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300"
+                          >
+                            <Copy size={14} />
+                          </button>
+                          {copiedKey === `log-sig-${log.id}` && (
+                            <span className="text-xs text-molten-gold">Copied</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Amounts */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {log.amount_in && (() => {
+                        if (log.event_type === 'tracked_wallet_activity') {
+                          const isBuy = log.side === 'BUY'
+                          let targetToken: string | null | undefined
+                          let baseToken: string | null | undefined
+                          if (isBuy) {
+                            targetToken = log.target_token
+                            baseToken = log.base_token
+                          } else {
+                            targetToken = log.base_token
+                            baseToken = log.target_token
+                          }
+
+                          if (isBuy) {
+                            const isToken = true
+                            const tokenName = log.token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_in, selectedCoin, isToken, log.token_decimals)}
+                                  {` ${tokenName}`}
+                                </p>
+                              </div>
+                            )
+                          } else {
+                            const isToken = false
+                            const currencyName = log.base_token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_in, selectedCoin, isToken, null)}
+                                  {` ${currencyName}`}
+                                </p>
+                              </div>
+                            )
+                          }
+                        }
+
+                        const isBuyOperation = log.event_type === 'user_purchase'
+                        const isToken = !isBuyOperation
+                        return (
+                          <div>
+                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
+                            <p className="text-white font-space-grotesk font-mono text-sm">
+                              {formatAmount(log.amount_in, selectedCoin, isToken, isToken ? log.token_decimals : null)}
+                              {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
                             </p>
                           </div>
+                        )
+                      })()}
+
+                      {log.amount_out && (() => {
+                        if (log.event_type === 'tracked_wallet_activity') {
+                          const isBuy = log.side === 'BUY'
+                          let targetToken: string | null | undefined
+                          let baseToken: string | null | undefined
+
+                          if (isBuy) {
+                            targetToken = log.target_token
+                            baseToken = log.base_token
+                          } else {
+                            targetToken = log.base_token
+                            baseToken = log.target_token
+                          }
+
+                          if (isBuy) {
+                            const isToken = false
+                            const currencyName = log.base_token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_out, selectedCoin, isToken, null)}
+                                  {` ${currencyName}`}
+                                </p>
+                              </div>
+                            )
+                          } else {
+                            const isToken = true
+                            const tokenName = log.token_name || selectedCoin.toUpperCase()
+                            return (
+                              <div>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
+                                <p className="text-white font-space-grotesk font-mono text-sm">
+                                  {formatAmount(log.amount_out, selectedCoin, isToken, log.token_decimals)}
+                                  {` ${tokenName}`}
+                                </p>
+                              </div>
+                            )
+                          }
+                        }
+
+                        const isBuyOperation = log.event_type === 'user_purchase'
+                        const isToken = isBuyOperation
+                        return (
+                          <div>
+                            <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
+                            <p className="text-white font-space-grotesk font-mono text-sm">
+                              {formatAmount(log.amount_out, selectedCoin, isToken, isToken ? log.token_decimals : null)}
+                              {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
+                            </p>
+                          </div>
+                        )
+                      })()}
+
+                      {log.fee_amount && (
+                        <div>
+                          <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Fee Amount</p>
+                          <p className="text-white font-space-grotesk font-mono text-sm">
+                            {formatAmount(log.fee_amount, selectedCoin, false)} {selectedCoin.toUpperCase()}
+                          </p>
                         </div>
                       )}
                     </div>
 
-                    {log.error_message && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
-                      <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                        <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error Message</p>
-                        <p className="text-red-300 font-space-grotesk text-sm">{log.error_message}</p>
+                    {/* Event Data - Only show for non-user purchase/sell events */}
+                    {log.event_data && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
+                      <div>
+                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Event Data</p>
+                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-3">
+                          <p className="text-white/80 font-space-grotesk text-sm font-mono break-all">
+                            {log.event_data}
+                          </p>
+                        </div>
                       </div>
                     )}
-                  </motion.div>
-                ))}
+                  </div>
+
+                  {log.error_message && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
+                    <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error Message</p>
+                      <p className="text-red-300 font-space-grotesk text-sm">{log.error_message}</p>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
             </div>
           )}
 
@@ -3612,8 +3458,8 @@ function ProfilePageContent() {
                         disabled={isUpdatingTrackingType}
                         onClick={() => handleUpdateGlobalTrackingType(type.id)}
                         className={`px-2 py-2 rounded-lg border font-orbitron font-bold text-[10px] transition-all duration-300 ${defaultTrackingType === type.id
-                            ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_10px_rgba(255,184,0,0.2)]'
-                            : 'bg-void-black/40 text-white/40 border-white/5 hover:border-molten-gold/30 hover:text-white/60'
+                          ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_10px_rgba(255,184,0,0.2)]'
+                          : 'bg-void-black/40 text-white/40 border-white/5 hover:border-molten-gold/30 hover:text-white/60'
                           } ${isUpdatingTrackingType ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {type.label}
