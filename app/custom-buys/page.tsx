@@ -75,6 +75,9 @@ export default function CustomBuysPage() {
       setRefreshing(true)
       setError(null)
       setLoading(true)
+      setTokens([])
+      setTotalCount(0)
+      setTotalBalance(0)
       const offset = (currentPage - 1) * tokensPerPage
 
       const [tokenResponse, positionsResponse] = await Promise.all([
@@ -119,6 +122,15 @@ export default function CustomBuysPage() {
       console.error('Failed to fetch sounds:', err)
     }
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+    setTokens([])
+    setTrackedPositions({})
+    setTotalCount(0)
+    setTotalBalance(0)
+    setLoading(true)
+  }, [selectedCoin])
 
   useEffect(() => {
     fetchTokenBalances()
