@@ -177,6 +177,14 @@ export default function CustomBuysPage() {
       setSellError('Slippage must be between 1 and 100 percent')
       return
     }
+
+    const balance = parseFloat(sellModal.token.balance || '0')
+    const amountToSell = parseFloat(sellAmount)
+    const epsilon = 1e-6
+    if (amountToSell - balance > epsilon) {
+      setSellError(`Insufficient balance. You only have ${balance.toFixed(6)} tokens.`)
+      return
+    }
     try {
       setSelling(true)
       setSellError(null)
@@ -450,9 +458,9 @@ export default function CustomBuysPage() {
               animate={{ opacity: 1, y: 0 }}
               className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg mb-6"
             >
-              <div className="flex items-center gap-2 text-red-400">
-                <XCircle size={20} />
-                <span className="font-orbitron font-bold">{error}</span>
+              <div className="flex items-start gap-2 text-red-400">
+                <XCircle size={20} className="mt-0.5 flex-shrink-0" />
+                <span className="font-orbitron font-bold break-all">{error}</span>
               </div>
             </motion.div>
           )}
@@ -705,9 +713,27 @@ export default function CustomBuysPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg mb-4"
               >
-                <div className="flex items-center gap-2 text-red-400">
-                  <XCircle size={16} />
-                  <span className="text-sm font-orbitron font-bold">{sellError}</span>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-start gap-2 text-red-400">
+                    <XCircle size={16} className="mt-0.5 flex-shrink-0" />
+                    <span className="text-sm font-space-grotesk leading-relaxed break-all whitespace-pre-wrap">
+                      {sellError.includes('Verification here:') || sellError.includes('BscScan here:')
+                        ? sellError.split('here:')[0]
+                        : sellError}
+                    </span>
+                  </div>
+
+                  {sellError.includes('BscScan here:') && (
+                    <a
+                      href={sellError.match(/https:\/\/\S+/)?.[0]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-colors rounded text-xs font-orbitron font-bold"
+                    >
+                      <ExternalLink size={12} />
+                      View On-Chain Failure
+                    </a>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -850,9 +876,9 @@ export default function CustomBuysPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg mb-4"
               >
-                <div className="flex items-center gap-2 text-red-400">
-                  <XCircle size={16} />
-                  <span className="text-sm font-orbitron font-bold">{tpSlError}</span>
+                <div className="flex items-start gap-2 text-red-400">
+                  <XCircle size={16} className="mt-0.5 flex-shrink-0" />
+                  <span className="text-sm font-orbitron font-bold break-all">{tpSlError}</span>
                 </div>
               </motion.div>
             )}

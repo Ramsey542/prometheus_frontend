@@ -72,7 +72,7 @@ export const walletTrackerApi = {
 
 
 
-  async stopTrackingWallet(walletAddress: string, coin: string = 'sol', disableTpSl: boolean = false): Promise<{ message: string }> {
+  async stopTrackingWallet(walletAddress: string, coin: string = 'sol', disableTpSl: boolean = false, trackingType?: string): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
 
@@ -80,7 +80,12 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/track/wallet/${coin}/${walletAddress}?disable_tp_sl=${disableTpSl}`, {
+      let url = `${config.apiBaseUrl}/track/wallet/${coin}/${walletAddress}?disable_tp_sl=${disableTpSl}`;
+      if (coin === 'sol' && trackingType) {
+        url += `&tracking_type=${trackingType}`;
+      }
+
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -92,7 +97,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async deleteTrackedWallet(walletAddress: string, coin: string = 'sol'): Promise<{ message: string }> {
+  async deleteTrackedWallet(walletAddress: string, coin: string = 'sol', trackingType?: string): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
 
@@ -100,7 +105,12 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/track/tracked-wallet/${coin}/${walletAddress}`, {
+      let url = `${config.apiBaseUrl}/track/tracked-wallet/${coin}/${walletAddress}`;
+      if (coin === 'sol' && trackingType) {
+        url += `?tracking_type=${trackingType}`;
+      }
+
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

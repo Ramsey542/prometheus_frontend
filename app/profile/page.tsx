@@ -155,10 +155,8 @@ function ProfilePageContent() {
   const [tpValidationErrors, setTpValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [slValidationErrors, setSlValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [tpSlIsActive, setTpSlIsActive] = useState<{ [key: string]: boolean }>({})
-  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean }>({ open: false, walletAddress: null, isActive: false })
+  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean, trackingType?: string }>({ open: false, walletAddress: null, isActive: false })
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
-  const [editingField, setEditingField] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState<string>('')
   const [editingCustomName, setEditingCustomName] = useState<string | null>(null)
   const [customNameValue, setCustomNameValue] = useState<string>('')
   const [customNameLoading, setCustomNameLoading] = useState<string | null>(null)
@@ -355,6 +353,7 @@ function ProfilePageContent() {
   useEffect(() => {
     if (user && currentSection === 'tracker-logs' && trackerLogs && trackerLogs.length > 0) {
       trackerLogs.forEach(log => {
+        console.log(`the tracker logs are ${log.token_logo_uri}`)
         const trackedWalletAddr = log.event_type === 'tracked_wallet_activity'
           ? log.wallet_address
           : (log.tracked_wallet_address || log.copied_wallet)
@@ -455,7 +454,11 @@ function ProfilePageContent() {
     e.preventDefault()
     if (!newWalletAddress.trim()) return
     setSelectedTrackingType(defaultTrackingType)
-    setShowTrackingOptions({ open: true, type: 'single' })
+    if (selectedCoin === 'sol') {
+      setShowTrackingOptions({ open: true, type: 'single' })
+    } else {
+      submitAddWallet()
+    }
   }
 
   const submitAddWallet = async () => {
@@ -563,7 +566,7 @@ function ProfilePageContent() {
       setBulkProcessing(false)
     }
   }
-  const handleStopTrackingClick = async (walletAddress: string) => {
+  const handleStopTrackingClick = async (walletAddress: string, trackingType?: string) => {
     try {
       const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
       const isActive = settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : false
@@ -572,26 +575,27 @@ function ProfilePageContent() {
         setStopTrackingModal({
           open: true,
           walletAddress,
-          isActive
-        })
+          isActive,
+          trackingType
+        } as any)
       } else {
-        await handleStopTracking(walletAddress, false)
+        await handleStopTracking(walletAddress, false, trackingType)
       }
     } catch (err: any) {
       console.error('Failed to check wallet settings:', err)
-      await handleStopTracking(walletAddress, false)
+      await handleStopTracking(walletAddress, false, trackingType)
     }
   }
 
-  const handleStopTracking = async (walletAddress: string, disableTpSl: boolean = false) => {
+  const handleStopTracking = async (walletAddress: string, disableTpSl: boolean = false, trackingType?: string) => {
     try {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
 
-      await walletTrackerApi.stopTrackingWallet(walletAddress, selectedCoin, disableTpSl)
+      await walletTrackerApi.stopTrackingWallet(walletAddress, selectedCoin, disableTpSl, trackingType)
       setWalletTrackerSuccess('Wallet tracking stopped successfully!')
-      setStopTrackingModal({ open: false, walletAddress: null, isActive: false })
+      setStopTrackingModal({ open: false, walletAddress: null, isActive: false } as any)
       await fetchTrackedWallets()
       await fetchCopyTradingStats()
     } catch (err: any) {
@@ -606,7 +610,7 @@ function ProfilePageContent() {
     }
   }
 
-  const handleResumeTracking = async (walletAddress: string) => {
+  const handleResumeTracking = async (walletAddress: string, trackingType?: string) => {
     try {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
@@ -614,7 +618,8 @@ function ProfilePageContent() {
 
       const walletData: TrackedWalletCreate = {
         wallet_address: walletAddress,
-        is_active: true
+        is_active: true,
+        tracking_type: trackingType || 'both'
       }
 
       await walletTrackerApi.startTrackingWallet(walletData, selectedCoin)
@@ -632,13 +637,15 @@ function ProfilePageContent() {
     }
   }
 
-  const handleDeleteTrackedWallet = async (walletAddress: string) => {
+  const handleDeleteTrackedWallet = async (walletAddress: string, trackingType?: string) => {
     try {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
-      await walletTrackerApi.deleteTrackedWallet(walletAddress, selectedCoin)
-      setTrackedWallets((prev) => prev.filter((wallet) => wallet.wallet_address !== walletAddress))
+      await walletTrackerApi.deleteTrackedWallet(walletAddress, selectedCoin, trackingType)
+      setTrackedWallets((prev) => prev.filter((wallet) => 
+        wallet.wallet_address !== walletAddress || wallet.tracking_type !== trackingType
+      ))
       setWalletsTotal((prev) => Math.max(prev - 1, 0))
       await fetchTrackedWallets()
       await fetchCopyTradingStats()
@@ -1550,7 +1557,7 @@ function ProfilePageContent() {
 
                     {wallet.is_active ? (
                       <motion.button
-                        onClick={() => handleStopTrackingClick(wallet.wallet_address)}
+                        onClick={() => handleStopTrackingClick(wallet.wallet_address, wallet.tracking_type)}
                         disabled={walletTrackerLoading}
                         className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center gap-2 text-sm font-orbitron font-semibold disabled:opacity-50"
                         whileHover={{ scale: 1.02 }}
@@ -1561,7 +1568,7 @@ function ProfilePageContent() {
                       </motion.button>
                     ) : (
                       <motion.button
-                        onClick={() => handleResumeTracking(wallet.wallet_address)}
+                        onClick={() => handleResumeTracking(wallet.wallet_address, wallet.tracking_type)}
                         disabled={walletTrackerLoading}
                         className="px-4 py-2 bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors duration-300 flex items-center gap-2 text-sm font-orbitron font-semibold disabled:opacity-50"
                         whileHover={{ scale: 1.02 }}
@@ -1572,7 +1579,7 @@ function ProfilePageContent() {
                       </motion.button>
                     )}
                     <motion.button
-                      onClick={() => handleDeleteTrackedWallet(wallet.wallet_address)}
+                      onClick={() => handleDeleteTrackedWallet(wallet.wallet_address, wallet.tracking_type)}
                       disabled={walletTrackerLoading}
                       className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
                       whileHover={{ scale: 1.05 }}
@@ -2637,7 +2644,7 @@ function ProfilePageContent() {
                       <div className="text-center col-span-2 border-t border-molten-gold/10 pt-2">
                         <div className="text-sm font-orbitron text-molten-gold tracking-wide mb-1">TOTAL PNL</div>
                         <div className={`text-xl font-orbitron font-bold ${(wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {(wallet.total_pnl || 0).toFixed(4)} SOL
+                          {(wallet.total_pnl || 0).toFixed(4)} {selectedCoin === 'sol' ? 'SOL' : 'BNB'}
                         </div>
                       </div>
                     </div>
@@ -2933,17 +2940,21 @@ function ProfilePageContent() {
                             src={`/dex-icons/${log.dex_name?.toLowerCase().includes('raydium') ? 'raydium' :
                               log.dex_name?.toLowerCase().includes('meteora') ? 'meteora' :
                                 log.dex_name?.toLowerCase().includes('jupiter') ? 'jupiter' :
-                                  'pumpfun'
+                                  log.dex_name?.toLowerCase().includes('uniswap') ? 'uniswap_v2' :
+                                    log.dex_name?.toLowerCase().includes('metamask') ? 'metamask_router' :
+                                      log.dex_name?.toLowerCase().includes('four.meme') ? 'four.meme' :
+                                        log.dex_name?.toLowerCase().includes('okx') ? 'okx_dex' :
+                                          selectedCoin === 'bnb' ? 'uniswap_v2' : 'pumpfun'
                               }.png`}
-                            alt={log.dex_name || 'Pumpfun'}
-                            className="w-6 h-6 rounded-full"
+                            alt={log.dex_name || (selectedCoin === 'bnb' ? 'Uniswap V2' : 'Pumpfun')}
+                            className="w-10 h-10 rounded-full"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/dex-icons/pumpfun.png';
+                              (e.target as HTMLImageElement).src = selectedCoin === 'bnb' ? '/dex-icons/uniswap_v2.png' : '/dex-icons/pumpfun.png';
                               (e.target as HTMLImageElement).onerror = null;
                             }}
                           />
                           <p className="text-white font-orbitron font-bold">
-                            {log.dex_name || 'Pumpfun'}
+                            {log.dex_name || (selectedCoin === 'bnb' ? 'Uniswap V2' : 'Pumpfun')}
                           </p>
                         </div>
                       </div>
@@ -3936,7 +3947,7 @@ function ProfilePageContent() {
                 Stop Tracking Wallet
               </h3>
               <button
-                onClick={() => setStopTrackingModal({ open: false, walletAddress: null, isActive: false })}
+                onClick={() => setStopTrackingModal({ open: false, walletAddress: null, isActive: false, trackingType: undefined })}
                 className="text-white/60 hover:text-white transition-colors"
               >
                 <X size={24} />
@@ -3963,7 +3974,7 @@ function ProfilePageContent() {
               <motion.button
                 onClick={() => {
                   if (stopTrackingModal.walletAddress) {
-                    handleStopTracking(stopTrackingModal.walletAddress, true)
+                    handleStopTracking(stopTrackingModal.walletAddress, true, stopTrackingModal.trackingType)
                   }
                 }}
                 disabled={walletTrackerLoading}
@@ -3978,7 +3989,7 @@ function ProfilePageContent() {
               <motion.button
                 onClick={() => {
                   if (stopTrackingModal.walletAddress) {
-                    handleStopTracking(stopTrackingModal.walletAddress, false)
+                    handleStopTracking(stopTrackingModal.walletAddress, false, stopTrackingModal.trackingType)
                   }
                 }}
                 disabled={walletTrackerLoading}
@@ -4003,7 +4014,7 @@ function ProfilePageContent() {
           </motion.div>
         </div>
       )}
-      {showTrackingOptions.open && (
+      {selectedCoin === 'sol' && showTrackingOptions.open && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
