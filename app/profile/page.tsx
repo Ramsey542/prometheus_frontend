@@ -588,9 +588,9 @@ function ProfilePageContent() {
     try {
       const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
       const isActive = settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : false
-      const btdFullActive = settings.btd_on_full_sell === true
-      const btdPartialActive = settings.btd_on_partial_sell === true
-
+      const btdFullActive = settings.btd_on_full_sell === true || settings.btd_on_full_sell?.enabled === true
+      const btdPartialActive = settings.btd_on_partial_sell === true || settings.btd_on_partial_sell?.enabled === true
+      console.log('the stop model is ', stopTrackingModal)
       if (isActive || btdFullActive || btdPartialActive) {
         setStopTrackingModal({
           open: true,
@@ -1003,7 +1003,7 @@ function ProfilePageContent() {
         btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
         btd_on_full_sell: settings.btd_on_full_sell ?? false
       }
-      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
+      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type)
 
       setTrackedWallets(prev => prev.map(w =>
         w.wallet_address === walletAddress
@@ -1068,7 +1068,7 @@ function ProfilePageContent() {
         btd_on_full_sell: settings.btd_on_full_sell ?? false
       }
 
-      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
+      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type)
 
       setTrackedWallets(prev => prev.map(w =>
         w.wallet_address === walletAddress
@@ -2421,6 +2421,38 @@ function ProfilePageContent() {
                           />
                         </motion.button>
                       </div>
+
+                      {walletSettings[showWalletSettings].reverse_copy && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="mt-3 space-y-2 border-t border-molten-gold/10 pt-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h5 className="text-[10px] md:text-xs font-orbitron font-semibold text-white">Reverse Delay (seconds)</h5>
+                              <p className="text-white/40 font-space-grotesk text-[8px] md:text-[10px]">Wait before executing reverse trade</p>
+                            </div>
+                            <input
+                              type="number"
+                              value={walletSettings[showWalletSettings].reverse_copy_delay ?? 0}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setWalletSettings(prev => ({
+                                  ...prev,
+                                  [showWalletSettings]: {
+                                    ...prev[showWalletSettings],
+                                    reverse_copy_delay: isNaN(val) ? 0 : val
+                                  }
+                                }));
+                              }}
+                              className="w-20 bg-void-black/50 border border-molten-gold/20 rounded px-2 py-1 text-white font-space-grotesk text-right text-xs focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                              min="0"
+                              step="1"
+                            />
+                          </div>
+                        </motion.div>
+                      )}
                     </div>
                   </div>
 
@@ -4335,23 +4367,25 @@ function ProfilePageContent() {
                 whileTap={{ scale: 0.98 }}
               >
                 <XCircle size={18} />
-                Disable Settings & Stop Tracking
+                {stopTrackingModal.isActive ? 'Disable TP/SL & Stop Tracking' : 'Stop Tracking'}
               </motion.button>
 
-              <motion.button
-                onClick={() => {
-                  if (stopTrackingModal.walletAddress) {
-                    handleStopTracking(stopTrackingModal.walletAddress, false, stopTrackingModal.trackingType)
-                  }
-                }}
-                disabled={walletTrackerLoading}
-                className="w-full px-4 py-3 bg-molten-gold/20 border border-molten-gold/50 text-molten-gold rounded-lg hover:bg-molten-gold/30 transition-colors duration-300 flex items-center justify-center gap-2 font-orbitron font-semibold disabled:opacity-50"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <EyeOff size={18} />
-                Only Stop Copy Trading (Keep Settings Active)
-              </motion.button>
+              {stopTrackingModal.isActive && (
+                <motion.button
+                  onClick={() => {
+                    if (stopTrackingModal.walletAddress) {
+                      handleStopTracking(stopTrackingModal.walletAddress, false, stopTrackingModal.trackingType)
+                    }
+                  }}
+                  disabled={walletTrackerLoading}
+                  className="w-full px-4 py-3 bg-molten-gold/20 border border-molten-gold/50 text-molten-gold rounded-lg hover:bg-molten-gold/30 transition-colors duration-300 flex items-center justify-center gap-2 font-orbitron font-semibold disabled:opacity-50"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <EyeOff size={18} />
+                  Only Stop Copy Trading (Keep TP/SL Active)
+                </motion.button>
+              )}
 
               <motion.button
                 onClick={() => setStopTrackingModal({ open: false, walletAddress: null, isActive: false })}
