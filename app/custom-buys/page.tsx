@@ -300,9 +300,10 @@ export default function CustomBuysPage() {
 
   const handleEditTpSl = (token: TokenBalance) => {
     const position = trackedPositions[token.token_address.toLowerCase()]
-    if (position && position.mirror_address) {
-      setTpSlModal({ open: true, token, mirrorAddress: position.mirror_address })
-      fetchTpSlSettings(position.mirror_address)
+    const mirrorAddr = position?.mirror_address || token.token_address;
+    if (mirrorAddr) {
+      setTpSlModal({ open: true, token, mirrorAddress: mirrorAddr })
+      fetchTpSlSettings(mirrorAddr)
     }
   }
 
@@ -650,11 +651,10 @@ export default function CustomBuysPage() {
                             </motion.button>
                             <motion.button
                               onClick={() => handleEditTpSl(token)}
-                              disabled={!trackedPositions[token.token_address.toLowerCase()]?.mirror_address}
-                              className="px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold text-xs font-orbitron font-semibold rounded hover:bg-molten-gold/20 transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="px-3 py-1.5 bg-molten-gold/10 border border-molten-gold/30 text-molten-gold text-xs font-orbitron font-semibold rounded hover:bg-molten-gold/20 transition-colors flex items-center gap-1"
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
-                              title={!trackedPositions[token.token_address.toLowerCase()]?.mirror_address ? "No mirrored position found" : "Edit TP/SL"}
+                              title="Edit TP/SL"
                             >
                               <Settings size={12} />
                               Edit TP/SL

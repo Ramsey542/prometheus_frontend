@@ -45,9 +45,11 @@ interface WalletSettings {
   entry_on_first_swap: boolean
   buy_once_per_token: boolean
   mirror_sells_enabled: boolean
-  swap_notifications_enabled: boolean
   swap_notification_sound: string
   tracking_type: string
+  reverse_copy: boolean
+  btd_on_partial_sell: any
+  btd_on_full_sell: any
 }
 
 export default function DashboardPage() {
@@ -70,7 +72,10 @@ export default function DashboardPage() {
     mirror_sells_enabled: true,
     swap_notifications_enabled: true,
     swap_notification_sound: 'success.mp3',
-    tracking_type: 'both'
+    tracking_type: 'both',
+    reverse_copy: false,
+    btd_on_partial_sell: { enabled: false, target_token: '' },
+    btd_on_full_sell: { enabled: false, target_token: '' }
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -704,10 +709,89 @@ export default function DashboardPage() {
                     >
                       <motion.div
                         className="w-4 h-4 bg-white rounded-full"
-                        animate={{ x: settings.one_btd_at_a_time ? 18 : 0 }}
+                        animate={{ x: settings.one_btd_at_a_time ? 24 : 0 }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                       />
                     </motion.button>
+                  </div>
+
+                  <div className="col-span-1 md:col-span-2 space-y-4 pt-4 border-t border-molten-gold/10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Trigger BTD on Partial Sell</label>
+                        <div className="group relative">
+                          <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                            <Info size={12} className="text-molten-gold" />
+                          </div>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                            Start BTD monitoring when the mirror wallet performs a partial sell of the token.
+                          </div>
+                        </div>
+                      </div>
+                      <motion.button
+                        onClick={() => setSettings(prev => ({ ...prev, btd_on_partial_sell: { ...(prev.btd_on_partial_sell || {}), enabled: !(prev.btd_on_partial_sell?.enabled) } }))}
+                        className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${settings.btd_on_partial_sell?.enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                        whileTap={{ scale: 0.95 }}
+                        type="button"
+                      >
+                        <motion.div
+                          className="w-4 h-4 bg-white rounded-full"
+                          animate={{ x: settings.btd_on_partial_sell?.enabled ? 24 : 0 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        />
+                      </motion.button>
+                    </div>
+
+                    {settings.btd_on_partial_sell?.enabled && (
+                      <div className="mt-2 ml-4">
+                        <label className="block text-xs font-orbitron text-molten-gold mb-1">Target Token (Optional)</label>
+                        <input
+                          type="text"
+                          value={settings.btd_on_partial_sell?.target_token || ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, btd_on_partial_sell: { ...prev.btd_on_partial_sell, target_token: e.target.value } }))}
+                          className="w-full md:max-w-md bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          placeholder="Paste token address or leave empty for all"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Trigger BTD on Full Sell</label>
+                        <div className="group relative">
+                          <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                            <Info size={12} className="text-molten-gold" />
+                          </div>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                            Start BTD monitoring ONLY when the mirror wallet performs a full sell (100%) of the token.
+                          </div>
+                        </div>
+                      </div>
+                      <motion.button
+                        onClick={() => setSettings(prev => ({ ...prev, btd_on_full_sell: { ...(prev.btd_on_full_sell || {}), enabled: !(prev.btd_on_full_sell?.enabled) } }))}
+                        className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${settings.btd_on_full_sell?.enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                        whileTap={{ scale: 0.95 }}
+                        type="button"
+                      >
+                        <motion.div
+                          className="w-4 h-4 bg-white rounded-full"
+                          animate={{ x: settings.btd_on_full_sell?.enabled ? 24 : 0 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        />
+                      </motion.button>
+                    </div>
+                    {settings.btd_on_full_sell?.enabled && (
+                      <div className="mt-2 ml-4">
+                        <label className="block text-xs font-orbitron text-molten-gold mb-1">Target Token (Optional)</label>
+                        <input
+                          type="text"
+                          value={settings.btd_on_full_sell?.target_token || ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, btd_on_full_sell: { ...prev.btd_on_full_sell, target_token: e.target.value } }))}
+                          className="w-full md:max-w-md bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          placeholder="Paste token address or leave empty for all"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -1052,6 +1136,35 @@ export default function DashboardPage() {
                   <motion.div
                     className="w-4 h-4 bg-white rounded-full"
                     animate={{ x: settings.mirror_sells_enabled ? 24 : 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                </motion.button>
+              </div>
+
+              {/* Reverse Copy Trade Checkbox */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div>
+                    <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Reverse Copy Trade</h4>
+                    <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Invert mirror wallet actions</p>
+                  </div>
+                  <div className="group relative">
+                    <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                      <Info size={12} className="text-molten-gold" />
+                    </div>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                      When enabled, the bot will perform the opposite action of the mirror wallet: when the mirror wallet sells, Prometheus buys.
+                    </div>
+                  </div>
+                </div>
+                <motion.button
+                  onClick={() => setSettings(prev => ({ ...prev, reverse_copy: !prev.reverse_copy }))}
+                  className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.reverse_copy ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    className="w-4 h-4 bg-white rounded-full"
+                    animate={{ x: settings.reverse_copy ? 24 : 0 }}
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />
                 </motion.button>

@@ -13,6 +13,7 @@ import {
   Activity,
   TrendingUp,
   Edit3,
+  Settings,
   Plus,
   Trash2,
   CheckCircle,
@@ -27,7 +28,8 @@ import {
   Download,
   X,
   ExternalLink,
-  Upload
+  Upload,
+  Info
 } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { logout, getProfile } from '../../store/slices/authSlice'
@@ -184,6 +186,9 @@ function ProfilePageContent() {
   const [selectedTrackingType, setSelectedTrackingType] = useState<string>('both')
   const [defaultTrackingType, setDefaultTrackingType] = useState<string>('both')
   const [isUpdatingTrackingType, setIsUpdatingTrackingType] = useState(false)
+  const [trackerActiveView, setTrackerActiveView] = useState<'wallets' | 'tokens'>('wallets')
+  const [trackedPositions, setTrackedPositions] = useState<Record<string, any>>({})
+  const [trackedPositionsLoading, setTrackedPositionsLoading] = useState(false)
 
   const handleToggleDebugMode = async () => {
     if (!profile?.is_admin) return
@@ -322,6 +327,7 @@ function ProfilePageContent() {
         await Promise.all([
           fetchTrackedWallets(),
           fetchCopyTradingStats(),
+          fetchTrackedPositions(),
           currentSection === 'tracker-logs' ? fetchAllLogs() : Promise.resolve()
         ])
         setCoinSwitching(false)
@@ -447,6 +453,18 @@ function ProfilePageContent() {
       }
     } finally {
       setStatsLoading(false)
+    }
+  }
+
+  const fetchTrackedPositions = async () => {
+    try {
+      setTrackedPositionsLoading(true)
+      const positions = await walletTrackerApi.getTrackedPositions(selectedCoin)
+      setTrackedPositions(positions)
+    } catch (err) {
+      console.error('Failed to fetch tracked positions:', err)
+    } finally {
+      setTrackedPositionsLoading(false)
     }
   }
 
@@ -643,7 +661,7 @@ function ProfilePageContent() {
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
       await walletTrackerApi.deleteTrackedWallet(walletAddress, selectedCoin, trackingType)
-      setTrackedWallets((prev) => prev.filter((wallet) => 
+      setTrackedWallets((prev) => prev.filter((wallet) =>
         wallet.wallet_address !== walletAddress || wallet.tracking_type !== trackingType
       ))
       setWalletsTotal((prev) => Math.max(prev - 1, 0))
@@ -832,9 +850,11 @@ function ProfilePageContent() {
           entry_on_first_swap: settings.entry_on_first_swap ?? false,
           buy_once_per_token: settings.buy_once_per_token ?? false,
           mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
-          swap_notifications_enabled: settings.swap_notifications_enabled ?? true,
           swap_notification_sound: settings.swap_notification_sound ?? 'success.mp3',
-          tracking_type: settings.tracking_type ?? 'both'
+          tracking_type: settings.tracking_type ?? 'both',
+          reverse_copy: settings.reverse_copy ?? false,
+          btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
+          btd_on_full_sell: settings.btd_on_full_sell ?? false
         }
       }))
       setTpSlIsActive(prev => ({
@@ -972,7 +992,10 @@ function ProfilePageContent() {
         mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
         sol_trade_amount: settings.sol_trade_amount,
         bnb_trade_amount: settings.bnb_trade_amount,
-        tracking_type: settings.tracking_type ?? 'both'
+        tracking_type: settings.tracking_type ?? 'both',
+        reverse_copy: settings.reverse_copy ?? false,
+        btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
+        btd_on_full_sell: settings.btd_on_full_sell ?? false
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
 
@@ -1033,7 +1056,10 @@ function ProfilePageContent() {
         mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
         sol_trade_amount: settings.sol_trade_amount,
         bnb_trade_amount: settings.bnb_trade_amount,
-        tracking_type: settings.tracking_type ?? 'both'
+        tracking_type: settings.tracking_type ?? 'both',
+        reverse_copy: settings.reverse_copy ?? false,
+        btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
+        btd_on_full_sell: settings.btd_on_full_sell ?? false
       }
 
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin)
@@ -1901,10 +1927,112 @@ function ProfilePageContent() {
                           >
                             <motion.div
                               className="w-3 h-3 bg-white rounded-full"
-                              animate={{ x: walletSettings[showWalletSettings].one_btd_at_a_time ? 16 : 0 }}
+                              animate={{ x: walletSettings[showWalletSettings].one_btd_at_a_time ? 20 : 0 }}
                               transition={{ type: "spring", stiffness: 500, damping: 30 }}
                             />
                           </motion.button>
+                        </div>
+
+                        <div className="col-span-2 space-y-4 pt-4 border-t border-molten-gold/10">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Trigger BTD on Partial Sell</label>
+                              <div className="group relative">
+                                <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                  <Info size={12} className="text-molten-gold" />
+                                </div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                  Start BTD monitoring when the mirror wallet performs a partial sell of the token.
+                                </div>
+                              </div>
+                            </div>
+                            <motion.button
+                              onClick={() => setWalletSettings(prev => ({
+                                ...prev,
+                                [showWalletSettings]: {
+                                  ...prev[showWalletSettings],
+                                  btd_on_partial_sell: { ...(prev[showWalletSettings].btd_on_partial_sell || {}), enabled: !(prev[showWalletSettings].btd_on_partial_sell?.enabled) }
+                                }
+                              }))}
+                              className={`w-10 h-5 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${walletSettings[showWalletSettings].btd_on_partial_sell?.enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <motion.div
+                                className="w-3 h-3 bg-white rounded-full"
+                                animate={{ x: walletSettings[showWalletSettings].btd_on_partial_sell?.enabled ? 20 : 0 }}
+                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                              />
+                            </motion.button>
+                          </div>
+
+                          {walletSettings[showWalletSettings].btd_on_partial_sell?.enabled && (
+                            <div className="mt-2 ml-4 mb-4">
+                              <label className="block text-xs font-orbitron text-molten-gold mb-1">Target Token (Optional)</label>
+                              <input
+                                type="text"
+                                value={walletSettings[showWalletSettings].btd_on_partial_sell?.target_token || ''}
+                                onChange={(e) => setWalletSettings(prev => ({
+                                  ...prev,
+                                  [showWalletSettings]: {
+                                    ...prev[showWalletSettings],
+                                    btd_on_partial_sell: { ...prev[showWalletSettings].btd_on_partial_sell, target_token: e.target.value }
+                                  }
+                                }))}
+                                className="w-full md:max-w-md bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                                placeholder="Paste token address or leave empty for all"
+                              />
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Trigger BTD on Full Sell</label>
+                              <div className="group relative">
+                                <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                  <Info size={12} className="text-molten-gold" />
+                                </div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                  Start BTD monitoring ONLY when the mirror wallet performs a full sell (100%) of the token.
+                                </div>
+                              </div>
+                            </div>
+                            <motion.button
+                              onClick={() => setWalletSettings(prev => ({
+                                ...prev,
+                                [showWalletSettings]: {
+                                  ...prev[showWalletSettings],
+                                  btd_on_full_sell: { ...(prev[showWalletSettings].btd_on_full_sell || {}), enabled: !(prev[showWalletSettings].btd_on_full_sell?.enabled) }
+                                }
+                              }))}
+                              className={`w-10 h-5 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${walletSettings[showWalletSettings].btd_on_full_sell?.enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <motion.div
+                                className="w-3 h-3 bg-white rounded-full"
+                                animate={{ x: walletSettings[showWalletSettings].btd_on_full_sell?.enabled ? 20 : 0 }}
+                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                              />
+                            </motion.button>
+                          </div>
+
+                          {walletSettings[showWalletSettings].btd_on_full_sell?.enabled && (
+                            <div className="mt-2 ml-4">
+                              <label className="block text-xs font-orbitron text-molten-gold mb-1">Target Token (Optional)</label>
+                              <input
+                                type="text"
+                                value={walletSettings[showWalletSettings].btd_on_full_sell?.target_token || ''}
+                                onChange={(e) => setWalletSettings(prev => ({
+                                  ...prev,
+                                  [showWalletSettings]: {
+                                    ...prev[showWalletSettings],
+                                    btd_on_full_sell: { ...prev[showWalletSettings].btd_on_full_sell, target_token: e.target.value }
+                                  }
+                                }))}
+                                className="w-full md:max-w-md bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                                placeholder="Paste token address or leave empty for all"
+                              />
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}
@@ -2252,6 +2380,41 @@ function ProfilePageContent() {
                           />
                         </motion.button>
                       </div>
+
+                      {/* Reverse Copy Trade Checkbox */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <h5 className="text-sm font-orbitron font-semibold text-white mb-1">Reverse Copy Trade</h5>
+                            <p className="text-white/40 font-space-grotesk text-[10px] md:text-xs">Invert mirror wallet actions</p>
+                          </div>
+                          <div className="group relative">
+                            <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                              <Info size={12} className="text-molten-gold" />
+                            </div>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                              When enabled, the bot will perform the opposite action of the mirror wallet: when the mirror wallet sells, Prometheus buys.
+                            </div>
+                          </div>
+                        </div>
+                        <motion.button
+                          onClick={() => setWalletSettings(prev => ({
+                            ...prev,
+                            [showWalletSettings]: {
+                              ...prev[showWalletSettings],
+                              reverse_copy: !prev[showWalletSettings].reverse_copy
+                            }
+                          }))}
+                          className={`w-10 h-5 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${walletSettings[showWalletSettings].reverse_copy ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <motion.div
+                            className="w-3 h-3 bg-white rounded-full"
+                            animate={{ x: walletSettings[showWalletSettings].reverse_copy ? 20 : 0 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          />
+                        </motion.button>
+                      </div>
                     </div>
                   </div>
 
@@ -2521,11 +2684,10 @@ function ProfilePageContent() {
         )}
       </div>
     </div>
-  )
-
+  );
   const renderTrackerLogs = () => {
     return (
-      <div className="max-w-6xl mx-auto space-y-4 md:space-y-8">
+      <section className="max-w-6xl mx-auto space-y-4 md:space-y-8">
         <div className="flex items-center justify-between">
           <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold">
             Tracker Logs
@@ -2551,7 +2713,27 @@ function ProfilePageContent() {
                 <TrendingUp size={20} />
                 Wallet Performance Overview
               </h3>
-              {copyTradingStats.wallet_stats.length > 6 && (
+              <div className="flex bg-void-black/50 p-1 rounded-lg border border-molten-gold/20 mr-4">
+                <button
+                  onClick={() => setTrackerActiveView('wallets')}
+                  className={`px-4 py-1 rounded-md text-xs font-orbitron font-bold transition-all duration-300 ${trackerActiveView === 'wallets'
+                    ? 'bg-molten-gold text-void-black shadow-lg shadow-molten-gold/20'
+                    : 'text-molten-gold/60 hover:text-molten-gold'
+                    }`}
+                >
+                  Wallets
+                </button>
+                <button
+                  onClick={() => setTrackerActiveView('tokens')}
+                  className={`px-4 py-1 rounded-md text-xs font-orbitron font-bold transition-all duration-300 ${trackerActiveView === 'tokens'
+                    ? 'bg-molten-gold text-void-black shadow-lg shadow-molten-gold/20'
+                    : 'text-molten-gold/60 hover:text-molten-gold'
+                    }`}
+                >
+                  Tokens
+                </button>
+              </div>
+              {copyTradingStats.wallet_stats.length > 6 && trackerActiveView === 'wallets' && (
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => setWalletPerfPage(prev => Math.max(0, prev - 1))}
@@ -2576,81 +2758,238 @@ function ProfilePageContent() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {copyTradingStats.wallet_stats
-                .slice(walletPerfPage * 6, (walletPerfPage + 1) * 6)
-                .map((wallet, index) => (
-                  <motion.div
-                    key={wallet.wallet_address}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <Wallet size={20} className="text-molten-gold flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-orbitron font-bold text-white text-sm truncate">
-                              {walletSettings[wallet.wallet_address]?.custom_name || formatWalletAddress(wallet.wallet_address)}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={`https://gmgn.ai/${selectedCoin === 'sol' ? 'sol' : 'bsc'}/address/${wallet.wallet_address}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] text-molten-gold/60 hover:text-molten-gold transition-colors font-orbitron flex items-center gap-0.5"
-                              >
-                                GMGN <ExternalLink size={8} />
-                              </a>
-                              <a
-                                href={selectedCoin === 'sol'
-                                  ? `https://solscan.io/account/${wallet.wallet_address}`
-                                  : `https://bscscan.com/address/${wallet.wallet_address}`
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] text-molten-gold/60 hover:text-molten-gold transition-colors font-orbitron flex items-center gap-0.5"
-                              >
-                                {selectedCoin === 'sol' ? 'SOLSCAN' : 'BSCSCAN'} <ExternalLink size={8} />
-                              </a>
+            {trackerActiveView === 'wallets' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {copyTradingStats.wallet_stats
+                  .slice(walletPerfPage * 6, (walletPerfPage + 1) * 6)
+                  .map((wallet, index) => {
+                    const settings = walletSettings[wallet.wallet_address];
+                    const tpSlActive = settings?.tp_sl_is_active ?? (trackedWallets.find(w => w.wallet_address === wallet.wallet_address)?.is_default ? (defaultTrackingType === 'both' || defaultTrackingType === 'tp_sl') : false);
+
+                    return (
+                      <motion.div
+                        key={wallet.wallet_address}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="bg-void-black/30 border border-molten-gold/20 rounded-lg p-4 relative overflow-hidden group"
+                      >
+                        <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-100 transition-opacity">
+                          <div className="group/tooltip relative">
+                            {tpSlActive ? (
+                              <Activity size={16} className="text-green-400 animate-pulse" />
+                            ) : (
+                              <Activity size={16} className="text-white/20" />
+                            )}
+                            <div className="absolute top-full right-0 mt-2 p-2 bg-void-black border border-molten-gold/20 rounded shadow-xl text-[10px] text-white whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity z-50">
+                              {tpSlActive ? 'TP/SL Monitoring Active' : 'TP/SL Monitoring Disabled'}
+                              {tpSlActive && settings && (
+                                <div className="mt-1 flex flex-col gap-0.5 border-t border-white/10 pt-1">
+                                  {(Array.isArray(settings.take_profit_levels) ? settings.take_profit_levels : JSON.parse(settings.take_profit_levels || "[]")).map((l: any, i: number) => (
+                                    <span key={i} className="text-green-400">TP {i + 1}: +{l.profit_percentage}% (Sell {l.sell_percentage}%)</span>
+                                  ))}
+                                  {(Array.isArray(settings.stop_loss_levels) ? settings.stop_loss_levels : JSON.parse(settings.stop_loss_levels || "[]")).map((l: any, i: number) => (
+                                    <span key={i} className="text-red-400">SL {i + 1}: -{l.loss_percentage}% (Sell {l.sell_percentage}%)</span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
-                          {walletSettings[wallet.wallet_address]?.custom_name && (
-                            <p className="text-white/60 font-space-grotesk font-mono text-xs truncate">
-                              {formatWalletAddress(wallet.wallet_address)}
-                            </p>
-                          )}
                         </div>
-                      </div>
-                      <div className={`px-2 py-1 rounded-full text-xs font-orbitron font-bold flex-shrink-0 ${wallet.is_active
-                        ? 'bg-green-500/20 text-green-400 border border-green-500/50'
-                        : 'bg-red-500/20 text-red-400 border border-red-500/50'
-                        }`}>
-                        {wallet.is_active ? 'ACTIVE' : 'INACTIVE'}
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center">
-                        <div className="text-sm font-orbitron text-molten-gold tracking-wide mb-1">MATCHES</div>
-                        <div className="text-xl font-orbitron font-bold text-white">{wallet.total_matches}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-orbitron text-blue-400 tracking-wide mb-1">SUCCESS RATE</div>
-                        <div className="text-xl font-orbitron font-bold text-white">{wallet.success_rate.toFixed(1)}%</div>
-                      </div>
-                      <div className="text-center col-span-2 border-t border-molten-gold/10 pt-2">
-                        <div className="text-sm font-orbitron text-molten-gold tracking-wide mb-1">TOTAL PNL</div>
-                        <div className={`text-xl font-orbitron font-bold ${(wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {(wallet.total_pnl || 0).toFixed(4)} {selectedCoin === 'sol' ? 'SOL' : 'BNB'}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <Wallet size={20} className="text-molten-gold flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-orbitron font-bold text-white text-sm truncate">
+                                  {settings?.custom_name || formatWalletAddress(wallet.wallet_address)}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <a
+                                    href={`https://gmgn.ai/${selectedCoin === 'sol' ? 'sol' : 'bsc'}/address/${wallet.wallet_address}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-molten-gold/60 hover:text-molten-gold transition-colors font-orbitron flex items-center gap-0.5"
+                                  >
+                                    GMGN <ExternalLink size={8} />
+                                  </a>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {tpSlActive && (
+                                  <span className="flex items-center gap-1 text-[10px] font-orbitron font-bold text-green-400 uppercase tracking-tighter">
+                                    <Activity size={10} /> TP/SL ON
+                                  </span>
+                                )}
+                                {!tpSlActive && (
+                                  <span className="text-[10px] font-orbitron font-bold text-white/30 uppercase tracking-tighter">
+                                    TP/SL OFF
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`px-2 py-1 rounded-full text-[10px] font-orbitron font-bold flex-shrink-0 ${wallet.is_active
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                            : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                            }`}>
+                            {wallet.is_active ? 'ACTIVE' : 'INACTIVE'}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-            </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="text-center">
+                            <div className="text-[10px] font-orbitron text-molten-gold tracking-wide mb-1 opacity-60">MATCHES</div>
+                            <div className="text-lg font-orbitron font-bold text-white">{wallet.total_matches}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[10px] font-orbitron text-blue-400 tracking-wide mb-1 opacity-60">SUCCESS RATE</div>
+                            <div className="text-lg font-orbitron font-bold text-white">{wallet.success_rate.toFixed(1)}%</div>
+                          </div>
+                          <div className="text-center col-span-2 border-t border-molten-gold/10 pt-2 flex flex-col items-center">
+                            <div className="text-[10px] font-orbitron text-molten-gold tracking-wide mb-0.5 opacity-60">TOTAL PNL</div>
+                            <div className={`text-lg font-orbitron font-bold ${(wallet.total_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {(wallet.total_pnl || 0).toFixed(4)} {selectedCoin === 'sol' ? 'SOL' : 'BNB'}
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {Object.keys(trackedPositions).length === 0 ? (
+                  <div className="text-center py-10 bg-void-black/20 rounded-lg border border-dashed border-molten-gold/20">
+                    <Activity size={32} className="text-molten-gold/40 mx-auto mb-3" />
+                    <p className="text-white/60 font-orbitron text-sm">No active token positions tracked</p>
+                    <p className="text-white/40 font-space-grotesk text-xs mt-1">Positions will appear here when tokens are held with TP/SL active</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(trackedPositions).map(([address, pos]: [string, any], index) => {
+                      const latestPrice = pos.current_price?.[pos.current_price.length - 1];
+                      const changePercent = latestPrice ? ((latestPrice.price - pos.buy_price) / pos.buy_price) * 100 : 0;
+
+                      const tokenInfo = trackerLogs.find(l => l.target_token?.toLowerCase() === address.toLowerCase());
+                      const tokenName = tokenInfo?.token_name;
+                      const tokenSymbol = tokenInfo?.token_symbol;
+                      const tokenLogo = tokenInfo?.token_logo_uri;
+
+                      return (
+                        <motion.div
+                          key={address}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="bg-void-black/40 border border-molten-gold/30 rounded-lg p-4 group relative"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {tokenLogo ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={tokenLogo}
+                                  alt={tokenSymbol || 'token'}
+                                  className="w-10 h-10 rounded-full border border-molten-gold/20 object-cover flex-shrink-0"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-molten-gold/10 border border-molten-gold/20 flex items-center justify-center text-molten-gold font-orbitron font-bold text-xs flex-shrink-0">
+                                  {tokenSymbol?.slice(0, 2).toUpperCase() || address.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-base font-orbitron font-bold text-white truncate">
+                                  {tokenName || tokenSymbol || formatWalletAddress(address)}
+                                </p>
+                                <p className="text-xs text-white/40 font-space-grotesk truncate">
+                                  Copied: {walletSettings[pos.mirror_address]?.custom_name || trackedWallets.find(w => w.wallet_address === pos.mirror_address)?.custom_name || formatWalletAddress(pos.mirror_address || '')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <div className={`text-sm font-orbitron font-bold px-3 py-1.5 rounded-full ${changePercent >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
+                              </div>
+                              <div className="flex items-center gap-1.5 px-1">
+                                <Activity size={10} className={pos.tp_sl_active ? 'text-green-400 animate-pulse' : 'text-white/20'} />
+                                <span className={`text-[9px] font-orbitron font-bold tracking-tighter ${pos.tp_sl_active ? 'text-green-400/80' : 'text-white/20'}`}>
+                                  {pos.tp_sl_active ? 'TP/SL ACTIVE' : 'TP/SL OFF'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 mb-4">
+                            <div className="flex justify-between items-center text-sm font-orbitron">
+                              <span className="text-white/40 uppercase">Buy Price</span>
+                              <span className="text-white font-bold font-mono">${pos.buy_price < 0.0001 ? pos.buy_price.toExponential(4) : pos.buy_price.toFixed(8)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm font-orbitron group/price">
+                              <span className="text-white/40 uppercase">Current Price</span>
+                              <div className="relative">
+                                <span className="text-molten-gold font-bold text-[14px]">${latestPrice?.price < 0.0001 ? latestPrice.price.toExponential(4) : latestPrice?.price.toFixed(8)}</span>
+                                {/* Price History Tooltip */}
+                                <div className="absolute bottom-full right-0 mb-2 w-64 bg-black/95 border border-molten-gold/40 rounded-lg p-3 z-50 opacity-0 group-hover/price:opacity-100 transition-opacity pointer-events-none shadow-2xl backdrop-blur-md">
+                                  <div className="flex items-center gap-2 mb-2 border-b border-molten-gold/20 pb-1.5">
+                                    {tokenLogo && (
+                                      /* eslint-disable-next-line @next/next/no-img-element */
+                                      <img src={tokenLogo} alt="" className="w-5 h-5 rounded-full border border-molten-gold/20" />
+                                    )}
+                                    <p className="text-xs font-orbitron font-bold text-molten-gold uppercase tracking-wider">
+                                      {tokenSymbol || 'Price Activity'}
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {(pos.current_price || []).slice().reverse().map((h: any, i: number) => (
+                                      <div key={i} className="flex justify-between gap-3 text-[11px]">
+                                        <span className="text-white/50 font-space-grotesk">{new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                                        <span className="text-white font-mono font-bold">$ {h.price.toFixed(8)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="border-t border-molten-gold/10 pt-3 space-y-2">
+                            <p className="text-[11px] font-orbitron text-molten-gold/60 uppercase tracking-widest mb-1">TP/SL Targets</p>
+                            {pos.targets?.map((target: any, idx: number) => {
+                              const distanceToTarget = latestPrice ? ((target.target_price - latestPrice.price) / latestPrice.price) * 100 : 0;
+                              return (
+                                <div key={idx} className="flex flex-col gap-0.5">
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span className={`font-orbitron font-bold ${target.type === 'tp' ? 'text-green-400' : 'text-red-400'}`}>
+                                      {target.type.toUpperCase()} {target.percentage}%
+                                    </span>
+                                    <span className="text-white/60 font-mono">${target.target_price < 0.0001 ? target.target_price.toExponential(4) : target.target_price.toFixed(8)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-[10px] opacity-60">
+                                    <span className="text-white/40 italic">Distance</span>
+                                    <span className={distanceToTarget > 0 ? 'text-blue-400' : 'text-orange-400'}>
+                                      {distanceToTarget > 0 ? '+' : ''}{distanceToTarget.toFixed(2)}%
+                                    </span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {(!pos.targets || pos.targets.length === 0) && (
+                              <p className="text-xs text-white/30 italic font-orbitron">No levels active</p>
+                            )}
+                          </div>
+
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -3239,7 +3578,7 @@ function ProfilePageContent() {
             </div>
           )}
         </div>
-      </div>
+      </section>
     )
   }
 
