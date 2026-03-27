@@ -730,9 +730,11 @@ function ProfilePageContent() {
     try {
       setStatsLoading(true)
       await Promise.all([
+        dispatch(getProfile(selectedCoin)).unwrap(),
         fetchCopyTradingStats(),
         fetchTrackedWallets(1),
-        fetchAllLogs(1)
+        fetchAllLogs(1),
+        fetchTrackedPositions()
       ])
     } catch (err) {
       console.error('Refresh failed:', err)

@@ -219,7 +219,7 @@ export const walletTrackerApi = {
       if (!accessToken) {
         throw new WalletTrackerApiError('No access token found', 401);
       }
-
+      console.log('the settings is', settings);
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${coin}/${walletAddress}/settings`, {
         method: 'PUT',
         headers: {
@@ -228,6 +228,7 @@ export const walletTrackerApi = {
         },
         body: JSON.stringify(settings),
       });
+      console.log('the full response is', response);
 
       return await handleResponse(response);
     });
