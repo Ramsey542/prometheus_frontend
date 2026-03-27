@@ -157,7 +157,7 @@ function ProfilePageContent() {
   const [tpValidationErrors, setTpValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [slValidationErrors, setSlValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [tpSlIsActive, setTpSlIsActive] = useState<{ [key: string]: boolean }>({})
-  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean, trackingType?: string }>({ open: false, walletAddress: null, isActive: false })
+  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean, btdFullActive?: boolean, btdPartialActive?: boolean, trackingType?: string }>({ open: false, walletAddress: null, isActive: false })
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [editingCustomName, setEditingCustomName] = useState<string | null>(null)
   const [customNameValue, setCustomNameValue] = useState<string>('')
@@ -588,12 +588,16 @@ function ProfilePageContent() {
     try {
       const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
       const isActive = settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : false
+      const btdFullActive = settings.btd_on_full_sell === true
+      const btdPartialActive = settings.btd_on_partial_sell === true
 
-      if (isActive) {
+      if (isActive || btdFullActive || btdPartialActive) {
         setStopTrackingModal({
           open: true,
           walletAddress,
           isActive,
+          btdFullActive,
+          btdPartialActive,
           trackingType
         } as any)
       } else {
@@ -4295,16 +4299,23 @@ function ProfilePageContent() {
 
             <div className="mb-6">
               <p className="text-white font-space-grotesk mb-4">
-                This wallet has active Take Profit / Stop Loss settings. How would you like to proceed?
+                This wallet has active Take Profit / Stop Loss or Buy the Dip settings. How would you like to proceed?
               </p>
-              {stopTrackingModal.isActive && (
+              {(stopTrackingModal.isActive || stopTrackingModal.btdFullActive || stopTrackingModal.btdPartialActive) && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
                   <p className="text-yellow-400 font-orbitron font-semibold text-sm mb-2">
                     Active Settings:
                   </p>
-                  <p className="text-white/80 font-space-grotesk text-sm">
-                    • Take Profit / Stop Loss is active
-                  </p>
+                  {stopTrackingModal.isActive && (
+                    <p className="text-white/80 font-space-grotesk text-sm mb-1">
+                      • Take Profit / Stop Loss is active
+                    </p>
+                  )}
+                  {(stopTrackingModal.btdFullActive || stopTrackingModal.btdPartialActive) && (
+                    <p className="text-white/80 font-space-grotesk text-sm">
+                      • Buy the Dip (on sell) is active. By stopping tracking, this will be turned off as well unless tracking starts again.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -4322,7 +4333,7 @@ function ProfilePageContent() {
                 whileTap={{ scale: 0.98 }}
               >
                 <XCircle size={18} />
-                Disable TP/SL & Stop Tracking
+                Disable Settings & Stop Tracking
               </motion.button>
 
               <motion.button
@@ -4337,7 +4348,7 @@ function ProfilePageContent() {
                 whileTap={{ scale: 0.98 }}
               >
                 <EyeOff size={18} />
-                Only Stop Copy Trading (Keep TP/SL)
+                Only Stop Copy Trading (Keep Settings Active)
               </motion.button>
 
               <motion.button
