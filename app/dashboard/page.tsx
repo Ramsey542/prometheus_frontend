@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle, XCircle, ChevronDown, ChevronUp, Plus, Trash2, Copy } from 'lucide-react'
 import DashboardLayout from '../../components/DashboardLayout'
@@ -50,6 +50,7 @@ interface WalletSettings {
   reverse_copy: boolean
   btd_on_partial_sell: any
   btd_on_full_sell: any
+  swap_notifications_enabled: boolean
 }
 
 export default function DashboardPage() {
@@ -179,15 +180,7 @@ export default function DashboardPage() {
   const dispatch = useDispatch<AppDispatch>()
   const router = useRouter()
 
-  useEffect(() => {
-    if (profile) {
-      fetchSettings()
-      fetchAvailableSounds()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile])
-
-  const fetchAvailableSounds = async () => {
+  const fetchAvailableSounds = useCallback(async () => {
     try {
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/sounds`, {
         headers: {
@@ -201,18 +194,9 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Failed to fetch sounds:', err)
     }
-  }
+  }, [])
 
-  const testHearSound = (soundFile: string) => {
-    if (playingSound) return
-    setPlayingSound(soundFile)
-    const audio = new Audio(`/sounds/${soundFile}`)
-    audio.play().finally(() => {
-      setTimeout(() => setPlayingSound(null), 2000)
-    })
-  }
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings`, {
         headers: {
@@ -240,6 +224,22 @@ export default function DashboardPage() {
     } finally {
       setInitialLoading(false)
     }
+  }, [router])
+
+  useEffect(() => {
+    if (profile) {
+      fetchSettings()
+      fetchAvailableSounds()
+    }
+  }, [profile, fetchSettings, fetchAvailableSounds])
+
+  const testHearSound = (soundFile: string) => {
+    if (playingSound) return
+    setPlayingSound(soundFile)
+    const audio = new Audio(`/sounds/${soundFile}`)
+    audio.play().finally(() => {
+      setTimeout(() => setPlayingSound(null), 2000)
+    })
   }
 
   const handleSave = async () => {
