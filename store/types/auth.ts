@@ -110,19 +110,19 @@ export interface TrackedWallet {
   swap_notification_sound?: string;
   sol_trade_amount?: number | null;
   bnb_trade_amount?: number | null;
-  tracking_type?: string;
+  tracking_type?: any;
 }
 
 export interface TrackedWalletCreate {
   wallet_address: string;
   is_active?: boolean;
-  tracking_type?: string;
+  tracking_type?: any;
 }
 
 export interface TrackedWalletListCreate {
   wallets: string[];
   is_active?: boolean;
-  tracking_type?: string;
+  tracking_type?: any;
 }
 
 export interface CopyTradingLog {

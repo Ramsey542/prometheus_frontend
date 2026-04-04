@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { logout, getProfile } from '../../store/slices/authSlice'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileLayout from '../../components/ProfileLayout'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
@@ -113,6 +113,21 @@ const formatDate = (dateString: string, includeSeconds: boolean = false): string
   }
 }
 
+const formatDurationTooltip = (seconds: number) => {
+  if (seconds === 0) return 'All Time'
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+
+  const parts = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0) parts.push(`${minutes}m`)
+  if (s > 0) parts.push(`${s}s`)
+  return parts.join(' ') || '0s'
+}
+
 function ProfilePageContent() {
   const dispatch = useAppDispatch()
   const router = useRouter()
@@ -148,7 +163,7 @@ function ProfilePageContent() {
   const [tradeAmountSuccess, setTradeAmountSuccess] = useState<string | null>(null)
   const [tradeAmountError, setTradeAmountError] = useState<string | null>(null)
   const [walletSettings, setWalletSettings] = useState<{ [key: string]: any }>({})
-  const [showWalletSettings, setShowWalletSettings] = useState<string | null>(null)
+  const [showWalletSettings, setShowWalletSettings] = useState<number | string | null>(null)
   const [walletSettingsLoading, setWalletSettingsLoading] = useState(false)
   const [walletSettingsSuccess, setWalletSettingsSuccess] = useState<string | null>(null)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState<{ [key: string]: boolean }>({})
@@ -157,11 +172,11 @@ function ProfilePageContent() {
   const [tpValidationErrors, setTpValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [slValidationErrors, setSlValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [tpSlIsActive, setTpSlIsActive] = useState<{ [key: string]: boolean }>({})
-  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean, btdFullActive?: boolean, btdPartialActive?: boolean, trackingType?: string }>({ open: false, walletAddress: null, isActive: false })
+  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean, btdFullActive?: boolean, btdPartialActive?: boolean, trackingType?: string, walletId?: number }>({ open: false, walletAddress: null, isActive: false })
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
-  const [editingCustomName, setEditingCustomName] = useState<string | null>(null)
+  const [editingCustomName, setEditingCustomName] = useState<number | string | null>(null)
   const [customNameValue, setCustomNameValue] = useState<string>('')
-  const [customNameLoading, setCustomNameLoading] = useState<string | null>(null)
+  const [customNameLoading, setCustomNameLoading] = useState<number | string | null>(null)
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawDestination, setWithdrawDestination] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
@@ -211,14 +226,9 @@ function ProfilePageContent() {
   }, [profile?.is_debug_mode])
 
   const currentSection = searchParams.get('section') || 'overview'
-  useEffect(() => {
-    if (user) {
-      dispatch(getProfile(selectedCoin))
-      fetchDefaultSettings()
-    }
-  }, [dispatch, user, selectedCoin])
 
-  const fetchDefaultSettings = async () => {
+
+  const fetchDefaultSettings = useCallback(async () => {
     try {
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
         headers: {
@@ -232,7 +242,14 @@ function ProfilePageContent() {
     } catch (err) {
       console.error('Failed to fetch default settings:', err)
     }
-  }
+  }, [selectedCoin])
+
+  useEffect(() => {
+    if (user) {
+      dispatch(getProfile(selectedCoin))
+      fetchDefaultSettings()
+    }
+  }, [dispatch, user, selectedCoin, fetchDefaultSettings])
 
   const handleUpdateGlobalTrackingType = async (type: string) => {
     try {
@@ -348,8 +365,8 @@ function ProfilePageContent() {
   useEffect(() => {
     if (user && currentSection === 'wallet-tracker' && trackedWallets && trackedWallets.length > 0) {
       trackedWallets.forEach(wallet => {
-        if (!walletSettings[wallet.wallet_address]) {
-          fetchWalletSettings(wallet.wallet_address)
+        if (!walletSettings[wallet.id || wallet.wallet_address]) {
+          fetchWalletSettings(wallet.wallet_address, selectedCoin, wallet.id)
         }
       })
     }
@@ -363,8 +380,13 @@ function ProfilePageContent() {
         const trackedWalletAddr = log.event_type === 'tracked_wallet_activity'
           ? log.wallet_address
           : (log.tracked_wallet_address || log.copied_wallet)
-        if (trackedWalletAddr && !walletSettings[trackedWalletAddr]) {
-          fetchWalletSettings(trackedWalletAddr)
+
+        if (trackedWalletAddr) {
+          const wallet = trackedWallets.find(w => w.wallet_address === trackedWalletAddr);
+          const key = wallet?.id || trackedWalletAddr;
+          if (!walletSettings[key]) {
+            fetchWalletSettings(trackedWalletAddr, selectedCoin, wallet?.id);
+          }
         }
       })
     }
@@ -373,9 +395,11 @@ function ProfilePageContent() {
 
   useEffect(() => {
     if (user && currentSection === 'tracker-logs' && copyTradingStats?.wallet_stats) {
-      copyTradingStats.wallet_stats.forEach(wallet => {
-        if (!walletSettings[wallet.wallet_address]) {
-          fetchWalletSettings(wallet.wallet_address)
+      copyTradingStats.wallet_stats.forEach(walletStat => {
+        const wallet = trackedWallets.find(w => w.wallet_address === walletStat.wallet_address);
+        const key = wallet?.id || walletStat.wallet_address;
+        if (!walletSettings[key]) {
+          fetchWalletSettings(walletStat.wallet_address, selectedCoin, wallet?.id)
         }
       })
     }
@@ -471,7 +495,7 @@ function ProfilePageContent() {
   const handleAddWallet = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newWalletAddress.trim()) return
-    setSelectedTrackingType(defaultTrackingType)
+    setSelectedTrackingType('')
     if (selectedCoin === 'sol') {
       setShowTrackingOptions({ open: true, type: 'single' })
     } else {
@@ -584,16 +608,16 @@ function ProfilePageContent() {
       setBulkProcessing(false)
     }
   }
-  const handleStopTrackingClick = async (walletAddress: string, trackingType?: string) => {
+  const handleStopTrackingClick = async (walletId: number, walletAddress: string, trackingType?: string) => {
     try {
       const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
       const isActive = settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : false
       const btdFullActive = settings.btd_on_full_sell === true || settings.btd_on_full_sell?.enabled === true
       const btdPartialActive = settings.btd_on_partial_sell === true || settings.btd_on_partial_sell?.enabled === true
-      console.log('the stop model is ', stopTrackingModal)
       if (isActive || btdFullActive || btdPartialActive) {
         setStopTrackingModal({
           open: true,
+          walletId,
           walletAddress,
           isActive,
           btdFullActive,
@@ -601,22 +625,21 @@ function ProfilePageContent() {
           trackingType
         } as any)
       } else {
-        await handleStopTracking(walletAddress, false, trackingType)
+        await handleStopTracking(walletId, false)
       }
     } catch (err: any) {
       console.error('Failed to check wallet settings:', err)
-      await handleStopTracking(walletAddress, false, trackingType)
+      await handleStopTracking(walletId, false)
     }
   }
 
-  const handleStopTracking = async (walletAddress: string, disableTpSl: boolean = false, trackingType?: string) => {
+  const handleStopTracking = async (walletId: any, disableTpSl: boolean = false) => {
     try {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
-
-      await walletTrackerApi.stopTrackingWallet(walletAddress, selectedCoin, disableTpSl, trackingType)
-      setWalletTrackerSuccess('Wallet tracking stopped successfully!')
+      await walletTrackerApi.stopTrackingWallet(walletId, disableTpSl)
+      setWalletTrackerSuccess('Wallet tracking stopped successfully')
       setStopTrackingModal({ open: false, walletAddress: null, isActive: false } as any)
       await fetchTrackedWallets()
       await fetchCopyTradingStats()
@@ -659,14 +682,14 @@ function ProfilePageContent() {
     }
   }
 
-  const handleDeleteTrackedWallet = async (walletAddress: string, trackingType?: string) => {
+  const handleDeleteTrackedWallet = async (walletId: number, trackingType?: string) => {
     try {
       setWalletTrackerLoading(true)
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
-      await walletTrackerApi.deleteTrackedWallet(walletAddress, selectedCoin, trackingType)
+      await walletTrackerApi.deleteTrackedWallet(walletId)
       setTrackedWallets((prev) => prev.filter((wallet) =>
-        wallet.wallet_address !== walletAddress || wallet.tracking_type !== trackingType
+        wallet.id !== walletId || wallet.tracking_type !== trackingType
       ))
       setWalletsTotal((prev) => Math.max(prev - 1, 0))
       await fetchTrackedWallets()
@@ -840,12 +863,13 @@ function ProfilePageContent() {
     }
   }
 
-  const fetchWalletSettings = async (walletAddress: string) => {
+  const fetchWalletSettings = async (walletAddress: string, coin: string = 'sol', walletId?: number) => {
     try {
-      const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, selectedCoin)
+      const settings = await walletTrackerApi.getTrackedWalletSettings(walletAddress, coin, walletId)
+      const indexKey = walletId || walletAddress;
       setWalletSettings(prev => ({
         ...prev,
-        [walletAddress]: {
+        [indexKey]: {
           ...settings,
           take_profit_levels: settings.take_profit_levels && settings.take_profit_levels.length > 0
             ? settings.take_profit_levels
@@ -865,7 +889,7 @@ function ProfilePageContent() {
       }))
       setTpSlIsActive(prev => ({
         ...prev,
-        [walletAddress]: settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : true
+        [indexKey]: settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : true
       }))
     } catch (err) {
       console.error('Failed to fetch wallet settings:', err)
@@ -876,112 +900,115 @@ function ProfilePageContent() {
     return levels.reduce((sum, level) => sum + (level.sell_percentage || 0), 0)
   }
 
-  const addTakeProfitLevel = (walletAddress: string) => {
-    const currentLevels = walletSettings[walletAddress]?.take_profit_levels || []
+  const addTakeProfitLevel = (walletId: string | number) => {
+    const currentLevels = walletSettings[walletId]?.take_profit_levels || []
     setWalletSettings(prev => ({
       ...prev,
-      [walletAddress]: {
-        ...prev[walletAddress],
+      [walletId]: {
+        ...prev[walletId],
         take_profit_levels: [...currentLevels, { profit_percentage: 0, sell_percentage: 0 }]
       }
     }))
-    setShowAllTP(prev => ({ ...prev, [walletAddress]: true }))
+    setShowAllTP(prev => ({ ...prev, [walletId]: true }))
   }
 
-  const removeTakeProfitLevel = (walletAddress: string, index: number) => {
-    const currentLevels = walletSettings[walletAddress]?.take_profit_levels || []
+  const removeTakeProfitLevel = (walletId: string | number, index: number) => {
+    const currentLevels = walletSettings[walletId]?.take_profit_levels || []
     setWalletSettings(prev => ({
       ...prev,
-      [walletAddress]: {
-        ...prev[walletAddress],
+      [walletId]: {
+        ...prev[walletId],
         take_profit_levels: currentLevels.filter((_: any, i: number) => i !== index)
       }
     }))
   }
 
-  const updateTakeProfitLevel = (walletAddress: string, index: number, field: 'profit_percentage' | 'sell_percentage', value: string) => {
-    const currentLevels = walletSettings[walletAddress]?.take_profit_levels || []
+  const updateTakeProfitLevel = (walletId: string | number, index: number, field: 'profit_percentage' | 'sell_percentage', value: string) => {
+    const currentLevels = walletSettings[walletId]?.take_profit_levels || []
     const updatedLevels = [...currentLevels]
     const numValue = value === '' ? 0 : parseFloat(value) || 0
     updatedLevels[index] = { ...updatedLevels[index], [field]: numValue }
     setWalletSettings(prev => ({
       ...prev,
-      [walletAddress]: {
-        ...prev[walletAddress],
+      [walletId]: {
+        ...prev[walletId],
         take_profit_levels: updatedLevels
       }
     }))
 
     const total = calculateTotalSellPercentage(updatedLevels)
     if (total > 100) {
-      setTpValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage cannot exceed 100%' }))
+      setTpValidationErrors(prev => ({ ...prev, [walletId]: 'Total sell percentage cannot exceed 100%' }))
     } else if (total < 100 && updatedLevels.some(l => l.profit_percentage > 0 || l.sell_percentage > 0)) {
-      setTpValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage must equal 100%' }))
+      setTpValidationErrors(prev => ({ ...prev, [walletId]: 'Total sell percentage must equal 100%' }))
     } else {
-      setTpValidationErrors(prev => ({ ...prev, [walletAddress]: null }))
+      setTpValidationErrors(prev => ({ ...prev, [walletId]: null }))
     }
   }
 
-  const addStopLossLevel = (walletAddress: string) => {
-    const currentLevels = walletSettings[walletAddress]?.stop_loss_levels || []
+  const addStopLossLevel = (walletId: string | number) => {
+    const currentLevels = walletSettings[walletId]?.stop_loss_levels || []
     setWalletSettings(prev => ({
       ...prev,
-      [walletAddress]: {
-        ...prev[walletAddress],
+      [walletId]: {
+        ...prev[walletId],
         stop_loss_levels: [...currentLevels, { loss_percentage: 0, sell_percentage: 0 }]
       }
     }))
-    setShowAllSL(prev => ({ ...prev, [walletAddress]: true }))
+    setShowAllSL(prev => ({ ...prev, [walletId]: true }))
   }
 
-  const removeStopLossLevel = (walletAddress: string, index: number) => {
-    const currentLevels = walletSettings[walletAddress]?.stop_loss_levels || []
+  const removeStopLossLevel = (walletId: string | number, index: number) => {
+    const currentLevels = walletSettings[walletId]?.stop_loss_levels || []
     setWalletSettings(prev => ({
       ...prev,
-      [walletAddress]: {
-        ...prev[walletAddress],
+      [walletId]: {
+        ...prev[walletId],
         stop_loss_levels: currentLevels.filter((_: any, i: number) => i !== index)
       }
     }))
   }
 
-  const updateStopLossLevel = (walletAddress: string, index: number, field: 'loss_percentage' | 'sell_percentage', value: string) => {
-    const currentLevels = walletSettings[walletAddress]?.stop_loss_levels || []
+  const updateStopLossLevel = (walletId: string | number, index: number, field: 'loss_percentage' | 'sell_percentage', value: string) => {
+    const currentLevels = walletSettings[walletId]?.stop_loss_levels || []
     const updatedLevels = [...currentLevels]
     const numValue = value === '' ? 0 : parseFloat(value) || 0
     updatedLevels[index] = { ...updatedLevels[index], [field]: numValue }
     setWalletSettings(prev => ({
       ...prev,
-      [walletAddress]: {
-        ...prev[walletAddress],
+      [walletId]: {
+        ...prev[walletId],
         stop_loss_levels: updatedLevels
       }
     }))
 
     const total = calculateTotalSellPercentage(updatedLevels)
     if (total > 100) {
-      setSlValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage cannot exceed 100%' }))
+      setSlValidationErrors(prev => ({ ...prev, [walletId]: 'Total sell percentage cannot exceed 100%' }))
     } else if (total < 100 && updatedLevels.some(l => l.loss_percentage > 0 || l.sell_percentage > 0)) {
-      setSlValidationErrors(prev => ({ ...prev, [walletAddress]: 'Total sell percentage must equal 100%' }))
+      setSlValidationErrors(prev => ({ ...prev, [walletId]: 'Total sell percentage must equal 100%' }))
     } else {
-      setSlValidationErrors(prev => ({ ...prev, [walletAddress]: null }))
+      setSlValidationErrors(prev => ({ ...prev, [walletId]: null }))
     }
   }
 
-  const handleWalletSettingsClick = async (walletAddress: string) => {
-    if (!walletSettings[walletAddress]) {
-      await fetchWalletSettings(walletAddress)
+  const handleWalletSettingsClick = async (walletId: number, walletAddress: string) => {
+    const key = walletId || walletAddress;
+    if (!walletSettings[key]) {
+      await fetchWalletSettings(walletAddress, selectedCoin, walletId)
     }
-    setShowWalletSettings(showWalletSettings === walletAddress ? null : walletAddress)
+    console.log('the full wallet settings', walletSettings[key])
+    setShowWalletSettings(showWalletSettings === key ? null : key)
   }
 
-  const handleUpdateWalletSettings = async (walletAddress: string) => {
+  const handleUpdateWalletSettings = async (walletAddress: string, walletId: number | string) => {
     try {
       setWalletSettingsLoading(true)
       setWalletTrackerError(null)
       setWalletSettingsSuccess(null)
 
-      const settings = walletSettings[walletAddress]
+      const key = walletId || walletAddress;
+      const settings = walletSettings[key]
       const normalized = {
         ...settings,
         swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : (settings.swap_strategy || 'fixed_buys'),
@@ -992,7 +1019,7 @@ function ProfilePageContent() {
         max_buys_per_token_per_day: settings.max_buys_per_token_per_day,
         take_profit_levels: settings.take_profit_levels,
         stop_loss_levels: settings.stop_loss_levels,
-        tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
+        tp_sl_is_active: tpSlIsActive[key] !== undefined ? tpSlIsActive[key] : true,
         entry_on_first_swap: settings.entry_on_first_swap ?? false,
         buy_once_per_token: settings.buy_once_per_token ?? false,
         mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
@@ -1003,10 +1030,10 @@ function ProfilePageContent() {
         btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
         btd_on_full_sell: settings.btd_on_full_sell ?? false
       }
-      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type)
+      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type, walletId)
 
       setTrackedWallets(prev => prev.map(w =>
-        w.wallet_address === walletAddress
+        w.id === walletId
           ? { ...w, tracking_type: settings.tracking_type, custom_name: settings.custom_name, is_default: false }
           : w
       ))
@@ -1026,13 +1053,14 @@ function ProfilePageContent() {
     }
   }
 
-  const handleStartEditCustomName = async (walletAddress: string) => {
-    if (!walletSettings[walletAddress]) {
-      await fetchWalletSettings(walletAddress)
+  const handleStartEditCustomName = async (walletAddress: string, walletId: string | number) => {
+    const key = walletId || walletAddress;
+    if (!walletSettings[key]) {
+      await fetchWalletSettings(walletAddress, selectedCoin, typeof walletId === 'number' ? walletId : undefined)
     }
-    const currentName = walletSettings[walletAddress]?.custom_name || trackedWallets.find(w => w.wallet_address === walletAddress)?.custom_name || ''
+    const currentName = walletSettings[key]?.custom_name || trackedWallets.find(w => (walletId ? w.id === walletId : w.wallet_address === walletAddress))?.custom_name || ''
     setCustomNameValue(currentName)
-    setEditingCustomName(walletAddress)
+    setEditingCustomName(key)
   }
 
   const handleCancelEditCustomName = () => {
@@ -1040,12 +1068,13 @@ function ProfilePageContent() {
     setCustomNameValue('')
   }
 
-  const handleSaveCustomName = async (walletAddress: string) => {
+  const handleSaveCustomName = async (walletAddress: string, walletId: string | number) => {
     try {
-      setCustomNameLoading(walletAddress)
+      const key = walletId || walletAddress;
+      setCustomNameLoading(key)
       setWalletTrackerError(null)
 
-      const settings = walletSettings[walletAddress] || {}
+      const settings = walletSettings[key] || {}
       const normalized = {
         ...settings,
         swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : (settings.swap_strategy || 'fixed_buys'),
@@ -1056,7 +1085,7 @@ function ProfilePageContent() {
         max_buys_per_token_per_day: settings.max_buys_per_token_per_day,
         take_profit_levels: settings.take_profit_levels,
         stop_loss_levels: settings.stop_loss_levels,
-        tp_sl_is_active: tpSlIsActive[walletAddress] !== undefined ? tpSlIsActive[walletAddress] : true,
+        tp_sl_is_active: tpSlIsActive[key] !== undefined ? tpSlIsActive[key] : true,
         entry_on_first_swap: settings.entry_on_first_swap ?? false,
         buy_once_per_token: settings.buy_once_per_token ?? false,
         mirror_sells_enabled: settings.mirror_sells_enabled ?? true,
@@ -1068,20 +1097,21 @@ function ProfilePageContent() {
         btd_on_full_sell: settings.btd_on_full_sell ?? false
       }
 
-      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type)
+      const foundId = trackedWallets.find(w => w.wallet_address === walletAddress)?.id
+      await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type, foundId)
 
       setTrackedWallets(prev => prev.map(w =>
-        w.wallet_address === walletAddress
-          ? { ...w, custom_name: customNameValue.trim() || '' }
+        (foundId ? w.id === foundId : w.wallet_address === walletAddress)
+          ? { ...w, tracking_type: settings.tracking_type, custom_name: settings.custom_name, is_default: false }
           : w
       ))
 
       // Update local state
       setWalletSettings(prev => ({
         ...prev,
-        [walletAddress]: {
-          ...prev[walletAddress],
-          custom_name: customNameValue.trim() || ''
+        [key]: {
+          ...prev[key],
+          custom_name: settings.custom_name || ''
         }
       }))
 
@@ -1187,7 +1217,8 @@ function ProfilePageContent() {
     }
   }
 
-  const formatWalletAddress = (address: string) => {
+  const formatWalletAddress = (address: any) => {
+    if (!address || typeof address !== 'string') return ''
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
@@ -1424,7 +1455,7 @@ function ProfilePageContent() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      {editingCustomName === wallet.wallet_address ? (
+                      {editingCustomName === wallet.id ? (
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <input
                             type="text"
@@ -1435,20 +1466,20 @@ function ProfilePageContent() {
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                handleSaveCustomName(wallet.wallet_address)
+                                handleSaveCustomName(wallet.wallet_address, wallet.id)
                               } else if (e.key === 'Escape') {
                                 handleCancelEditCustomName()
                               }
                             }}
                           />
                           <motion.button
-                            onClick={() => handleSaveCustomName(wallet.wallet_address)}
-                            disabled={customNameLoading === wallet.wallet_address}
+                            onClick={() => handleSaveCustomName(wallet.wallet_address, wallet.id)}
+                            disabled={customNameLoading === wallet.id}
                             className="px-2 py-1.5 bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                           >
-                            {customNameLoading === wallet.wallet_address ? (
+                            {customNameLoading === wallet.id ? (
                               <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
                             ) : (
                               <CheckCircle size={14} />
@@ -1456,7 +1487,7 @@ function ProfilePageContent() {
                           </motion.button>
                           <motion.button
                             onClick={handleCancelEditCustomName}
-                            disabled={customNameLoading === wallet.wallet_address}
+                            disabled={customNameLoading === wallet.id}
                             className="px-2 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
@@ -1467,7 +1498,7 @@ function ProfilePageContent() {
                       ) : (
                         <>
                           <motion.button
-                            onClick={() => handleStartEditCustomName(wallet.wallet_address)}
+                            onClick={() => handleStartEditCustomName(wallet.wallet_address, wallet.id)}
                             className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
@@ -1489,22 +1520,23 @@ function ProfilePageContent() {
                                   className="text-xs md:text-sm text-white font-space-grotesk font-semibold cursor-default truncate"
                                   title={wallet.wallet_address}
                                 >
-                                  {walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name || formatWalletAddress(wallet.wallet_address)}
+                                  {walletSettings[wallet.id]?.custom_name || wallet.custom_name || formatWalletAddress(wallet.wallet_address)}
                                 </p>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                  {(walletSettings[wallet.wallet_address]?.custom_name || wallet.custom_name) && (
+                                  {(walletSettings[wallet.id]?.custom_name || wallet.custom_name) && (
                                     <p className="text-[10px] text-white/40 font-mono italic truncate" title={wallet.wallet_address}>
                                       {formatWalletAddress(wallet.wallet_address)}
                                     </p>
                                   )}
                                   {selectedCoin === 'sol' && (
-                                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-orbitron font-bold uppercase border ${wallet.tracking_type === 'launches'
+                                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-orbitron font-bold uppercase border ${(typeof wallet.tracking_type === 'object' ? wallet.tracking_type.type : wallet.tracking_type) === 'launches'
                                       ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                      : wallet.tracking_type === 'swaps'
+                                      : (typeof wallet.tracking_type === 'object' ? wallet.tracking_type.type : wallet.tracking_type) === 'swaps'
                                         ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
                                         : 'bg-molten-gold/10 border-molten-gold/30 text-molten-gold'
                                       }`}>
-                                      {wallet.tracking_type === 'launches' ? 'Launches' : wallet.tracking_type === 'swaps' ? 'Swaps' : 'Full Track'}
+                                      {(typeof wallet.tracking_type === 'object' ? wallet.tracking_type.type : wallet.tracking_type) === 'launches' ? 'Launches' : (typeof wallet.tracking_type === 'object' ? wallet.tracking_type.type : wallet.tracking_type) === 'swaps' ? 'Swaps' : 'Full Track'}
+                                      {(typeof wallet.tracking_type === 'object' && wallet.tracking_type.only_launched_by) && ' (Only Self-Launched)'}
                                     </span>
                                   )}
                                 </div>
@@ -1568,9 +1600,9 @@ function ProfilePageContent() {
                   </div>
                   <div className="flex flex-col gap-2 ml-4">
                     <motion.button
-                      onClick={() => handleWalletSettingsClick(wallet.wallet_address)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-300 ${walletSettings[wallet.wallet_address] &&
-                        walletSettings[wallet.wallet_address].is_default === false
+                      onClick={() => handleWalletSettingsClick(wallet.id, wallet.wallet_address)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-300 ${walletSettings[wallet.id] &&
+                        walletSettings[wallet.id].is_default === false
                         ? 'bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20'
                         : 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 hover:bg-yellow-500/20'
                         }`}
@@ -1579,8 +1611,8 @@ function ProfilePageContent() {
                     >
                       <CheckCircle size={14} />
                       <span className="text-sm font-orbitron font-semibold">
-                        {walletSettings[wallet.wallet_address] &&
-                          walletSettings[wallet.wallet_address].is_default === false
+                        {walletSettings[wallet.id] &&
+                          walletSettings[wallet.id].is_default === false
                           ? 'Custom Controls'
                           : 'Default Controls'
                         }
@@ -1589,7 +1621,7 @@ function ProfilePageContent() {
 
                     {wallet.is_active ? (
                       <motion.button
-                        onClick={() => handleStopTrackingClick(wallet.wallet_address, wallet.tracking_type)}
+                        onClick={() => handleStopTrackingClick(wallet.id, wallet.wallet_address, wallet.tracking_type)}
                         disabled={walletTrackerLoading}
                         className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center gap-2 text-sm font-orbitron font-semibold disabled:opacity-50"
                         whileHover={{ scale: 1.02 }}
@@ -1611,7 +1643,7 @@ function ProfilePageContent() {
                       </motion.button>
                     )}
                     <motion.button
-                      onClick={() => handleDeleteTrackedWallet(wallet.wallet_address, wallet.tracking_type)}
+                      onClick={() => handleDeleteTrackedWallet(wallet.id, wallet.tracking_type)}
                       disabled={walletTrackerLoading}
                       className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center disabled:opacity-50"
                       whileHover={{ scale: 1.05 }}
@@ -1671,7 +1703,10 @@ function ProfilePageContent() {
             >
               <div className="flex items-center justify-between mb-4 md:mb-6">
                 <h3 className="text-lg md:text-xl font-orbitron font-bold text-molten-gold break-words pr-2">
-                  Wallet Settings - {formatWalletAddress(showWalletSettings)}
+                  Wallet Settings - {(() => {
+                    const wallet = trackedWallets.find(w => w.id === showWalletSettings || w.wallet_address === showWalletSettings);
+                    return wallet ? formatWalletAddress(wallet.wallet_address) : formatWalletAddress(String(showWalletSettings));
+                  })()}
                 </h3>
                 <button
                   onClick={() => setShowWalletSettings(null)}
@@ -1697,20 +1732,25 @@ function ProfilePageContent() {
               {walletSettings[showWalletSettings] && (
                 <div className="space-y-4">
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
-                    <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Buy Strategy</h4>
-                    <select
-                      value={walletSettings[showWalletSettings].swap_strategy === 'none' ? 'fixed_buys' : (walletSettings[showWalletSettings].swap_strategy || 'fixed_buys')}
-                      onChange={(e) => setWalletSettings(prev => ({
-                        ...prev,
-                        [showWalletSettings]: {
-                          ...prev[showWalletSettings],
-                          swap_strategy: e.target.value
-                        }
-                      }))}
-                      className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                    >
-                      <option value="fixed_buys">Constant Size</option>
-                    </select>
+                    <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Trading Mode & Strategy</h4>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label className="block text-xs font-orbitron text-molten-gold mb-2 uppercase">Buy Strategy</label>
+                        <select
+                          value={walletSettings[showWalletSettings].swap_strategy === 'none' ? 'fixed_buys' : (walletSettings[showWalletSettings].swap_strategy || 'fixed_buys')}
+                          onChange={(e) => setWalletSettings(prev => ({
+                            ...prev,
+                            [showWalletSettings]: {
+                              ...prev[showWalletSettings],
+                              swap_strategy: e.target.value
+                            }
+                          }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                        >
+                          <option value="fixed_buys">Constant Size</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
@@ -2558,10 +2598,12 @@ function ProfilePageContent() {
                               ...prev,
                               [showWalletSettings]: {
                                 ...prev[showWalletSettings],
-                                tracking_type: option.id
+                                tracking_type: typeof prev[showWalletSettings].tracking_type === 'string'
+                                  ? { type: option.id }
+                                  : { ...prev[showWalletSettings].tracking_type, type: option.id }
                               }
                             }))}
-                            className={`w-full px-4 py-2 rounded-lg border text-left transition-all duration-300 flex items-center justify-between ${walletSettings[showWalletSettings].tracking_type === option.id
+                            className={`w-full px-4 py-2 rounded-lg border text-left transition-all duration-300 flex items-center justify-between ${(typeof walletSettings[showWalletSettings].tracking_type === 'string' ? walletSettings[showWalletSettings].tracking_type : walletSettings[showWalletSettings].tracking_type?.type) === option.id
                               ? 'bg-molten-gold/10 border-molten-gold text-molten-gold'
                               : 'bg-void-black/50 border-white/10 text-white/60 hover:border-molten-gold/30'
                               }`}
@@ -2569,10 +2611,142 @@ function ProfilePageContent() {
                             <span className="font-orbitron font-semibold text-xs tracking-wider">
                               {option.label}
                             </span>
-                            {walletSettings[showWalletSettings].tracking_type === option.id && <CheckCircle size={14} />}
+                            {(typeof walletSettings[showWalletSettings].tracking_type === 'string' ? walletSettings[showWalletSettings].tracking_type : walletSettings[showWalletSettings].tracking_type?.type) === option.id && <CheckCircle size={14} />}
                           </button>
                         ))}
                       </div>
+
+                      {(typeof walletSettings[showWalletSettings].tracking_type === 'string' ? walletSettings[showWalletSettings].tracking_type : walletSettings[showWalletSettings].tracking_type?.type) === 'launches' && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="mt-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg space-y-4 overflow-hidden"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Shield size={16} className="text-blue-400" />
+                              <h4 className="text-xs font-orbitron font-bold text-blue-400 uppercase tracking-wider">Launch Filtering</h4>
+                            </div>
+                            <motion.button
+                              onClick={() => setWalletSettings(prev => {
+                                const currentSettings = prev[showWalletSettings];
+                                const currentTracking = typeof currentSettings.tracking_type === 'string' ? { type: currentSettings.tracking_type } : currentSettings.tracking_type;
+                                return {
+                                  ...prev,
+                                  [showWalletSettings]: {
+                                    ...currentSettings,
+                                    tracking_type: {
+                                      ...currentTracking,
+                                      only_launched_by_wallet: !currentTracking.only_launched_by_wallet
+                                    }
+                                  }
+                                };
+                              })}
+                              className={`w-10 h-5 rounded-full p-1 transition-all duration-300 ${(typeof walletSettings[showWalletSettings].tracking_type === 'string' ? false : walletSettings[showWalletSettings].tracking_type?.only_launched_by_wallet) ? 'bg-blue-500' : 'bg-gray-700'}`}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <motion.div
+                                className="w-3 h-3 bg-white rounded-full"
+                                animate={{ x: (typeof walletSettings[showWalletSettings].tracking_type === 'string' ? false : walletSettings[showWalletSettings].tracking_type?.only_launched_by_wallet) ? 20 : 0 }}
+                              />
+                            </motion.button>
+                          </div>
+
+                          <p className="text-[12px] text-blue-400/60 font-space-grotesk leading-relaxed">
+                            When enabled, the bot will only copy trades for tokens that were launched by the tracked wallet itself.
+                          </p>
+
+                          {(typeof walletSettings[showWalletSettings].tracking_type === 'string' ? false : walletSettings[showWalletSettings].tracking_type?.only_launched_by_wallet) && (
+                            <div className="space-y-4 pt-2 border-t border-blue-500/10">
+                              <div>
+                                <label className="block text-[10px] font-orbitron text-blue-400 mb-2 uppercase tracking-widest">Initial Launch Period</label>
+                                <select
+                                  value={typeof walletSettings[showWalletSettings].tracking_type === 'string' ? 0 : (walletSettings[showWalletSettings].tracking_type?.launch_period_type === 'custom' ? 'custom' : walletSettings[showWalletSettings].tracking_type?.launch_period || 0)}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setWalletSettings(prev => ({
+                                      ...prev,
+                                      [showWalletSettings]: {
+                                        ...prev[showWalletSettings],
+                                        tracking_type: {
+                                          ...(typeof prev[showWalletSettings].tracking_type === 'string' ? { type: prev[showWalletSettings].tracking_type } : prev[showWalletSettings].tracking_type),
+                                          launch_period: val === 'custom' ? (typeof prev[showWalletSettings].tracking_type === 'string' ? 0 : prev[showWalletSettings].tracking_type?.launch_period || 0) : parseInt(val),
+                                          launch_period_type: val === 'custom' ? 'custom' : 'preset'
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                  className="w-full bg-void-black/50 border border-blue-500/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-xs focus:border-blue-400 focus:outline-none"
+                                >
+                                  <option value={0}>All Time</option>
+                                  <option value={86400}>Last 24 Hours</option>
+                                  <option value={604800}>Last Week</option>
+                                  <option value={2592000}>Last Month</option>
+                                  <option value="custom">Custom Seconds</option>
+                                </select>
+                              </div>
+
+                              {(typeof walletSettings[showWalletSettings].tracking_type === 'string' ? false : walletSettings[showWalletSettings].tracking_type?.launch_period_type === 'custom') && (
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <label className="block text-[10px] font-orbitron text-blue-400 uppercase tracking-widest">Custom Seconds</label>
+                                    <span className="text-[10px] text-blue-400/60 font-space-grotesk">{formatDurationTooltip(typeof walletSettings[showWalletSettings].tracking_type === 'string' ? 0 : walletSettings[showWalletSettings].tracking_type?.launch_period || 0)}</span>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    value={typeof walletSettings[showWalletSettings].tracking_type === 'string' ? 0 : walletSettings[showWalletSettings].tracking_type?.launch_period || 0}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      setWalletSettings(prev => ({
+                                        ...prev,
+                                        [showWalletSettings]: {
+                                          ...prev[showWalletSettings],
+                                          tracking_type: {
+                                            ...(typeof prev[showWalletSettings].tracking_type === 'string' ? { type: prev[showWalletSettings].tracking_type } : prev[showWalletSettings].tracking_type),
+                                            launch_period: isNaN(val) ? 0 : val
+                                          }
+                                        }
+                                      }));
+                                    }}
+                                    className="w-full bg-void-black/50 border border-blue-500/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-xs focus:border-blue-400 focus:outline-none"
+                                  />
+                                  <div className="flex flex-wrap gap-2">
+                                    {[
+                                      { label: '+1m', val: 60 },
+                                      { label: '+1h', val: 3600 },
+                                      { label: '+1d', val: 86400 },
+                                      { label: 'Reset', val: 0, reset: true }
+                                    ].map((btn) => (
+                                      <button
+                                        key={btn.label}
+                                        onClick={() => {
+                                          setWalletSettings(prev => {
+                                            const currentSettings = prev[showWalletSettings];
+                                            const currentTracking = typeof currentSettings.tracking_type === 'string' ? { type: currentSettings.tracking_type } : currentSettings.tracking_type;
+                                            return {
+                                              ...prev,
+                                              [showWalletSettings]: {
+                                                ...currentSettings,
+                                                tracking_type: {
+                                                  ...currentTracking,
+                                                  launch_period: btn.reset ? 0 : (currentTracking.launch_period || 0) + btn.val
+                                                }
+                                              }
+                                            };
+                                          });
+                                        }}
+                                        className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] text-blue-400 hover:bg-blue-500/20 transition-colors font-orbitron"
+                                      >
+                                        {btn.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
                     </div>
                   )}
 
@@ -2643,7 +2817,12 @@ function ProfilePageContent() {
                   </div>
 
                   <motion.button
-                    onClick={() => handleUpdateWalletSettings(showWalletSettings)}
+                    onClick={() => {
+                      const wallet = trackedWallets.find(w => (w.id || w.wallet_address) === showWalletSettings);
+                      if (wallet && showWalletSettings) {
+                        handleUpdateWalletSettings(wallet.wallet_address, wallet.id || wallet.wallet_address);
+                      }
+                    }}
                     disabled={walletSettingsLoading}
                     className="w-full py-3 bg-gradient-to-r from-molten-gold to-yellow-500 text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     whileHover={{ scale: 1.02 }}
@@ -4358,7 +4537,7 @@ function ProfilePageContent() {
               <motion.button
                 onClick={() => {
                   if (stopTrackingModal.walletAddress) {
-                    handleStopTracking(stopTrackingModal.walletAddress, true, stopTrackingModal.trackingType)
+                    handleStopTracking(stopTrackingModal.walletId, true)
                   }
                 }}
                 disabled={walletTrackerLoading}
@@ -4374,7 +4553,7 @@ function ProfilePageContent() {
                 <motion.button
                   onClick={() => {
                     if (stopTrackingModal.walletAddress) {
-                      handleStopTracking(stopTrackingModal.walletAddress, false, stopTrackingModal.trackingType)
+                      handleStopTracking(stopTrackingModal.walletId, false)
                     }
                   }}
                   disabled={walletTrackerLoading}
@@ -4420,27 +4599,21 @@ function ProfilePageContent() {
               Choose what types of activities you want to track for this wallet. This helps you focus on specific trading events.
             </p>
 
-            <div className="space-y-3 mb-8">
+            <div className="grid grid-cols-3 gap-3 mb-6">
               {[
-                { id: 'launches', label: 'Monitor Launches Only', desc: 'Track new token creations and liquidity events' },
-                { id: 'swaps', label: 'Monitor Swaps Only', desc: 'Track buy and sell transactions' },
-                { id: 'both', label: 'Monitor Both (Swaps + Launches)', desc: 'Full tracking of all activities' }
-              ].map((option) => (
+                { id: 'swaps', label: 'Swaps' },
+                { id: 'launches', label: 'Launches' },
+                { id: 'both', label: 'Both' }
+              ].map((type) => (
                 <button
-                  key={option.id}
-                  onClick={() => setSelectedTrackingType(option.id)}
-                  className={`w-full p-4 rounded-lg border text-left transition-all duration-300 ${selectedTrackingType === option.id
-                    ? 'bg-molten-gold/20 border-molten-gold shadow-[0_0_15px_rgba(255,183,0,0.2)]'
-                    : 'bg-void-black/50 border-white/10 hover:border-molten-gold/30'
+                  key={type.id}
+                  onClick={() => setSelectedTrackingType(type.id)}
+                  className={`py-3 rounded-lg border font-orbitron font-bold text-xs transition-all duration-300 ${selectedTrackingType === type.id
+                    ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_10px_rgba(255,184,0,0.2)]'
+                    : 'bg-void-black/40 text-white/40 border-white/5 hover:border-molten-gold/30 hover:text-white/60'
                     }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`font-orbitron font-bold text-sm ${selectedTrackingType === option.id ? 'text-molten-gold' : 'text-white'}`}>
-                      {option.label}
-                    </span>
-                    {selectedTrackingType === option.id && <CheckCircle size={16} className="text-molten-gold" />}
-                  </div>
-                  <p className="text-xs text-white/40 font-space-grotesk">{option.desc}</p>
+                  {type.label}
                 </button>
               ))}
             </div>
@@ -4454,10 +4627,13 @@ function ProfilePageContent() {
               </button>
               <motion.button
                 onClick={handleConfirmTrackingType}
-                disabled={walletTrackerLoading || bulkProcessing}
-                className="flex-1 py-3 bg-molten-gold text-void-black font-orbitron font-bold rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 text-sm"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                disabled={walletTrackerLoading || bulkProcessing || !selectedTrackingType}
+                className={`flex-1 py-3 font-orbitron font-bold rounded-lg transition-all flex items-center justify-center gap-2 text-sm ${!selectedTrackingType || walletTrackerLoading || bulkProcessing
+                  ? 'bg-molten-gold/50 text-void-black/50 cursor-not-allowed'
+                  : 'bg-molten-gold text-void-black hover:brightness-110'
+                  }`}
+                whileHover={!selectedTrackingType || walletTrackerLoading || bulkProcessing ? {} : { scale: 1.02 }}
+                whileTap={!selectedTrackingType || walletTrackerLoading || bulkProcessing ? {} : { scale: 0.98 }}
               >
                 {(walletTrackerLoading || bulkProcessing) ? (
                   <div className="w-5 h-5 border-2 border-void-black border-t-transparent rounded-full animate-spin" />

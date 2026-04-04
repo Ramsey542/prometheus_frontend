@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, Plus, Trash2, Copy } from 'lucide-react'
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, Plus, Trash2, Copy, Shield, Info, Check, Wallet } from 'lucide-react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { config } from '../../lib/config'
 import { useSelector, useDispatch } from 'react-redux'
@@ -10,7 +10,6 @@ import { RootState } from '../../store/index'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createWallet, selectWallet, getProfile } from '../../store/slices/authSlice'
-import { Wallet, Info, Check } from 'lucide-react'
 import { AppDispatch } from '../../store/index'
 import CreateWalletModal from '../../components/CreateWalletModal'
 
@@ -46,7 +45,7 @@ interface WalletSettings {
   buy_once_per_token: boolean
   mirror_sells_enabled: boolean
   swap_notification_sound: string
-  tracking_type: string
+  tracking_type: any
   reverse_copy: boolean
   btd_on_partial_sell: any
   btd_on_full_sell: any
@@ -73,7 +72,7 @@ export default function DashboardPage() {
     mirror_sells_enabled: true,
     swap_notifications_enabled: true,
     swap_notification_sound: 'success.mp3',
-    tracking_type: 'both',
+    tracking_type: { type: 'both' },
     reverse_copy: false,
     btd_on_partial_sell: { enabled: false, target_token: '' },
     btd_on_full_sell: { enabled: false, target_token: '' }
@@ -106,6 +105,21 @@ export default function DashboardPage() {
 
   const calculateTotalSellPercentage = (levels: TakeProfitLevel[] | StopLossLevel[]): number => {
     return levels.reduce((sum, level) => sum + (level.sell_percentage || 0), 0)
+  }
+
+  const formatDuration = (seconds: number) => {
+    if (seconds === 0) return 'All Time'
+    const days = Math.floor(seconds / 86400)
+    const hours = Math.floor((seconds % 86400) / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+
+    const parts = []
+    if (days > 0) parts.push(`${days}d`)
+    if (hours > 0) parts.push(`${hours}h`)
+    if (minutes > 0) parts.push(`${minutes}m`)
+    if (s > 0) parts.push(`${s}s`)
+    return parts.join(' ') || '0s'
   }
 
   const addTakeProfitLevel = () => {
@@ -213,7 +227,7 @@ export default function DashboardPage() {
           stop_loss_levels: data.stop_loss_levels && data.stop_loss_levels.length > 0
             ? data.stop_loss_levels
             : [{ loss_percentage: 0, sell_percentage: 0 }],
-          tracking_type: data.tracking_type || 'both'
+          tracking_type: typeof data.tracking_type === 'object' ? data.tracking_type : { type: data.tracking_type || 'both' }
         })
         setTpSlIsActive(data.tp_sl_is_active !== undefined ? data.tp_sl_is_active : true)
       } else if (response.status === 401) {
@@ -448,38 +462,46 @@ export default function DashboardPage() {
 
         <div className="space-y-4 md:space-y-6">
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
-            <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Buy Strategy</h3>
-            <div className="relative">
-              <button
-                onClick={() => setShowDropdown(!showDropdown)}
-                className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-4 py-3 text-white font-space-grotesk flex items-center justify-between hover:border-molten-gold/40 transition-colors duration-300"
-              >
-                <span>{swapStrategies.find(s => s.value === settings.swap_strategy)?.label}</span>
-                <ChevronDown size={16} className={`text-molten-gold transition-transform duration-300 ${showDropdown ? 'rotate-180' : ''}`} />
-              </button>
+            <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Tracking Mode & Strategy</h3>
+            <div className="grid grid-cols-1 gap-6">
+              <div>
+                <label className="block text-xs font-orbitron text-molten-gold/60 uppercase tracking-widest mb-2">Buy Strategy</label>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDropdown(!showDropdown)}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-4 py-3 text-white font-space-grotesk flex items-center justify-between hover:border-molten-gold/40 transition-colors duration-300"
+                  >
+                    <span>{swapStrategies.find(s => s.value === settings.swap_strategy)?.label || 'Constant Size'}</span>
+                    <ChevronDown size={16} className={`text-molten-gold transition-transform duration-300 ${showDropdown ? 'rotate-180' : ''}`} />
+                  </button>
 
-              {showDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="absolute top-full left-0 right-0 mt-2 bg-void-black/90 border border-molten-gold/20 rounded-lg shadow-2xl z-10"
-                >
-                  {swapStrategies.map((strategy) => (
-                    <button
-                      key={strategy.value}
-                      onClick={() => {
-                        setSettings(prev => ({ ...prev, swap_strategy: strategy.value }))
-                        setShowDropdown(false)
-                      }}
-                      className={`w-full px-4 py-3 text-left hover:bg-molten-gold/10 transition-colors duration-300 ${settings.swap_strategy === strategy.value ? 'text-molten-gold bg-molten-gold/10' : 'text-white'
-                        }`}
+                  {showDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute top-full left-0 right-0 mt-2 bg-void-black/90 border border-molten-gold/20 rounded-lg shadow-2xl z-[60]"
                     >
-                      {strategy.label}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
+                      {swapStrategies.map((strategy) => (
+                        <button
+                          key={strategy.value}
+                          onClick={() => {
+                            setSettings(prev => ({ ...prev, swap_strategy: strategy.value }))
+                            setShowDropdown(false)
+                          }}
+                          className={`w-full px-4 py-3 text-left hover:bg-molten-gold/10 transition-colors duration-300 ${settings.swap_strategy === strategy.value ? 'text-molten-gold bg-molten-gold/10' : 'text-white'
+                            }`}
+                        >
+                          {strategy.label}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+
             </div>
+
+
           </div>
 
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
@@ -1184,16 +1206,136 @@ export default function DashboardPage() {
                 ].map((type) => (
                   <button
                     key={type.id}
-                    onClick={() => setSettings(prev => ({ ...prev, tracking_type: type.id }))}
-                    className={`px-4 py-3 rounded-lg border font-orbitron font-bold text-xs transition-all duration-300 ${settings.tracking_type === type.id
-                        ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_15px_rgba(255,184,0,0.3)]'
-                        : 'bg-void-black/40 text-white/60 border-white/10 hover:border-molten-gold/50'
+                    onClick={() => setSettings(prev => ({
+                      ...prev,
+                      tracking_type: typeof prev.tracking_type === 'string'
+                        ? { type: type.id }
+                        : { ...prev.tracking_type, type: type.id }
+                    }))}
+                    className={`px-4 py-3 rounded-lg border font-orbitron font-bold text-xs transition-all duration-300 ${(typeof settings.tracking_type === 'string' ? settings.tracking_type : settings.tracking_type?.type) === type.id
+                      ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_15px_rgba(255,184,0,0.3)]'
+                      : 'bg-void-black/40 text-white/60 border-white/10 hover:border-molten-gold/50'
                       }`}
                   >
                     {type.label}
                   </button>
                 ))}
               </div>
+
+              {(typeof settings.tracking_type === 'string' ? settings.tracking_type : settings.tracking_type?.type) === 'launches' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg space-y-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Shield size={16} className="text-blue-400" />
+                      <h4 className="text-xs font-orbitron font-bold text-blue-400 uppercase tracking-wider">Launch Filters</h4>
+                    </div>
+                    <motion.button
+                      onClick={() => setSettings(prev => ({
+                        ...prev,
+                        tracking_type: {
+                          ...(typeof prev.tracking_type === 'string' ? { type: prev.tracking_type } : prev.tracking_type),
+                          only_launched_by_wallet: !(typeof prev.tracking_type === 'string' ? false : prev.tracking_type?.only_launched_by_wallet)
+                        }
+                      }))}
+                      className={`w-10 h-5 rounded-full p-1 transition-all duration-300 ${(typeof settings.tracking_type === 'string' ? false : settings.tracking_type?.only_launched_by_wallet)
+                        ? 'bg-blue-500' : 'bg-gray-700'
+                        }`}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <motion.div
+                        className="w-3 h-3 bg-white rounded-full"
+                        animate={{ x: (typeof settings.tracking_type === 'string' ? false : settings.tracking_type?.only_launched_by_wallet) ? 20 : 0 }}
+                      />
+                    </motion.button>
+                  </div>
+
+                  <p className="text-[12px] text-blue-400/60 font-space-grotesk leading-relaxed">
+                    When enabled, the bot will only copy trades for tokens that were launched by the tracked wallet itself.
+                  </p>
+
+                  {(typeof settings.tracking_type === 'string' ? false : settings.tracking_type?.only_launched_by_wallet) && (
+                    <div className="space-y-3 pt-2 border-t border-blue-500/10">
+                      <div>
+                        <label className="block text-[10px] font-orbitron text-blue-400 mb-2 uppercase tracking-widest">Initial Launch Period</label>
+                        <select
+                          value={typeof settings.tracking_type === 'string' ? 0 : (settings.tracking_type?.launch_period_type === 'custom' ? 'custom' : settings.tracking_type?.launch_period || 0)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSettings(prev => ({
+                              ...prev,
+                              tracking_type: {
+                                ...(typeof prev.tracking_type === 'string' ? { type: prev.tracking_type } : prev.tracking_type),
+                                launch_period: val === 'custom' ? (typeof prev.tracking_type === 'string' ? 0 : prev.tracking_type?.launch_period || 0) : parseInt(val),
+                                launch_period_type: val === 'custom' ? 'custom' : 'preset'
+                              }
+                            }));
+                          }}
+                          className="w-full bg-void-black/50 border border-blue-500/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-xs focus:border-blue-400 focus:outline-none"
+                        >
+                          <option value={0}>All Time</option>
+                          <option value={86400}>Last 24 Hours</option>
+                          <option value={604800}>Last Week</option>
+                          <option value={2592000}>Last Month</option>
+                          <option value="custom">Custom Seconds</option>
+                        </select>
+                      </div>
+
+                      {(typeof settings.tracking_type === 'string' ? false : settings.tracking_type?.launch_period_type === 'custom') && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-[10px] font-orbitron text-blue-400 uppercase tracking-widest">Custom Seconds</label>
+                            <span className="text-[10px] text-blue-400/60 font-space-grotesk">{formatDuration(typeof settings.tracking_type === 'string' ? 0 : settings.tracking_type?.launch_period || 0)}</span>
+                          </div>
+                          <input
+                            type="number"
+                            value={typeof settings.tracking_type === 'string' ? 0 : settings.tracking_type?.launch_period || 0}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setSettings(prev => ({
+                                ...prev,
+                                tracking_type: {
+                                  ...(typeof prev.tracking_type === 'string' ? { type: prev.tracking_type } : prev.tracking_type),
+                                  launch_period: isNaN(val) ? 0 : val
+                                }
+                              }));
+                            }}
+                            className="w-full bg-void-black/50 border border-blue-500/20 rounded-lg px-3 py-2 text-white font-space-grotesk text-xs focus:border-blue-400 focus:outline-none"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { label: '+1m', val: 60 },
+                              { label: '+1h', val: 3600 },
+                              { label: '+1d', val: 86400 },
+                              { label: 'Reset', val: 0, reset: true }
+                            ].map((btn) => (
+                              <button
+                                key={btn.label}
+                                onClick={() => {
+                                  setSettings(prev => ({
+                                    ...prev,
+                                    tracking_type: {
+                                      ...(typeof prev.tracking_type === 'string' ? { type: prev.tracking_type } : prev.tracking_type),
+                                      launch_period: btn.reset ? 0 : ((typeof prev.tracking_type === 'string' ? 0 : prev.tracking_type?.launch_period) || 0) + btn.val
+                                    }
+                                  }));
+                                }}
+                                className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] text-blue-400 hover:bg-blue-500/20 transition-colors font-orbitron"
+                              >
+                                {btn.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
               <p className="text-[10px] md:text-xs text-white/40 font-space-grotesk mt-3">
                 Select which activities to track for newly added wallets.
               </p>

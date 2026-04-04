@@ -72,7 +72,7 @@ export const walletTrackerApi = {
 
 
 
-  async stopTrackingWallet(walletAddress: string, coin: string = 'sol', disableTpSl: boolean = false, trackingType?: string): Promise<{ message: string }> {
+  async stopTrackingWallet(walletId: number, disableTpSl: boolean = false): Promise<{ message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
 
@@ -80,10 +80,7 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      let url = `${config.apiBaseUrl}/track/wallet/${coin}/${walletAddress}?disable_tp_sl=${disableTpSl}`;
-      if (coin === 'sol' && trackingType) {
-        url += `&tracking_type=${trackingType}`;
-      }
+      const url = `${config.apiBaseUrl}/track/wallet/${walletId}?disable_tp_sl=${disableTpSl}`;
 
       const response = await fetch(url, {
         method: 'DELETE',
@@ -97,7 +94,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async deleteTrackedWallet(walletAddress: string, coin: string = 'sol', trackingType?: string): Promise<{ message: string }> {
+  async deleteTrackedWallet(walletId: number): Promise<{ success: boolean; message: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
 
@@ -105,10 +102,7 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      let url = `${config.apiBaseUrl}/track/tracked-wallet/${coin}/${walletAddress}`;
-      if (coin === 'sol' && trackingType) {
-        url += `?tracking_type=${trackingType}`;
-      }
+      const url = `${config.apiBaseUrl}/track/tracked-wallet/${walletId}`;
 
       const response = await fetch(url, {
         method: 'DELETE',
@@ -193,7 +187,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async getTrackedWalletSettings(walletAddress: string, coin: string = 'sol'): Promise<any> {
+  async getTrackedWalletSettings(walletAddress: string, coin: string = 'sol', walletId?: number): Promise<any> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
 
@@ -201,7 +195,12 @@ export const walletTrackerApi = {
         throw new WalletTrackerApiError('No access token found', 401);
       }
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-wallet/${coin}/${walletAddress}/settings`, {
+      let url = `${config.apiBaseUrl}/copy-trading/tracked-wallet/${coin}/${walletAddress}/settings`;
+      if (walletId) {
+        url += `?wallet_id=${walletId}`;
+      }
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -212,7 +211,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async updateTrackedWalletSettings(walletAddress: string, settings: any, coin: string = 'sol', trackingType?: string): Promise<any> {
+  async updateTrackedWalletSettings(walletAddress: string, settings: any, coin: string = 'sol', trackingType?: string, walletId?: number | string): Promise<any> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
 
@@ -226,13 +225,18 @@ export const walletTrackerApi = {
         url += `?tracking_type=${trackingType}`;
       }
 
+      const payload = {
+        ...settings,
+        wallet_id: walletId
+      };
+
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
       });
       console.log('the full response is', response);
 
