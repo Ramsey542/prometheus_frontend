@@ -3120,9 +3120,21 @@ function ProfilePageContent() {
                                 </div>
                               )}
                               <div className="flex-1 min-w-0">
-                                <p className="text-base font-orbitron font-bold text-white truncate">
-                                  {tokenName || tokenSymbol || formatWalletAddress(address)}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-base font-orbitron font-bold text-white truncate">
+                                    {tokenName || tokenSymbol || formatWalletAddress(address)}
+                                  </p>
+                                  <button
+                                    onClick={() => copyToClipboard(address, `token-pos-${address}`)}
+                                    className="text-molten-gold/60 hover:text-molten-gold transition-colors duration-300 flex-shrink-0"
+                                    title="Copy token address"
+                                  >
+                                    <Copy size={12} />
+                                  </button>
+                                  {copiedKey === `token-pos-${address}` && (
+                                    <span className="text-[10px] text-molten-gold font-orbitron">Copied</span>
+                                  )}
+                                </div>
                                 <p className="text-xs text-white/40 font-space-grotesk truncate">
                                   Copied: {walletSettings[pos.mirror_address]?.custom_name || trackedWallets.find(w => w.wallet_address === pos.mirror_address)?.custom_name || formatWalletAddress(pos.mirror_address || '')}
                                 </p>
