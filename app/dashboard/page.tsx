@@ -50,6 +50,35 @@ interface WalletSettings {
   btd_on_partial_sell: any
   btd_on_full_sell: any
   swap_notifications_enabled: boolean
+  rugcheck_filters_enabled: boolean
+  min_market_cap_usd: number | null
+  max_market_cap_usd: number | null
+  min_token_age_seconds: number | null
+  max_token_age_seconds: number | null
+  min_holders: number | null
+  max_holders: number | null
+}
+
+const optionalFloatFromInput = (value: string): number | null => {
+  if (value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const optionalIntFromInput = (value: string): number | null => {
+  if (value === '') return null
+  const parsed = parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const secondsToMinutesInput = (seconds: number | null | undefined): string | number => {
+  if (seconds === null || seconds === undefined) return ''
+  return Math.floor(seconds / 60)
+}
+
+const minutesToSecondsInput = (value: string): number | null => {
+  const minutes = optionalFloatFromInput(value)
+  return minutes === null ? null : Math.floor(minutes * 60)
 }
 
 export default function DashboardPage() {
@@ -75,7 +104,14 @@ export default function DashboardPage() {
     tracking_type: { type: 'both' },
     reverse_copy: false,
     btd_on_partial_sell: { enabled: false, target_token: '' },
-    btd_on_full_sell: { enabled: false, target_token: '' }
+    btd_on_full_sell: { enabled: false, target_token: '' },
+    rugcheck_filters_enabled: false,
+    min_market_cap_usd: null,
+    max_market_cap_usd: null,
+    min_token_age_seconds: null,
+    max_token_age_seconds: null,
+    min_holders: null,
+    max_holders: null
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -212,7 +248,7 @@ export default function DashboardPage() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings`, {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
@@ -227,7 +263,14 @@ export default function DashboardPage() {
           stop_loss_levels: data.stop_loss_levels && data.stop_loss_levels.length > 0
             ? data.stop_loss_levels
             : [{ loss_percentage: 0, sell_percentage: 0 }],
-          tracking_type: typeof data.tracking_type === 'object' ? data.tracking_type : { type: data.tracking_type || 'both' }
+          tracking_type: typeof data.tracking_type === 'object' ? data.tracking_type : { type: data.tracking_type || 'both' },
+          rugcheck_filters_enabled: data.rugcheck_filters_enabled ?? false,
+          min_market_cap_usd: data.min_market_cap_usd ?? null,
+          max_market_cap_usd: data.max_market_cap_usd ?? null,
+          min_token_age_seconds: data.min_token_age_seconds ?? null,
+          max_token_age_seconds: data.max_token_age_seconds ?? null,
+          min_holders: data.min_holders ?? null,
+          max_holders: data.max_holders ?? null
         })
         setTpSlIsActive(data.tp_sl_is_active !== undefined ? data.tp_sl_is_active : true)
       } else if (response.status === 401) {
@@ -238,7 +281,7 @@ export default function DashboardPage() {
     } finally {
       setInitialLoading(false)
     }
-  }, [router])
+  }, [router, selectedCoin])
 
   useEffect(() => {
     if (profile) {
@@ -277,6 +320,13 @@ export default function DashboardPage() {
         swap_notifications_enabled: settings.swap_notifications_enabled,
         swap_notification_sound: settings.swap_notification_sound,
         tracking_type: settings.tracking_type,
+        rugcheck_filters_enabled: settings.rugcheck_filters_enabled,
+        min_market_cap_usd: settings.min_market_cap_usd ?? null,
+        max_market_cap_usd: settings.max_market_cap_usd ?? null,
+        min_token_age_seconds: settings.min_token_age_seconds ?? null,
+        max_token_age_seconds: settings.max_token_age_seconds ?? null,
+        min_holders: settings.min_holders ?? null,
+        max_holders: settings.max_holders ?? null,
         coin_type: selectedCoin
       }
       console.log('the selected coin is', selectedCoin)
@@ -1191,6 +1241,155 @@ export default function DashboardPage() {
                   />
                 </motion.button>
               </div>
+              {selectedCoin === 'sol' && (
+                <div className="border-t border-molten-gold/10 pt-5 space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Token Filters</h4>
+                        <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Filter copied SOL buys by market cap, holder count, and token age</p>
+                      </div>
+                      <div className="group relative">
+                        <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                          <Info size={12} className="text-molten-gold" />
+                        </div>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                          Market cap uses current price multiplied by current supply, so burned tokens are excluded. Blank min or max values are ignored.
+                        </div>
+                      </div>
+                    </div>
+                    <motion.button
+                      onClick={() => setSettings(prev => ({ ...prev, rugcheck_filters_enabled: !prev.rugcheck_filters_enabled }))}
+                      className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.rugcheck_filters_enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <motion.div
+                        className="w-4 h-4 bg-white rounded-full"
+                        animate={{ x: settings.rugcheck_filters_enabled ? 24 : 0 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                      />
+                    </motion.button>
+                  </div>
+
+                  {settings.rugcheck_filters_enabled && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                    >
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Min Market Cap USD
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens below this market cap, calculated from current supply after burns.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.min_market_cap_usd ?? ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, min_market_cap_usd: optionalFloatFromInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No minimum"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Max Market Cap USD
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens above this market cap, calculated from current supply after burns.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.max_market_cap_usd ?? ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, max_market_cap_usd: optionalFloatFromInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No maximum"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Min Holders
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens with fewer holders.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.min_holders ?? ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, min_holders: optionalIntFromInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No minimum"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Max Holders
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens with more holders.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.max_holders ?? ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, max_holders: optionalIntFromInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No maximum"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Min Token Age Minutes
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens younger than this detectedAt age.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={secondsToMinutesInput(settings.min_token_age_seconds)}
+                          onChange={(e) => setSettings(prev => ({ ...prev, min_token_age_seconds: minutesToSecondsInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No minimum"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Max Token Age Minutes
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens older than this detectedAt age.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={secondsToMinutesInput(settings.max_token_age_seconds)}
+                          onChange={(e) => setSettings(prev => ({ ...prev, max_token_age_seconds: minutesToSecondsInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No maximum"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                  <p className="text-xs text-molten-gold/70 font-space-grotesk">Applying these filters adds roughly 200-400ms latency to each copied SOL buy.</p>
+                </div>
+              )}
             </div>
           </div>
 
