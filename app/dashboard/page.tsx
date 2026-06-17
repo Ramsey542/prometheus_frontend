@@ -25,6 +25,8 @@ interface StopLossLevel {
 
 interface WalletSettings {
   swap_strategy: string
+  dip_ladder_drop_percentage: number
+  dip_ladder_profit_percentage: number
   buy_the_dip: boolean
   buy_dip_percentage: number
   max_dip_percentage: number
@@ -83,7 +85,9 @@ const minutesToSecondsInput = (value: string): number | null => {
 
 export default function DashboardPage() {
   const [settings, setSettings] = useState<WalletSettings>({
-    swap_strategy: 'none',
+    swap_strategy: 'fixed_buys',
+    dip_ladder_drop_percentage: 5,
+    dip_ladder_profit_percentage: 5,
     buy_the_dip: false,
     buy_dip_percentage: 10,
     max_dip_percentage: 50,
@@ -135,8 +139,26 @@ export default function DashboardPage() {
     navigator.clipboard.writeText(text)
   }
 
+  const InfoTip = ({ children }: { children: string }) => (
+    <span className="group relative inline-flex items-center">
+      <Info size={13} className="text-molten-gold/80 cursor-help" />
+      <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white normal-case tracking-normal font-space-grotesk opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-[80]">
+        {children}
+      </span>
+    </span>
+  )
+
   const swapStrategies = [
-    { value: 'fixed_buys', label: 'Constant Size' },
+    {
+      value: 'fixed_buys',
+      label: 'Constant Size',
+      description: 'Copies each mirrored buy using the fixed buy size configured for this wallet.'
+    },
+    {
+      value: 'dip_ladder',
+      label: 'Dip Ladder',
+      description: 'Starts from a mirrored buy, buys each configured price drop, and sells each lot separately when it reaches its profit target.'
+    },
   ]
 
   const calculateTotalSellPercentage = (levels: TakeProfitLevel[] | StopLossLevel[]): number => {
@@ -257,6 +279,9 @@ export default function DashboardPage() {
         const data = await response.json()
         setSettings({
           ...data,
+          swap_strategy: data.swap_strategy === 'none' ? 'fixed_buys' : (data.swap_strategy || 'fixed_buys'),
+          dip_ladder_drop_percentage: data.dip_ladder_drop_percentage ?? 5,
+          dip_ladder_profit_percentage: data.dip_ladder_profit_percentage ?? 5,
           take_profit_levels: data.take_profit_levels && data.take_profit_levels.length > 0
             ? data.take_profit_levels
             : [{ profit_percentage: 0, sell_percentage: 0 }],
@@ -307,6 +332,9 @@ export default function DashboardPage() {
 
       const payload = {
         ...settings,
+        swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : settings.swap_strategy,
+        dip_ladder_drop_percentage: settings.dip_ladder_drop_percentage ?? 5,
+        dip_ladder_profit_percentage: settings.dip_ladder_profit_percentage ?? 5,
         slippage: settings.slippage === '' ? 0 : settings.slippage,
         max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour ?? undefined,
         max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day ?? undefined,
@@ -515,7 +543,10 @@ export default function DashboardPage() {
             <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Tracking Mode & Strategy</h3>
             <div className="grid grid-cols-1 gap-6">
               <div>
-                <label className="block text-xs font-orbitron text-molten-gold/60 uppercase tracking-widest mb-2">Buy Strategy</label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-xs font-orbitron text-molten-gold/60 uppercase tracking-widest">Buy Strategy</label>
+                  <InfoTip>Choose how global copied buys should be handled before any wallet-specific override is applied.</InfoTip>
+                </div>
                 <div className="relative">
                   <button
                     onClick={() => setShowDropdown(!showDropdown)}
@@ -538,16 +569,59 @@ export default function DashboardPage() {
                             setSettings(prev => ({ ...prev, swap_strategy: strategy.value }))
                             setShowDropdown(false)
                           }}
-                          className={`w-full px-4 py-3 text-left hover:bg-molten-gold/10 transition-colors duration-300 ${settings.swap_strategy === strategy.value ? 'text-molten-gold bg-molten-gold/10' : 'text-white'
+                          className={`w-full px-4 py-3 text-left hover:bg-molten-gold/10 transition-colors duration-300 flex items-center justify-between gap-3 ${settings.swap_strategy === strategy.value ? 'text-molten-gold bg-molten-gold/10' : 'text-white'
                             }`}
                         >
-                          {strategy.label}
+                          <span>{strategy.label}</span>
+                          <InfoTip>{strategy.description}</InfoTip>
                         </button>
                       ))}
                     </motion.div>
                   )}
                 </div>
               </div>
+
+              {settings.swap_strategy === 'dip_ladder' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Drop Step %</label>
+                      <InfoTip>Buy another lot each time the token price drops by this percentage from the current ladder level.</InfoTip>
+                    </div>
+                    <input
+                      type="number"
+                      value={settings.dip_ladder_drop_percentage}
+                      onChange={(e) => setSettings(prev => ({ ...prev, dip_ladder_drop_percentage: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                      placeholder="5"
+                      min="0.1"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Profit Target %</label>
+                      <InfoTip>Sell each dip ladder lot individually when that lot reaches this percentage profit from its own entry price.</InfoTip>
+                    </div>
+                    <input
+                      type="number"
+                      value={settings.dip_ladder_profit_percentage}
+                      onChange={(e) => setSettings(prev => ({ ...prev, dip_ladder_profit_percentage: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                      placeholder="5"
+                      min="0.1"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                </motion.div>
+              )}
 
             </div>
 

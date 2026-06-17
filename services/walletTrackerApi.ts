@@ -6,7 +6,8 @@ import {
   TrackedWalletListCreate,
   CopyTradingLog,
   CopyTradingStats,
-  WalletStats
+  WalletStats,
+  DipLadder
 } from '../store/types/auth';
 
 class WalletTrackerApiError extends Error {
@@ -338,6 +339,22 @@ export const walletTrackerApi = {
       if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
 
       const response = await fetch(`${config.apiBaseUrl}/copy-trading/tracked-positions/${coin}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return await handleResponse(response);
+    });
+  },
+
+  async getDipLadders(coin: string = 'sol'): Promise<DipLadder[]> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/dip-ladders/${coin}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

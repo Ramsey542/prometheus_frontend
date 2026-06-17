@@ -29,7 +29,10 @@ import {
   X,
   ExternalLink,
   Upload,
-  Info
+  Info,
+  Power,
+  Save,
+  Target
 } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { logout, getProfile } from '../../store/slices/authSlice'
@@ -37,7 +40,7 @@ import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileLayout from '../../components/ProfileLayout'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
-import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats } from '../../store/types/auth'
+import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, DipLadder } from '../../store/types/auth'
 import { authApi } from '@/services/authApi'
 import { config } from '../../lib/config'
 import CreateWalletModal from '../../components/CreateWalletModal'
@@ -88,6 +91,18 @@ const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boole
     }
     return amount
   }
+}
+
+const formatUsdPrice = (price: number | null | undefined): string => {
+  if (price === null || price === undefined || !Number.isFinite(price)) return 'N/A'
+  const absPrice = Math.abs(price)
+  const fractionDigits = absPrice > 0 && absPrice < 0.0001 ? 12 : 8
+  const formatted = price.toLocaleString('en-US', {
+    minimumFractionDigits: absPrice > 0 && absPrice < 0.0001 ? 6 : 0,
+    maximumFractionDigits: fractionDigits,
+    useGrouping: false
+  })
+  return `$${formatted}`
 }
 
 const formatDate = (dateString: string, includeSeconds: boolean = false): string => {
@@ -194,7 +209,7 @@ function ProfilePageContent() {
   const [tpValidationErrors, setTpValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [slValidationErrors, setSlValidationErrors] = useState<{ [key: string]: string | null }>({})
   const [tpSlIsActive, setTpSlIsActive] = useState<{ [key: string]: boolean }>({})
-  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean, btdFullActive?: boolean, btdPartialActive?: boolean, trackingType?: string, walletId?: number }>({ open: false, walletAddress: null, isActive: false })
+  const [stopTrackingModal, setStopTrackingModal] = useState<{ open: boolean, walletAddress: string | null, isActive: boolean, btdFullActive?: boolean, btdPartialActive?: boolean, dipLadderActive?: boolean, trackingType?: string, walletId?: number }>({ open: false, walletAddress: null, isActive: false })
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [editingCustomName, setEditingCustomName] = useState<number | string | null>(null)
   const [customNameValue, setCustomNameValue] = useState<string>('')
@@ -226,6 +241,10 @@ function ProfilePageContent() {
   const [trackerActiveView, setTrackerActiveView] = useState<'wallets' | 'tokens'>('wallets')
   const [trackedPositions, setTrackedPositions] = useState<Record<string, any>>({})
   const [trackedPositionsLoading, setTrackedPositionsLoading] = useState(false)
+  const [dipLadders, setDipLadders] = useState<DipLadder[]>([])
+  const [dipLaddersLoading, setDipLaddersLoading] = useState(false)
+  const [dipLadderSelectedWalletId, setDipLadderSelectedWalletId] = useState<number | null>(null)
+  const [dipLadderSaving, setDipLadderSaving] = useState(false)
 
   const handleToggleDebugMode = async () => {
     if (!profile?.is_admin) return
@@ -345,10 +364,11 @@ function ProfilePageContent() {
   }, [tradeAmountSuccess])
 
   useEffect(() => {
-    if (user && (currentSection === 'wallet-tracker' || currentSection === 'tracker-logs')) {
+    if (user && (currentSection === 'wallet-tracker' || currentSection === 'tracker-logs' || currentSection === 'dip-ladder')) {
       setCoinSwitching(true)
       setTrackedWallets([])
       setTrackerLogs([])
+      setDipLadders([])
       setCopyTradingStats(null)
       setWalletSettings({})
       setLogsPage(1)
@@ -367,6 +387,7 @@ function ProfilePageContent() {
           fetchTrackedWallets(),
           fetchCopyTradingStats(),
           fetchTrackedPositions(),
+          fetchDipLadders(),
           currentSection === 'tracker-logs' ? fetchAllLogs() : Promise.resolve()
         ])
         setCoinSwitching(false)
@@ -385,7 +406,7 @@ function ProfilePageContent() {
   }, [copyTradingStats])
 
   useEffect(() => {
-    if (user && currentSection === 'wallet-tracker' && trackedWallets && trackedWallets.length > 0) {
+    if (user && (currentSection === 'wallet-tracker' || currentSection === 'dip-ladder') && trackedWallets && trackedWallets.length > 0) {
       trackedWallets.forEach(wallet => {
         if (!walletSettings[wallet.id || wallet.wallet_address]) {
           fetchWalletSettings(wallet.wallet_address, selectedCoin, wallet.id)
@@ -394,6 +415,18 @@ function ProfilePageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, currentSection, trackedWallets])
+
+  useEffect(() => {
+    if (currentSection !== 'dip-ladder') return
+    if (!trackedWallets.length) {
+      setDipLadderSelectedWalletId(null)
+      return
+    }
+    const selectedStillExists = trackedWallets.some(wallet => wallet.id === dipLadderSelectedWalletId)
+    if (!selectedStillExists) {
+      setDipLadderSelectedWalletId(trackedWallets[0].id)
+    }
+  }, [currentSection, trackedWallets, dipLadderSelectedWalletId])
 
   useEffect(() => {
     if (user && currentSection === 'tracker-logs' && trackerLogs && trackerLogs.length > 0) {
@@ -512,6 +545,52 @@ function ProfilePageContent() {
     } finally {
       setTrackedPositionsLoading(false)
     }
+  }
+
+  const fetchDipLadders = async () => {
+    try {
+      setDipLaddersLoading(true)
+      const ladders = await walletTrackerApi.getDipLadders(selectedCoin)
+      setDipLadders(Array.isArray(ladders) ? ladders : [])
+    } catch (err) {
+      console.error('Failed to fetch Dip Ladders:', err)
+    } finally {
+      setDipLaddersLoading(false)
+    }
+  }
+
+  const updateDipLadderSetting = (walletId: number, updates: Record<string, any>) => {
+    setWalletSettings(prev => ({
+      ...prev,
+      [walletId]: {
+        ...prev[walletId],
+        ...updates
+      }
+    }))
+  }
+
+  const handleSaveDipLadderSettings = async () => {
+    const selectedWallet = trackedWallets.find(wallet => wallet.id === dipLadderSelectedWalletId)
+    if (!selectedWallet) return
+    try {
+      setDipLadderSaving(true)
+      const saved = await handleUpdateWalletSettings(selectedWallet.wallet_address, selectedWallet.id)
+      if (saved) {
+        await fetchDipLadders()
+      }
+    } finally {
+      setDipLadderSaving(false)
+    }
+  }
+
+  const handleToggleDipLadder = () => {
+    const selectedWallet = trackedWallets.find(wallet => wallet.id === dipLadderSelectedWalletId)
+    if (!selectedWallet) return
+    const currentSettings = walletSettings[selectedWallet.id]
+    if (!currentSettings) return
+    updateDipLadderSetting(selectedWallet.id, {
+      swap_strategy: currentSettings.swap_strategy === 'dip_ladder' ? 'fixed_buys' : 'dip_ladder'
+    })
   }
 
   const handleAddWallet = (e: React.FormEvent) => {
@@ -636,7 +715,8 @@ function ProfilePageContent() {
       const isActive = settings.tp_sl_is_active !== undefined ? settings.tp_sl_is_active : false
       const btdFullActive = settings.btd_on_full_sell === true || settings.btd_on_full_sell?.enabled === true
       const btdPartialActive = settings.btd_on_partial_sell === true || settings.btd_on_partial_sell?.enabled === true
-      if (isActive || btdFullActive || btdPartialActive) {
+      const dipLadderActive = dipLadders.some(ladder => ladder.tracked_wallet_id === walletId && ladder.status === 'active')
+      if (isActive || btdFullActive || btdPartialActive || dipLadderActive) {
         setStopTrackingModal({
           open: true,
           walletId,
@@ -644,6 +724,7 @@ function ProfilePageContent() {
           isActive,
           btdFullActive,
           btdPartialActive,
+          dipLadderActive,
           trackingType
         } as any)
       } else {
@@ -665,6 +746,7 @@ function ProfilePageContent() {
       setStopTrackingModal({ open: false, walletAddress: null, isActive: false } as any)
       await fetchTrackedWallets()
       await fetchCopyTradingStats()
+      await fetchDipLadders()
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to stop wallet tracking'
       setWalletTrackerError(errorMessage)
@@ -779,7 +861,8 @@ function ProfilePageContent() {
         fetchCopyTradingStats(),
         fetchTrackedWallets(1),
         fetchAllLogs(1),
-        fetchTrackedPositions()
+        fetchTrackedPositions(),
+        fetchDipLadders()
       ])
     } catch (err) {
       console.error('Refresh failed:', err)
@@ -905,6 +988,8 @@ function ProfilePageContent() {
           swap_notification_sound: settings.swap_notification_sound ?? 'success.mp3',
           tracking_type: settings.tracking_type ?? 'both',
           reverse_copy: settings.reverse_copy ?? false,
+          dip_ladder_drop_percentage: settings.dip_ladder_drop_percentage ?? 5,
+          dip_ladder_profit_percentage: settings.dip_ladder_profit_percentage ?? 5,
           btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
           btd_on_full_sell: settings.btd_on_full_sell ?? false,
           rugcheck_filters_enabled: settings.rugcheck_filters_enabled ?? false,
@@ -1030,14 +1115,14 @@ function ProfilePageContent() {
     setShowWalletSettings(showWalletSettings === key ? null : key)
   }
 
-  const handleUpdateWalletSettings = async (walletAddress: string, walletId: number | string) => {
+  const handleUpdateWalletSettings = async (walletAddress: string, walletId: number | string, settingsOverride?: any) => {
     try {
       setWalletSettingsLoading(true)
       setWalletTrackerError(null)
       setWalletSettingsSuccess(null)
 
       const key = walletId || walletAddress;
-      const settings = walletSettings[key]
+      const settings = settingsOverride || walletSettings[key]
       const normalized = {
         ...settings,
         swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : (settings.swap_strategy || 'fixed_buys'),
@@ -1056,6 +1141,8 @@ function ProfilePageContent() {
         bnb_trade_amount: settings.bnb_trade_amount,
         tracking_type: settings.tracking_type ?? 'both',
         reverse_copy: settings.reverse_copy ?? false,
+        dip_ladder_drop_percentage: settings.dip_ladder_drop_percentage ?? 5,
+        dip_ladder_profit_percentage: settings.dip_ladder_profit_percentage ?? 5,
         btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
         btd_on_full_sell: settings.btd_on_full_sell ?? false,
         rugcheck_filters_enabled: settings.rugcheck_filters_enabled ?? false,
@@ -1070,13 +1157,14 @@ function ProfilePageContent() {
 
       setTrackedWallets(prev => prev.map(w =>
         w.id === walletId
-          ? { ...w, tracking_type: settings.tracking_type, custom_name: settings.custom_name, is_default: false }
+          ? { ...w, tracking_type: settings.tracking_type, custom_name: settings.custom_name, swap_strategy: normalized.swap_strategy, is_default: false }
           : w
       ))
 
       setWalletSettingsSuccess('Wallet settings updated successfully!')
       setTimeout(() => setWalletSettingsSuccess(null), 5000)
       setShowWalletSettings(null)
+      return true
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to update wallet settings'
       setWalletTrackerError(errorMessage)
@@ -1084,6 +1172,7 @@ function ProfilePageContent() {
       if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
         router.push('/login')
       }
+      return false
     } finally {
       setWalletSettingsLoading(false)
     }
@@ -1129,6 +1218,8 @@ function ProfilePageContent() {
         bnb_trade_amount: settings.bnb_trade_amount,
         tracking_type: settings.tracking_type ?? 'both',
         reverse_copy: settings.reverse_copy ?? false,
+        dip_ladder_drop_percentage: settings.dip_ladder_drop_percentage ?? 5,
+        dip_ladder_profit_percentage: settings.dip_ladder_profit_percentage ?? 5,
         btd_on_partial_sell: settings.btd_on_partial_sell ?? false,
         btd_on_full_sell: settings.btd_on_full_sell ?? false,
         rugcheck_filters_enabled: settings.rugcheck_filters_enabled ?? false,
@@ -1780,7 +1871,7 @@ function ProfilePageContent() {
                       <div>
                         <label className="block text-xs font-orbitron text-molten-gold mb-2 uppercase">Buy Strategy</label>
                         <select
-                          value={walletSettings[showWalletSettings].swap_strategy === 'none' ? 'fixed_buys' : (walletSettings[showWalletSettings].swap_strategy || 'fixed_buys')}
+                          value={walletSettings[showWalletSettings].swap_strategy === 'dip_ladder' ? 'fixed_buys' : (walletSettings[showWalletSettings].swap_strategy === 'none' ? 'fixed_buys' : (walletSettings[showWalletSettings].swap_strategy || 'fixed_buys'))}
                           onChange={(e) => setWalletSettings(prev => ({
                             ...prev,
                             [showWalletSettings]: {
@@ -3136,6 +3227,386 @@ function ProfilePageContent() {
       </div>
     </div>
   );
+  const renderDipLadderSection = () => {
+    const selectedWallet = trackedWallets.find(wallet => wallet.id === dipLadderSelectedWalletId) || trackedWallets[0]
+    const selectedSettings = selectedWallet ? walletSettings[selectedWallet.id] : null
+    const selectedLadders = selectedWallet ? dipLadders.filter(ladder => ladder.tracked_wallet_id === selectedWallet.id) : dipLadders
+    const activeLadders = dipLadders.filter(ladder => ladder.status === 'active')
+    const openLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling').length || 0), 0)
+    const soldLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled').length || 0), 0)
+    const dipLadderEnabled = selectedSettings?.swap_strategy === 'dip_ladder'
+    const ladderStatusLabel = (status: string) => status === 'stopped_no_cash' ? 'NO CASH' : status.toUpperCase()
+    const ladderStatusClass = (status: string) => {
+      if (status === 'active') return 'text-blue-300 border-blue-400/40 bg-blue-500/10'
+      if (status === 'disabled') return 'text-white/45 border-white/15 bg-white/5'
+      return 'text-yellow-300 border-yellow-400/40 bg-yellow-500/10'
+    }
+
+    return (
+      <section className="max-w-7xl mx-auto overflow-visible w-full max-w-full space-y-8 md:space-y-10">
+        <div className="relative overflow-hidden rounded-lg border border-molten-gold/20 bg-gradient-to-br from-void-black via-black to-molten-gold/10 p-5 md:p-8">
+          <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_15%_20%,rgba(245,158,11,0.22),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(59,130,246,0.16),transparent_28%)]" />
+          <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+            <div className="max-w-5xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-molten-gold/15 border border-molten-gold/30 flex items-center justify-center">
+                  <Target size={20} className="text-molten-gold" />
+                </div>
+                <span className="text-xs font-orbitron font-bold uppercase tracking-[0.28em] text-molten-gold/80">
+                  Dip Ladder Strategy
+                </span>
+              </div>
+              <h1 className="text-3xl md:text-5xl font-orbitron font-bold text-white leading-tight max-w-5xl">
+                Accumulate dips and release each lot at its own profit target.
+              </h1>
+              <p className="mt-4 text-sm md:text-base text-white/60 font-space-grotesk max-w-3xl">
+                Turn the strategy on per wallet, tune the drop and profit steps, and monitor live triggers, lots, and recovery sells in one view.
+              </p>
+            </div>
+            <motion.button
+              onClick={async () => {
+                await Promise.all([fetchTrackedWallets(1), fetchDipLadders()])
+              }}
+              disabled={walletTrackerLoading || dipLaddersLoading}
+              className="w-full lg:w-auto px-4 py-3 rounded-lg bg-molten-gold text-void-black font-orbitron font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all disabled:opacity-50"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <RefreshCw size={18} className={dipLaddersLoading ? 'animate-spin' : ''} />
+              Refresh
+            </motion.button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 rounded-lg overflow-hidden border border-molten-gold/20 bg-void-black/40">
+          {[
+            { label: 'Active Ladders', value: activeLadders.length, tone: 'text-blue-300' },
+            { label: 'Open Lots', value: openLotsCount, tone: 'text-molten-gold' },
+            { label: 'Closed Lots', value: soldLotsCount, tone: 'text-green-400' }
+          ].map((metric, index) => (
+            <div key={metric.label} className={`p-5 md:p-6 ${index < 2 ? 'border-b md:border-b-0 md:border-r border-molten-gold/10' : ''}`}>
+              <p className="text-xs font-orbitron uppercase tracking-[0.22em] text-white/35 mb-2">{metric.label}</p>
+              <p className={`text-3xl font-orbitron font-bold ${metric.tone}`}>{metric.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-12 grid-flow-dense gap-0 rounded-lg overflow-hidden border border-molten-gold/20 bg-gradient-to-br from-gray-900/50 to-black/80">
+          <div className="xl:col-span-4 border-b xl:border-b-0 xl:border-r border-molten-gold/10 p-4 md:p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-orbitron font-bold text-molten-gold">Wallets</h2>
+              <span className="text-xs text-white/40 font-space-grotesk">{trackedWallets.length} tracked</span>
+            </div>
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {trackedWallets.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-molten-gold/20 p-5 text-center">
+                  <Wallet size={28} className="mx-auto mb-3 text-molten-gold/40" />
+                  <p className="text-sm text-white/50 font-space-grotesk">No tracked wallets found.</p>
+                </div>
+              ) : trackedWallets.map(wallet => {
+                const settings = walletSettings[wallet.id]
+                const walletEnabled = settings?.swap_strategy === 'dip_ladder'
+                const walletLadders = dipLadders.filter(ladder => ladder.tracked_wallet_id === wallet.id && ladder.status === 'active')
+
+                return (
+                  <motion.button
+                    key={wallet.id}
+                    onClick={() => setDipLadderSelectedWalletId(wallet.id)}
+                    className={`group w-full text-left rounded-lg border p-3 transition-all overflow-hidden ${selectedWallet?.id === wallet.id
+                      ? 'border-molten-gold/50 bg-molten-gold/10'
+                      : 'border-white/10 bg-black/20 hover:border-molten-gold/30 hover:bg-molten-gold/5'
+                      }`}
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-orbitron font-bold text-white truncate">
+                          {settings?.custom_name || formatWalletAddress(wallet.wallet_address)}
+                        </p>
+                        <p className="text-xs text-white/35 font-mono truncate mt-1">{wallet.wallet_address}</p>
+                      </div>
+                      <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border flex-shrink-0 ${walletEnabled ? 'text-molten-gold border-molten-gold/40 bg-molten-gold/10' : 'text-white/35 border-white/10 bg-white/5'}`}>
+                        {walletEnabled ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
+                    <div className="mt-3 h-1 rounded-full bg-white/5 overflow-hidden">
+                      <div className={`h-full transition-all duration-700 ${walletEnabled ? 'w-full bg-molten-gold' : 'w-1/5 bg-white/20'}`} />
+                    </div>
+                    <p className="mt-2 text-[11px] text-white/40 font-space-grotesk">
+                      {walletLadders.length} ladder action{walletLadders.length === 1 ? '' : 's'}
+                    </p>
+                  </motion.button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="xl:col-span-4 border-b xl:border-b-0 xl:border-r border-molten-gold/10 p-4 md:p-5">
+            <div className="flex items-center justify-between gap-4 mb-5">
+              <div>
+                <h2 className="text-lg font-orbitron font-bold text-molten-gold">Controls</h2>
+                <p className="text-xs text-white/45 font-space-grotesk mt-1">
+                  {selectedWallet ? formatWalletAddress(selectedWallet.wallet_address) : 'Select a wallet'}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleDipLadder}
+                disabled={!selectedWallet || !selectedSettings || dipLadderSaving || walletSettingsLoading}
+                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${dipLadderEnabled ? 'bg-molten-gold' : 'bg-gray-700'}`}
+              >
+                <motion.div
+                  className="w-5 h-5 bg-white rounded-full flex items-center justify-center"
+                  animate={{ x: dipLadderEnabled ? 28 : 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                >
+                  <Power size={11} className={dipLadderEnabled ? 'text-void-black' : 'text-gray-700'} />
+                </motion.div>
+              </button>
+            </div>
+
+            {!selectedWallet || !selectedSettings ? (
+              <div className="rounded-lg border border-dashed border-molten-gold/20 p-8 text-center">
+                <RefreshCw size={28} className="mx-auto mb-3 text-molten-gold/40 animate-spin" />
+                <p className="text-sm text-white/50 font-space-grotesk">Loading wallet settings...</p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div className={`rounded-lg border p-4 ${dipLadderEnabled ? 'border-molten-gold/30 bg-molten-gold/10' : 'border-white/10 bg-black/20'}`}>
+                  <p className="text-xs font-orbitron uppercase tracking-[0.22em] text-white/35 mb-2">Status</p>
+                  <p className={`text-xl font-orbitron font-bold ${dipLadderEnabled ? 'text-molten-gold' : 'text-white/45'}`}>
+                    {dipLadderEnabled ? 'Dip Ladder Enabled' : 'Dip Ladder Disabled'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Drop Step %</label>
+                    <input
+                      type="number"
+                      value={selectedSettings.dip_ladder_drop_percentage ?? 5}
+                      onChange={(e) => updateDipLadderSetting(selectedWallet.id, {
+                        dip_ladder_drop_percentage: parseFloat(e.target.value) || 0
+                      })}
+                      className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                      min="0.1"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Profit Target %</label>
+                    <input
+                      type="number"
+                      value={selectedSettings.dip_ladder_profit_percentage ?? 5}
+                      onChange={(e) => updateDipLadderSetting(selectedWallet.id, {
+                        dip_ladder_profit_percentage: parseFloat(e.target.value) || 0
+                      })}
+                      className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                      min="0.1"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-molten-gold/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between text-sm font-space-grotesk mb-2">
+                    <span className="text-white/45">Next buy after each fill</span>
+                    <span className="text-molten-gold font-orbitron font-bold">-{selectedSettings.dip_ladder_drop_percentage ?? 5}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm font-space-grotesk">
+                    <span className="text-white/45">Each lot sells at</span>
+                    <span className="text-green-400 font-orbitron font-bold">+{selectedSettings.dip_ladder_profit_percentage ?? 5}%</span>
+                  </div>
+                </div>
+
+                <motion.button
+                  onClick={handleSaveDipLadderSettings}
+                  disabled={dipLadderSaving || walletSettingsLoading || !selectedWallet || !selectedSettings}
+                  className="w-full px-4 py-3 rounded-lg bg-molten-gold text-void-black font-orbitron font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all disabled:opacity-50"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {dipLadderSaving || walletSettingsLoading ? (
+                    <RefreshCw size={18} className="animate-spin" />
+                  ) : (
+                    <Save size={18} />
+                  )}
+                  Save Dip Ladder
+                </motion.button>
+              </div>
+            )}
+          </div>
+
+          <div className="xl:col-span-4 p-4 md:p-5">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-orbitron font-bold text-molten-gold">Selected Wallet</h2>
+              <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${selectedWallet?.is_active ? 'text-green-400 border-green-500/40 bg-green-500/10' : 'text-red-400 border-red-500/40 bg-red-500/10'}`}>
+                {selectedWallet?.is_active ? 'TRACKING' : 'STOPPED'}
+              </span>
+            </div>
+            <div className="space-y-3">
+              {selectedLadders.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-molten-gold/20 p-8 text-center">
+                  <Activity size={30} className="mx-auto mb-3 text-molten-gold/40" />
+                  <p className="text-sm text-white/50 font-space-grotesk">No Dip Ladder actions for this wallet yet.</p>
+                </div>
+              ) : selectedLadders.slice(0, 3).map(ladder => {
+                const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
+                return (
+                  <div key={ladder.id} className="rounded-lg border border-molten-gold/15 bg-black/25 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="min-w-0">
+                        <p className="text-sm text-white font-orbitron font-bold truncate">{formatWalletAddress(ladder.token_address)}</p>
+                        <p className="text-xs text-white/35 font-mono truncate mt-1">{ladder.token_address}</p>
+                      </div>
+                      <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
+                        {ladderStatusLabel(ladder.status)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Buy Trigger</p>
+                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-blue-300 font-mono font-bold leading-snug">{formatUsdPrice(ladder.next_buy_price_usd)}</p>
+                        <p className="mt-1 text-[10px] text-white/30 font-space-grotesk">Current at or below trigger</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Current Price</p>
+                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.last_price_usd)}</p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs text-white/40 font-space-grotesk">{openLots.length} open lot{openLots.length === 1 ? '' : 's'}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-molten-gold/20 bg-gradient-to-br from-gray-900/50 to-black/80 p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-xl font-orbitron font-bold text-molten-gold">Current Dip Ladder Actions</h2>
+              <p className="text-sm text-white/45 font-space-grotesk mt-1">Statuses, cycle references, buy triggers, sell targets, and open lots across {selectedCoin.toUpperCase()}.</p>
+            </div>
+            <span className="text-xs text-white/40 font-space-grotesk">{dipLaddersLoading ? 'Refreshing...' : `${dipLadders.length} total`}</span>
+          </div>
+
+          {dipLadders.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-molten-gold/20 p-10 text-center">
+              <Target size={36} className="mx-auto mb-3 text-molten-gold/40" />
+              <p className="text-white/60 font-orbitron text-sm">No Dip Ladder actions yet</p>
+              <p className="text-white/35 font-space-grotesk text-xs mt-2">A ladder appears after an enabled wallet mirrors a buy.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {dipLadders.map((ladder, index) => {
+                const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
+                const closedLots = ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled') || []
+                const walletName = walletSettings[ladder.tracked_wallet_id]?.custom_name || trackedWallets.find(wallet => wallet.id === ladder.tracked_wallet_id)?.custom_name || formatWalletAddress(ladder.wallet_address)
+
+                return (
+                  <motion.div
+                    key={ladder.id}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.04 }}
+                    className="group relative z-10 rounded-lg border border-molten-gold/15 bg-void-black/45 p-4 md:p-5 overflow-visible hover:z-[90] hover:border-molten-gold/35 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-lg font-orbitron font-bold text-white truncate">{formatWalletAddress(ladder.token_address)}</p>
+                          <button
+                            onClick={() => copyToClipboard(ladder.token_address, `dip-page-${ladder.id}`)}
+                            className="text-molten-gold/60 hover:text-molten-gold transition-colors"
+                            title="Copy token address"
+                          >
+                            <Copy size={13} />
+                          </button>
+                        </div>
+                        <p className="text-xs text-white/40 font-space-grotesk mt-1">Wallet: {walletName}</p>
+                      </div>
+                      <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
+                        {ladderStatusLabel(ladder.status)}
+                      </span>
+                    </div>
+
+                    <div className="mb-3 rounded-lg border border-molten-gold/15 bg-molten-gold/5 px-3 py-2 text-[11px] text-white/55 font-space-grotesk">
+                      <span className="text-molten-gold/80 font-orbitron font-bold uppercase">Reference</span> starts the current cycle. The bot buys when current price reaches the Buy Trigger, then recalculates the next trigger from the filled buy price.
+                    </div>
+
+                    <div className="relative z-10 grid grid-cols-2 md:grid-cols-5 gap-0 rounded-lg overflow-visible border border-white/10 mb-4">
+                      <div className="min-w-0 p-3 border-r border-b md:border-b-0 border-white/10">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <p className="text-[10px] text-white/35 font-orbitron uppercase">Cycle Ref</p>
+                          <span className="group/reference relative z-[120] inline-flex">
+                            <Info size={11} className="text-molten-gold/70 cursor-help" />
+                            <span className="absolute left-0 top-full z-[250] mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-molten-gold/30 bg-void-black/95 p-3 text-[10px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-300 pointer-events-none group-hover/reference:opacity-100 md:left-1/2 md:-translate-x-1/2 font-space-grotesk normal-case">
+                              Cycle starting price. It seeds the first buy trigger only. After each buy, the next trigger is calculated from that buy price, then the reference resets after all lots sell.
+                            </span>
+                          </span>
+                        </div>
+                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.anchor_price_usd)}</p>
+                      </div>
+                      <div className="min-w-0 p-3 md:border-r border-b md:border-b-0 border-white/10">
+                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Buy Trigger</p>
+                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-blue-300 font-mono font-bold leading-snug">{formatUsdPrice(ladder.next_buy_price_usd)}</p>
+                        <p className="mt-1 text-[10px] text-white/35 font-space-grotesk">Current at or below trigger</p>
+                      </div>
+                      <div className="min-w-0 p-3 border-r border-b md:border-b-0 border-white/10">
+                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Current</p>
+                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.last_price_usd)}</p>
+                      </div>
+                      <div className="p-3 border-r border-white/10">
+                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Drop</p>
+                        <p className="text-xs text-molten-gold font-orbitron font-bold">{ladder.drop_percentage}%</p>
+                      </div>
+                      <div className="p-3">
+                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Target</p>
+                        <p className="text-xs text-green-400 font-orbitron font-bold">{ladder.profit_percentage}%</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-orbitron text-molten-gold/80 uppercase tracking-[0.18em]">Lots</p>
+                        <p className="text-[11px] text-white/40 font-space-grotesk">{openLots.length} open, {closedLots.length} closed</p>
+                      </div>
+                      {openLots.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-white/10 p-3 text-sm text-white/35 font-space-grotesk">
+                          Waiting for the next configured drop.
+                        </div>
+                      ) : openLots.map(lot => (
+                        <div key={lot.id} className="rounded-lg bg-black/25 border border-white/10 p-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Entry</p>
+                              <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-white font-mono leading-snug">{formatUsdPrice(lot.entry_price_usd)}</p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Sell Target</p>
+                              <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-green-400 font-mono leading-snug">{formatUsdPrice(lot.target_price_usd)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Remaining</p>
+                              <p className="text-sm text-molten-gold font-mono">{lot.remaining_amount_tokens.toLocaleString(undefined, { maximumFractionDigits: 6 })}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+    )
+  }
+
   const renderTrackerLogs = () => {
     return (
       <section className="max-w-6xl mx-auto space-y-4 md:space-y-8">
@@ -3311,14 +3782,132 @@ function ProfilePageContent() {
               </div>
             ) : (
               <div className="space-y-4">
-                {Object.keys(trackedPositions).length === 0 ? (
+                {Object.keys(trackedPositions).length === 0 && dipLadders.length === 0 ? (
                   <div className="text-center py-10 bg-void-black/20 rounded-lg border border-dashed border-molten-gold/20">
                     <Activity size={32} className="text-molten-gold/40 mx-auto mb-3" />
                     <p className="text-white/60 font-orbitron text-sm">No active token positions tracked</p>
-                    <p className="text-white/40 font-space-grotesk text-xs mt-1">Positions will appear here when tokens are held with TP/SL active</p>
+                    <p className="text-white/40 font-space-grotesk text-xs mt-1">TP/SL positions and Dip Ladders will appear here while active</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <>
+                    {dipLadders.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-orbitron font-bold text-molten-gold uppercase tracking-wider">Dip Ladders</h4>
+                          <span className="text-xs text-white/40 font-space-grotesk">{dipLaddersLoading ? 'Refreshing...' : `${dipLadders.filter(ladder => ladder.status === 'active').length} active`}</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {dipLadders.map((ladder, index) => {
+                            const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
+                            const soldLots = ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled') || []
+                            const tokenInfo = trackerLogs.find(l => l.target_token?.toLowerCase() === ladder.token_address.toLowerCase())
+                            const tokenName = tokenInfo?.token_name
+                            const tokenSymbol = tokenInfo?.token_symbol
+                            const tokenLogo = tokenInfo?.token_logo_uri
+
+                            return (
+                              <motion.div
+                                key={ladder.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className="bg-void-black/40 border border-blue-400/30 rounded-lg p-4 group relative"
+                              >
+                                <div className="flex items-start justify-between gap-3 mb-4">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {tokenLogo ? (
+                                      <img
+                                        src={tokenLogo}
+                                        alt={tokenSymbol || 'token'}
+                                        className="w-10 h-10 rounded-full border border-blue-400/20 object-cover flex-shrink-0"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-10 rounded-full bg-blue-400/10 border border-blue-400/20 flex items-center justify-center text-blue-300 font-orbitron font-bold text-xs flex-shrink-0">
+                                        {tokenSymbol?.slice(0, 2).toUpperCase() || ladder.token_address.slice(0, 2).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-base font-orbitron font-bold text-white truncate">
+                                          {tokenName || tokenSymbol || formatWalletAddress(ladder.token_address)}
+                                        </p>
+                                        <button
+                                          onClick={() => copyToClipboard(ladder.token_address, `dip-ladder-${ladder.id}`)}
+                                          className="text-blue-300/70 hover:text-blue-300 transition-colors duration-300 flex-shrink-0"
+                                          title="Copy token address"
+                                        >
+                                          <Copy size={12} />
+                                        </button>
+                                      </div>
+                                      <p className="text-xs text-white/40 font-space-grotesk truncate">
+                                        Copied: {walletSettings[ladder.tracked_wallet_id]?.custom_name || trackedWallets.find(w => w.id === ladder.tracked_wallet_id)?.custom_name || formatWalletAddress(ladder.wallet_address)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladder.status === 'active' ? 'bg-blue-500/20 text-blue-300 border-blue-400/40' : ladder.status === 'disabled' ? 'bg-white/5 text-white/45 border-white/15' : 'bg-yellow-500/20 text-yellow-300 border-yellow-400/40'}`}>
+                                    {ladder.status === 'stopped_no_cash' ? 'NO CASH' : ladder.status.toUpperCase()}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                  <div className="min-w-0 bg-black/20 rounded-lg p-3">
+                                    <p className="text-[10px] text-white/40 font-orbitron uppercase mb-1">Buy Trigger</p>
+                                    <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-blue-300 font-mono font-bold leading-snug">{formatUsdPrice(ladder.next_buy_price_usd)}</p>
+                                    <p className="mt-1 text-[10px] text-white/30 font-space-grotesk">Current at or below trigger</p>
+                                  </div>
+                                  <div className="min-w-0 bg-black/20 rounded-lg p-3">
+                                    <p className="text-[10px] text-white/40 font-orbitron uppercase mb-1">Current Price</p>
+                                    <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.last_price_usd)}</p>
+                                  </div>
+                                  <div className="bg-black/20 rounded-lg p-3">
+                                    <p className="text-[10px] text-white/40 font-orbitron uppercase mb-1">Drop Step</p>
+                                    <p className="text-sm text-white font-orbitron font-bold">{ladder.drop_percentage}%</p>
+                                  </div>
+                                  <div className="bg-black/20 rounded-lg p-3">
+                                    <p className="text-[10px] text-white/40 font-orbitron uppercase mb-1">Profit</p>
+                                    <p className="text-sm text-green-400 font-orbitron font-bold">{ladder.profit_percentage}%</p>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-blue-400/10 pt-3 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-[11px] font-orbitron text-blue-300/70 uppercase tracking-widest">Lots</p>
+                                    <p className="text-[10px] text-white/40 font-space-grotesk">{openLots.length} open, {soldLots.length} sold</p>
+                                  </div>
+                                  {openLots.length > 0 ? openLots.map((lot) => (
+                                    <div key={lot.id} className="min-w-0 bg-black/20 rounded-lg p-2 space-y-1">
+                                      <div className="flex justify-between items-start gap-2 text-xs">
+                                        <span className="text-white/50 font-orbitron">Entry</span>
+                                        <span className="min-w-0 break-all [overflow-wrap:anywhere] text-right text-white font-mono leading-snug">{formatUsdPrice(lot.entry_price_usd)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-start gap-2 text-xs">
+                                        <span className="text-green-400/70 font-orbitron">Target</span>
+                                        <span className="min-w-0 break-all [overflow-wrap:anywhere] text-right text-green-400 font-mono leading-snug">{formatUsdPrice(lot.target_price_usd)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-[10px]">
+                                        <span className="text-white/40 font-space-grotesk">Remaining</span>
+                                        <span className="text-white/60 font-mono">{lot.remaining_amount_tokens.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                                      </div>
+                                    </div>
+                                  )) : (
+                                    <p className="text-xs text-white/30 italic font-orbitron">Waiting for next drop</p>
+                                  )}
+                                  {ladder.last_error && (
+                                    <p className="text-xs text-yellow-300/80 font-space-grotesk break-words">{ladder.last_error}</p>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {Object.keys(trackedPositions).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {Object.entries(trackedPositions).map(([address, pos]: [string, any], index) => {
                       const latestPrice = pos.current_price?.[pos.current_price.length - 1];
                       const changePercent = latestPrice ? ((latestPrice.price - pos.buy_price) / pos.buy_price) * 100 : 0;
@@ -3390,12 +3979,12 @@ function ProfilePageContent() {
                           <div className="space-y-3 mb-4">
                             <div className="flex justify-between items-center text-sm font-orbitron">
                               <span className="text-white/40 uppercase">Buy Price</span>
-                              <span className="text-white font-bold font-mono">${pos.buy_price < 0.0001 ? pos.buy_price.toExponential(4) : pos.buy_price.toFixed(8)}</span>
+                              <span className="text-white font-bold font-mono">{formatUsdPrice(pos.buy_price)}</span>
                             </div>
                             <div className="flex justify-between items-center text-sm font-orbitron group/price">
                               <span className="text-white/40 uppercase">Current Price</span>
                               <div className="relative">
-                                <span className="text-molten-gold font-bold text-[14px]">${latestPrice?.price < 0.0001 ? latestPrice.price.toExponential(4) : latestPrice?.price.toFixed(8)}</span>
+                                <span className="text-molten-gold font-bold text-[14px]">{formatUsdPrice(latestPrice?.price)}</span>
                                 {/* Price History Tooltip */}
                                 <div className="absolute bottom-full right-0 mb-2 w-64 bg-black/95 border border-molten-gold/40 rounded-lg p-3 z-50 opacity-0 group-hover/price:opacity-100 transition-opacity pointer-events-none shadow-2xl backdrop-blur-md">
                                   <div className="flex items-center gap-2 mb-2 border-b border-molten-gold/20 pb-1.5">
@@ -3411,7 +4000,7 @@ function ProfilePageContent() {
                                     {(pos.current_price || []).slice().reverse().map((h: any, i: number) => (
                                       <div key={i} className="flex justify-between gap-3 text-[11px]">
                                         <span className="text-white/50 font-space-grotesk">{new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                                        <span className="text-white font-mono font-bold">$ {h.price.toFixed(8)}</span>
+                                        <span className="text-white font-mono font-bold">{formatUsdPrice(h.price)}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -3430,7 +4019,7 @@ function ProfilePageContent() {
                                     <span className={`font-orbitron font-bold ${target.type === 'tp' ? 'text-green-400' : 'text-red-400'}`}>
                                       {target.type.toUpperCase()} {target.percentage}%
                                     </span>
-                                    <span className="text-white/60 font-mono">${target.target_price < 0.0001 ? target.target_price.toExponential(4) : target.target_price.toFixed(8)}</span>
+                                    <span className="text-white/60 font-mono">{formatUsdPrice(target.target_price)}</span>
                                   </div>
                                   <div className="flex justify-between items-center text-[10px] opacity-60">
                                     <span className="text-white/40 italic">Distance</span>
@@ -3449,7 +4038,9 @@ function ProfilePageContent() {
                         </motion.div>
                       )
                     })}
-                  </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -3584,6 +4175,7 @@ function ProfilePageContent() {
 
                         const isManual = eData.mirror_wallet_address === 'manual_buy';
                         const isTpSl = eData.tp_sl_sell === true || log.is_tp_sl_sell;
+                        const isDipLadder = eData.strategy === 'dip_ladder' || eData.dip_ladder === true || eData.dip_ladder_buy === true || eData.dip_ladder_sell === true;
 
                         if (isTpSl) {
                           const triggerType = eData.tp_sl_trigger_type || log.tp_sl_trigger_type;
@@ -3600,13 +4192,13 @@ function ProfilePageContent() {
                                 {(typeof log.tp_sl_buy_price === 'number' || typeof eData.tp_sl_buy_price === 'number') && (
                                   <div className="flex justify-between border-b border-white/10 pb-1">
                                     <span className="text-white/60">Buy Price:</span>
-                                    <span className="text-molten-gold">${(eData.tp_sl_buy_price || log.tp_sl_buy_price) < 0.0001 ? (eData.tp_sl_buy_price || log.tp_sl_buy_price).toExponential(4) : (eData.tp_sl_buy_price || log.tp_sl_buy_price).toFixed(8)}</span>
+                                    <span className="text-molten-gold">{formatUsdPrice(eData.tp_sl_buy_price || log.tp_sl_buy_price)}</span>
                                   </div>
                                 )}
                                 {(typeof log.tp_sl_trigger_price === 'number' || typeof eData.tp_sl_trigger_price === 'number') && (
                                   <div className="flex justify-between border-b border-white/10 pb-1">
                                     <span className="text-white/60">Trigger Price:</span>
-                                    <span className={triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}>${(eData.tp_sl_trigger_price || log.tp_sl_trigger_price) < 0.0001 ? (eData.tp_sl_trigger_price || log.tp_sl_trigger_price).toExponential(4) : (eData.tp_sl_trigger_price || log.tp_sl_trigger_price).toFixed(8)}</span>
+                                    <span className={triggerType === 'take_profit' ? 'text-green-400' : 'text-red-400'}>{formatUsdPrice(eData.tp_sl_trigger_price || log.tp_sl_trigger_price)}</span>
                                   </div>
                                 )}
                                 {typeof triggerValue === 'number' && (
@@ -3624,6 +4216,14 @@ function ProfilePageContent() {
                           return (
                             <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-cyan-200 border border-cyan-400/40 rounded-full bg-cyan-500/10 shadow-[0_0_12px_rgba(6,182,212,0.45)]">
                               Manual Trade
+                            </span>
+                          );
+                        }
+
+                        if (isDipLadder) {
+                          return (
+                            <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-molten-gold border border-molten-gold/40 rounded-full bg-molten-gold/10 shadow-[0_0_12px_rgba(245,158,11,0.45)]">
+                              Dip Ladder
                             </span>
                           );
                         }
@@ -3650,7 +4250,7 @@ function ProfilePageContent() {
                               {log.current_price !== null && log.current_price !== undefined && (
                                 <div>
                                   <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
-                                  <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
+                                  <p className="text-white font-space-grotesk">{formatUsdPrice(log.current_price)}</p>
                                 </div>
                               )}
                               {log.take_profit_levels && log.take_profit_levels.length > 0 && (
@@ -3692,7 +4292,7 @@ function ProfilePageContent() {
                               {log.current_price !== null && log.current_price !== undefined && (
                                 <div>
                                   <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
-                                  <p className="text-white font-space-grotesk">${log.current_price.toFixed(8)}</p>
+                                  <p className="text-white font-space-grotesk">{formatUsdPrice(log.current_price)}</p>
                                 </div>
                               )}
                             </div>
@@ -3722,9 +4322,19 @@ function ProfilePageContent() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Status</p>
-                        <p className={`font-orbitron font-bold ${log.status === 'success' ? 'text-green-400' : log.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
-                          {log.status?.toUpperCase() || 'UNKNOWN'}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className={`font-orbitron font-bold ${log.status === 'success' ? 'text-green-400' : log.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
+                            {log.status?.toUpperCase() || 'UNKNOWN'}
+                          </p>
+                          {log.status === 'failed' && log.error_message && (
+                            <span className="group/status relative inline-flex">
+                              <Info size={14} className="text-red-300 cursor-help" />
+                              <span className="absolute bottom-full left-1/2 z-[100] mb-2 w-72 -translate-x-1/2 rounded-lg border border-red-400/30 bg-void-black/95 p-3 text-[11px] font-space-grotesk normal-case text-red-100 opacity-0 shadow-2xl transition-opacity duration-300 pointer-events-none group-hover/status:opacity-100">
+                                {log.error_message}
+                              </span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {log.side && (
                         <div>
@@ -4594,6 +5204,7 @@ function ProfilePageContent() {
       )}
 
       {currentSection === 'wallet-tracker' ? renderWalletTrackerSection() :
+        currentSection === 'dip-ladder' ? renderDipLadderSection() :
         currentSection === 'tracker-logs' ? renderTrackerLogs() :
           renderProfileOverview()}
 
@@ -4758,9 +5369,9 @@ function ProfilePageContent() {
 
             <div className="mb-6">
               <p className="text-white font-space-grotesk mb-4">
-                This wallet has active Take Profit / Stop Loss or Buy the Dip settings. How would you like to proceed?
+                This wallet has active Take Profit / Stop Loss, Buy the Dip, or Dip Ladder settings. How would you like to proceed?
               </p>
-              {(stopTrackingModal.isActive || stopTrackingModal.btdFullActive || stopTrackingModal.btdPartialActive) && (
+              {(stopTrackingModal.isActive || stopTrackingModal.btdFullActive || stopTrackingModal.btdPartialActive || stopTrackingModal.dipLadderActive) && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
                   <p className="text-yellow-400 font-orbitron font-semibold text-sm mb-2">
                     Active Settings:
@@ -4773,6 +5384,11 @@ function ProfilePageContent() {
                   {(stopTrackingModal.btdFullActive || stopTrackingModal.btdPartialActive) && (
                     <p className="text-white/80 font-space-grotesk text-sm">
                       • Buy the Dip (on sell) is active. By stopping tracking, this will be turned off as well unless tracking starts again.
+                    </p>
+                  )}
+                  {stopTrackingModal.dipLadderActive && (
+                    <p className="text-white/80 font-space-grotesk text-sm">
+                      Dip Ladder has active monitoring for this wallet.
                     </p>
                   )}
                 </div>

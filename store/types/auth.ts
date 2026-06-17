@@ -96,6 +96,8 @@ export interface TrackedWallet {
   buy_the_dip?: boolean;
   buy_dip_percentage?: number;
   max_dip_percentage?: number;
+  dip_ladder_drop_percentage?: number;
+  dip_ladder_profit_percentage?: number;
   buy_dip_timeout?: number;
   dip_recovery?: boolean;
   custom_name?: string;
@@ -123,6 +125,41 @@ export interface TrackedWalletListCreate {
   wallets: string[];
   is_active?: boolean;
   tracking_type?: any;
+}
+
+export interface DipLadderLot {
+  id: number;
+  entry_price_usd: number;
+  target_price_usd: number;
+  buy_amount_native: number;
+  amount_tokens: number;
+  remaining_amount_tokens: number;
+  buy_tx_signature?: string | null;
+  sell_tx_signature?: string | null;
+  status: string;
+  last_error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DipLadder {
+  id: number;
+  user_id: number;
+  tracked_wallet_id: number;
+  wallet_address: string;
+  token_address: string;
+  coin_type: string;
+  anchor_price_usd: number;
+  next_buy_price_usd: number;
+  last_price_usd?: number | null;
+  drop_percentage: number;
+  profit_percentage: number;
+  status: string;
+  last_error?: string | null;
+  last_checked_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  lots: DipLadderLot[];
 }
 
 export interface CopyTradingLog {

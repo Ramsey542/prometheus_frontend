@@ -46,6 +46,7 @@ const navigationSections: NavigationSection[] = [
     items: [
       { id: 'account-overview', label: 'Account Overview', icon: Wallet },
       { id: 'wallet-tracker', label: 'Wallet Tracker', icon: Zap },
+      { id: 'dip-ladder', label: 'Dip Ladder', icon: LineChart },
       { id: 'tracker-logs', label: 'Tracker Logs', icon: MessageCircle },
       { id: 'controls', label: 'Controls', icon: BarChart3, isActive: true },
       { id: 'token-buys', label: 'Token Buys', icon: ShoppingCart, isActive: true },
@@ -71,6 +72,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       const section = searchParams.get('section')
       if (section === 'wallet-tracker') {
         setActiveItem('wallet-tracker')
+      } else if (section === 'dip-ladder') {
+        setActiveItem('dip-ladder')
       } else if (section === 'tracker-logs') {
         setActiveItem('tracker-logs')
       } else if (section === 'custom-buys') {
@@ -182,6 +185,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                       return '/profile'
                     case 'wallet-tracker':
                       return '/profile?section=wallet-tracker'
+                    case 'dip-ladder':
+                      return '/profile?section=dip-ladder'
                     case 'tracker-logs':
                       return '/profile?section=tracker-logs'
                     case 'controls':
