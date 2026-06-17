@@ -120,7 +120,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showDropdown, setShowDropdown] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [tpValidationError, setTpValidationError] = useState<string | null>(null)
@@ -138,28 +137,6 @@ export default function DashboardPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
   }
-
-  const InfoTip = ({ children }: { children: string }) => (
-    <span className="group relative inline-flex items-center">
-      <Info size={13} className="text-molten-gold/80 cursor-help" />
-      <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white normal-case tracking-normal font-space-grotesk opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-[80]">
-        {children}
-      </span>
-    </span>
-  )
-
-  const swapStrategies = [
-    {
-      value: 'fixed_buys',
-      label: 'Constant Size',
-      description: 'Copies each mirrored buy using the fixed buy size configured for this wallet.'
-    },
-    {
-      value: 'dip_ladder',
-      label: 'Dip Ladder',
-      description: 'Starts from a mirrored buy, buys each configured price drop, and sells each lot separately when it reaches its profit target.'
-    },
-  ]
 
   const calculateTotalSellPercentage = (levels: TakeProfitLevel[] | StopLossLevel[]): number => {
     return levels.reduce((sum, level) => sum + (level.sell_percentage || 0), 0)
@@ -539,95 +516,6 @@ export default function DashboardPage() {
         )}
 
         <div className="space-y-4 md:space-y-6">
-          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
-            <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-3 md:mb-4">Tracking Mode & Strategy</h3>
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="block text-xs font-orbitron text-molten-gold/60 uppercase tracking-widest">Buy Strategy</label>
-                  <InfoTip>Choose how global copied buys should be handled before any wallet-specific override is applied.</InfoTip>
-                </div>
-                <div className="relative">
-                  <button
-                    onClick={() => setShowDropdown(!showDropdown)}
-                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-4 py-3 text-white font-space-grotesk flex items-center justify-between hover:border-molten-gold/40 transition-colors duration-300"
-                  >
-                    <span>{swapStrategies.find(s => s.value === settings.swap_strategy)?.label || 'Constant Size'}</span>
-                    <ChevronDown size={16} className={`text-molten-gold transition-transform duration-300 ${showDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {showDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="absolute top-full left-0 right-0 mt-2 bg-void-black/90 border border-molten-gold/20 rounded-lg shadow-2xl z-[60]"
-                    >
-                      {swapStrategies.map((strategy) => (
-                        <button
-                          key={strategy.value}
-                          onClick={() => {
-                            setSettings(prev => ({ ...prev, swap_strategy: strategy.value }))
-                            setShowDropdown(false)
-                          }}
-                          className={`w-full px-4 py-3 text-left hover:bg-molten-gold/10 transition-colors duration-300 flex items-center justify-between gap-3 ${settings.swap_strategy === strategy.value ? 'text-molten-gold bg-molten-gold/10' : 'text-white'
-                            }`}
-                        >
-                          <span>{strategy.label}</span>
-                          <InfoTip>{strategy.description}</InfoTip>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-
-              {settings.swap_strategy === 'dip_ladder' && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4"
-                >
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Drop Step %</label>
-                      <InfoTip>Buy another lot each time the token price drops by this percentage from the current ladder level.</InfoTip>
-                    </div>
-                    <input
-                      type="number"
-                      value={settings.dip_ladder_drop_percentage}
-                      onChange={(e) => setSettings(prev => ({ ...prev, dip_ladder_drop_percentage: parseFloat(e.target.value) || 0 }))}
-                      className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                      placeholder="5"
-                      min="0.1"
-                      max="100"
-                      step="0.1"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <label className="block text-xs md:text-sm font-orbitron text-molten-gold font-semibold">Profit Target %</label>
-                      <InfoTip>Sell each dip ladder lot individually when that lot reaches this percentage profit from its own entry price.</InfoTip>
-                    </div>
-                    <input
-                      type="number"
-                      value={settings.dip_ladder_profit_percentage}
-                      onChange={(e) => setSettings(prev => ({ ...prev, dip_ladder_profit_percentage: parseFloat(e.target.value) || 0 }))}
-                      className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                      placeholder="5"
-                      min="0.1"
-                      max="100"
-                      step="0.1"
-                    />
-                  </div>
-                </motion.div>
-              )}
-
-            </div>
-
-
-          </div>
-
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-0">
               <div>
