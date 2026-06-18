@@ -365,6 +365,23 @@ export const walletTrackerApi = {
     });
   },
 
+  async saveDipLadder(coin: string = 'sol', payload: { token_address: string; dip_ladder_drop_percentage: number; dip_ladder_profit_percentage: number; is_active: boolean }): Promise<DipLadder> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/dip-ladders/${coin}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      return await handleResponse(response);
+    });
+  },
+
   async generatePnlImage(tokenAddress: string, tokenSymbol: string, sent: string, received: string, pnl: number | null | undefined, transactionSignature: string | null, coin: string = 'sol'): Promise<Blob> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');

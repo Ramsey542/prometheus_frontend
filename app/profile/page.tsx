@@ -35,7 +35,7 @@ import {
   Target
 } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
-import { logout, getProfile } from '../../store/slices/authSlice'
+import { logout, getProfile, setCoin } from '../../store/slices/authSlice'
 import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileLayout from '../../components/ProfileLayout'
@@ -44,6 +44,19 @@ import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, D
 import { authApi } from '@/services/authApi'
 import { config } from '../../lib/config'
 import CreateWalletModal from '../../components/CreateWalletModal'
+
+const DIP_LADDER_NATIVE_TOKENS = {
+  sol: {
+    label: 'SOL',
+    name: 'Native SOL',
+    address: 'So11111111111111111111111111111111111111112'
+  },
+  bnb: {
+    label: 'BNB',
+    name: 'Native BNB',
+    address: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c'
+  }
+} as const
 
 const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boolean = false, tokenDecimals?: number | null): string => {
   if (!amount) return 'N/A'
@@ -243,7 +256,13 @@ function ProfilePageContent() {
   const [trackedPositionsLoading, setTrackedPositionsLoading] = useState(false)
   const [dipLadders, setDipLadders] = useState<DipLadder[]>([])
   const [dipLaddersLoading, setDipLaddersLoading] = useState(false)
-  const [dipLadderSelectedWalletId, setDipLadderSelectedWalletId] = useState<number | null>(null)
+  const [dipLadderSelectedId, setDipLadderSelectedId] = useState<number | null>(null)
+  const [dipLadderForm, setDipLadderForm] = useState({
+    token_address: '',
+    dip_ladder_drop_percentage: 5,
+    dip_ladder_profit_percentage: 5,
+    is_active: false
+  })
   const [dipLadderSaving, setDipLadderSaving] = useState(false)
 
   const handleToggleDebugMode = async () => {
@@ -383,13 +402,17 @@ function ProfilePageContent() {
       setLogWalletFilter('all')
 
       const fetchData = async () => {
-        await Promise.all([
-          fetchTrackedWallets(),
-          fetchCopyTradingStats(),
-          fetchTrackedPositions(),
-          fetchDipLadders(),
-          currentSection === 'tracker-logs' ? fetchAllLogs() : Promise.resolve()
-        ])
+        if (currentSection === 'dip-ladder') {
+          await fetchDipLadders()
+        } else {
+          await Promise.all([
+            fetchTrackedWallets(),
+            fetchCopyTradingStats(),
+            fetchTrackedPositions(),
+            fetchDipLadders(),
+            currentSection === 'tracker-logs' ? fetchAllLogs() : Promise.resolve()
+          ])
+        }
         setCoinSwitching(false)
       }
 
@@ -406,7 +429,7 @@ function ProfilePageContent() {
   }, [copyTradingStats])
 
   useEffect(() => {
-    if (user && (currentSection === 'wallet-tracker' || currentSection === 'dip-ladder') && trackedWallets && trackedWallets.length > 0) {
+    if (user && currentSection === 'wallet-tracker' && trackedWallets && trackedWallets.length > 0) {
       trackedWallets.forEach(wallet => {
         if (!walletSettings[wallet.id || wallet.wallet_address]) {
           fetchWalletSettings(wallet.wallet_address, selectedCoin, wallet.id)
@@ -418,15 +441,23 @@ function ProfilePageContent() {
 
   useEffect(() => {
     if (currentSection !== 'dip-ladder') return
-    if (!trackedWallets.length) {
-      setDipLadderSelectedWalletId(null)
-      return
+    if (dipLadderSelectedId && dipLadders.some(ladder => ladder.id === dipLadderSelectedId)) return
+    const formToken = dipLadderForm.token_address.trim().toLowerCase()
+    const firstLadder = formToken
+      ? dipLadders.find(ladder => ladder.token_address.toLowerCase() === formToken)
+      : dipLadders[0]
+    if (firstLadder) {
+      setDipLadderSelectedId(firstLadder.id)
+      setDipLadderForm({
+        token_address: firstLadder.token_address,
+        dip_ladder_drop_percentage: firstLadder.drop_percentage,
+        dip_ladder_profit_percentage: firstLadder.profit_percentage,
+        is_active: firstLadder.status === 'active'
+      })
+    } else {
+      setDipLadderSelectedId(null)
     }
-    const selectedStillExists = trackedWallets.some(wallet => wallet.id === dipLadderSelectedWalletId)
-    if (!selectedStillExists) {
-      setDipLadderSelectedWalletId(trackedWallets[0].id)
-    }
-  }, [currentSection, trackedWallets, dipLadderSelectedWalletId])
+  }, [currentSection, dipLadders, dipLadderSelectedId, dipLadderForm.token_address])
 
   useEffect(() => {
     if (user && currentSection === 'tracker-logs' && trackerLogs && trackerLogs.length > 0) {
@@ -559,38 +590,87 @@ function ProfilePageContent() {
     }
   }
 
-  const updateDipLadderSetting = (walletId: number, updates: Record<string, any>) => {
-    setWalletSettings(prev => ({
+  const handleSelectDipLadder = (ladder: DipLadder) => {
+    setDipLadderSelectedId(ladder.id)
+    setDipLadderForm({
+      token_address: ladder.token_address,
+      dip_ladder_drop_percentage: ladder.drop_percentage,
+      dip_ladder_profit_percentage: ladder.profit_percentage,
+      is_active: ladder.status === 'active'
+    })
+  }
+
+  const handleNewDipLadder = () => {
+    setDipLadderSelectedId(null)
+    setDipLadderForm({
+      token_address: '',
+      dip_ladder_drop_percentage: 5,
+      dip_ladder_profit_percentage: 5,
+      is_active: false
+    })
+  }
+
+  const handleSelectNativeDipLadder = (coin: 'sol' | 'bnb') => {
+    const nativeToken = DIP_LADDER_NATIVE_TOKENS[coin]
+    if (coin !== selectedCoin) {
+      dispatch(setCoin(coin))
+    }
+    const matchingLadder = dipLadders.find(ladder =>
+      ladder.coin_type === coin && ladder.token_address.toLowerCase() === nativeToken.address.toLowerCase()
+    )
+    if (matchingLadder) {
+      handleSelectDipLadder(matchingLadder)
+      return
+    }
+    setDipLadderSelectedId(null)
+    setDipLadderForm(prev => ({
       ...prev,
-      [walletId]: {
-        ...prev[walletId],
-        ...updates
-      }
+      token_address: nativeToken.address,
+      is_active: true
     }))
   }
 
   const handleSaveDipLadderSettings = async () => {
-    const selectedWallet = trackedWallets.find(wallet => wallet.id === dipLadderSelectedWalletId)
-    if (!selectedWallet) return
+    if (!dipLadderForm.token_address.trim()) {
+      setWalletTrackerError('Token CA is required')
+      return
+    }
     try {
       setDipLadderSaving(true)
-      const saved = await handleUpdateWalletSettings(selectedWallet.wallet_address, selectedWallet.id)
-      if (saved) {
-        await fetchDipLadders()
+      setWalletTrackerError(null)
+      const tokenLower = dipLadderForm.token_address.trim().toLowerCase()
+      const saveCoin = tokenLower === DIP_LADDER_NATIVE_TOKENS.bnb.address.toLowerCase()
+        ? 'bnb'
+        : tokenLower === DIP_LADDER_NATIVE_TOKENS.sol.address.toLowerCase()
+          ? 'sol'
+          : selectedCoin
+      const saved = await walletTrackerApi.saveDipLadder(saveCoin, {
+        token_address: dipLadderForm.token_address.trim(),
+        dip_ladder_drop_percentage: Number(dipLadderForm.dip_ladder_drop_percentage) || 0,
+        dip_ladder_profit_percentage: Number(dipLadderForm.dip_ladder_profit_percentage) || 0,
+        is_active: dipLadderForm.is_active
+      })
+      if (saveCoin !== selectedCoin) {
+        dispatch(setCoin(saveCoin))
       }
+      setDipLadderSelectedId(saved.id)
+      setDipLadderForm({
+        token_address: saved.token_address,
+        dip_ladder_drop_percentage: saved.drop_percentage,
+        dip_ladder_profit_percentage: saved.profit_percentage,
+        is_active: saved.status === 'active'
+      })
+      if (saveCoin === selectedCoin) {
+        await fetchDipLadders()
+      } else {
+        const ladders = await walletTrackerApi.getDipLadders(saveCoin)
+        setDipLadders(Array.isArray(ladders) ? ladders : [])
+      }
+    } catch (err: any) {
+      setWalletTrackerError(err.message || 'Failed to save Dip Ladder')
     } finally {
       setDipLadderSaving(false)
     }
-  }
-
-  const handleToggleDipLadder = () => {
-    const selectedWallet = trackedWallets.find(wallet => wallet.id === dipLadderSelectedWalletId)
-    if (!selectedWallet) return
-    const currentSettings = walletSettings[selectedWallet.id]
-    if (!currentSettings) return
-    updateDipLadderSetting(selectedWallet.id, {
-      swap_strategy: currentSettings.swap_strategy === 'dip_ladder' ? 'fixed_buys' : 'dip_ladder'
-    })
   }
 
   const handleAddWallet = (e: React.FormEvent) => {
@@ -2627,20 +2707,19 @@ function ProfilePageContent() {
                           </div>
                         </motion.div>
                       )}
-                      {selectedCoin === 'sol' && (
-                        <div className="border-t border-molten-gold/10 pt-4 space-y-4">
+                      <div className="border-t border-molten-gold/10 pt-4 space-y-4">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
                               <div>
                                 <h5 className="text-sm font-orbitron font-semibold text-white mb-1">Token Filters</h5>
-                                <p className="text-white/40 font-space-grotesk text-[10px] md:text-xs">Filter copied SOL buys by market cap, holders, and token age</p>
+                                <p className="text-white/40 font-space-grotesk text-[10px] md:text-xs">Filter copied {selectedCoin.toUpperCase()} buys by market cap, holders, and token age</p>
                               </div>
                               <div className="group relative">
                                 <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                                   <Info size={12} className="text-molten-gold" />
                                 </div>
                                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                                  Market cap uses token price multiplied b current supply, so burned tokens are excluded. Blank min or max values are ignored.
+                                  SOL uses RugCheck data. BNB uses GeckoTerminal token info, with holder last_updated used as the token age reference. Blank min or max values are ignored.
                                 </div>
                               </div>
                             </div>
@@ -2674,7 +2753,7 @@ function ProfilePageContent() {
                                   Min Market Cap USD
                                   <span className="group relative">
                                     <Info size={12} className="text-molten-gold cursor-help" />
-                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens below this minimum market cap, calculated from current supply after burns.</span>
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens below this minimum market cap.</span>
                                   </span>
                                 </label>
                                 <input
@@ -2698,7 +2777,7 @@ function ProfilePageContent() {
                                   Max Market Cap USD
                                   <span className="group relative">
                                     <Info size={12} className="text-molten-gold cursor-help" />
-                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens above this market cap, calculated from current supply after burns.</span>
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens above this market cap.</span>
                                   </span>
                                 </label>
                                 <input
@@ -2746,7 +2825,7 @@ function ProfilePageContent() {
                                   Max Holders
                                   <span className="group relative">
                                     <Info size={12} className="text-molten-gold cursor-help" />
-                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens with more  holders.</span>
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens with more holders.</span>
                                   </span>
                                 </label>
                                 <input
@@ -2770,7 +2849,7 @@ function ProfilePageContent() {
                                   Min Token Age Minutes
                                   <span className="group relative">
                                     <Info size={12} className="text-molten-gold cursor-help" />
-                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens younger than this detectedAt age.</span>
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens younger than this age. BNB uses GeckoTerminal holders.last_updated.</span>
                                   </span>
                                 </label>
                                 <input
@@ -2794,7 +2873,7 @@ function ProfilePageContent() {
                                   Max Token Age Minutes
                                   <span className="group relative">
                                     <Info size={12} className="text-molten-gold cursor-help" />
-                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens older than this detectedAt age.</span>
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-52 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens older than this age. BNB uses GeckoTerminal holders.last_updated.</span>
                                   </span>
                                 </label>
                                 <input
@@ -2815,9 +2894,8 @@ function ProfilePageContent() {
                               </div>
                             </motion.div>
                           )}
-                          <p className="text-[10px] md:text-xs text-molten-gold/70 font-space-grotesk">Applying these filters adds roughly 200-400ms latency to each copied SOL buy.</p>
+                          <p className="text-[10px] md:text-xs text-molten-gold/70 font-space-grotesk">Applying these filters adds a metadata check before each copied {selectedCoin.toUpperCase()} buy.</p>
                         </div>
-                      )}
                     </div>
                   </div>
 
@@ -3228,18 +3306,22 @@ function ProfilePageContent() {
     </div>
   );
   const renderDipLadderSection = () => {
-    const selectedWallet = trackedWallets.find(wallet => wallet.id === dipLadderSelectedWalletId) || trackedWallets[0]
-    const selectedSettings = selectedWallet ? walletSettings[selectedWallet.id] : null
-    const selectedLadders = selectedWallet ? dipLadders.filter(ladder => ladder.tracked_wallet_id === selectedWallet.id) : dipLadders
+    const selectedLadder = dipLadders.find(ladder => ladder.id === dipLadderSelectedId) || null
     const activeLadders = dipLadders.filter(ladder => ladder.status === 'active')
     const openLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling').length || 0), 0)
     const soldLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled').length || 0), 0)
-    const dipLadderEnabled = selectedSettings?.swap_strategy === 'dip_ladder'
+    const nativeToken = DIP_LADDER_NATIVE_TOKENS[selectedCoin]
+    const tokenValue = dipLadderForm.token_address.trim()
+    const isNativeSelection = tokenValue.toLowerCase() === nativeToken.address.toLowerCase()
     const ladderStatusLabel = (status: string) => status === 'stopped_no_cash' ? 'NO CASH' : status.toUpperCase()
     const ladderStatusClass = (status: string) => {
       if (status === 'active') return 'text-blue-300 border-blue-400/40 bg-blue-500/10'
       if (status === 'disabled') return 'text-white/45 border-white/15 bg-white/5'
       return 'text-yellow-300 border-yellow-400/40 bg-yellow-500/10'
+    }
+    const tokenDisplayName = (address: string) => {
+      const match = Object.values(DIP_LADDER_NATIVE_TOKENS).find(token => token.address.toLowerCase() === address.toLowerCase())
+      return match ? match.name : formatWalletAddress(address)
     }
 
     return (
@@ -3257,15 +3339,15 @@ function ProfilePageContent() {
                 </span>
               </div>
               <h1 className="text-3xl md:text-5xl font-orbitron font-bold text-white leading-tight max-w-5xl">
-                Accumulate dips and release each lot at its own profit target.
+                Run a ladder directly on any token CA.
               </h1>
               <p className="mt-4 text-sm md:text-base text-white/60 font-space-grotesk max-w-3xl">
-                Turn the strategy on per wallet, tune the drop and profit steps, and monitor live triggers, lots, and recovery sells in one view.
+                Paste a token contract, save the ladder, and the reference price is captured from that moment. Native SOL and BNB are one click away.
               </p>
             </div>
             <motion.button
               onClick={async () => {
-                await Promise.all([fetchTrackedWallets(1), fetchDipLadders()])
+                await fetchDipLadders()
               }}
               disabled={walletTrackerLoading || dipLaddersLoading}
               className="w-full lg:w-auto px-4 py-3 rounded-lg bg-molten-gold text-void-black font-orbitron font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all disabled:opacity-50"
@@ -3291,174 +3373,178 @@ function ProfilePageContent() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-12 grid-flow-dense gap-0 rounded-lg overflow-hidden border border-molten-gold/20 bg-gradient-to-br from-gray-900/50 to-black/80">
-          <div className="xl:col-span-4 border-b xl:border-b-0 xl:border-r border-molten-gold/10 p-4 md:p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-orbitron font-bold text-molten-gold">Wallets</h2>
-              <span className="text-xs text-white/40 font-space-grotesk">{trackedWallets.length} tracked</span>
-            </div>
-            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-              {trackedWallets.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-molten-gold/20 p-5 text-center">
-                  <Wallet size={28} className="mx-auto mb-3 text-molten-gold/40" />
-                  <p className="text-sm text-white/50 font-space-grotesk">No tracked wallets found.</p>
-                </div>
-              ) : trackedWallets.map(wallet => {
-                const settings = walletSettings[wallet.id]
-                const walletEnabled = settings?.swap_strategy === 'dip_ladder'
-                const walletLadders = dipLadders.filter(ladder => ladder.tracked_wallet_id === wallet.id && ladder.status === 'active')
-
-                return (
-                  <motion.button
-                    key={wallet.id}
-                    onClick={() => setDipLadderSelectedWalletId(wallet.id)}
-                    className={`group w-full text-left rounded-lg border p-3 transition-all overflow-hidden ${selectedWallet?.id === wallet.id
-                      ? 'border-molten-gold/50 bg-molten-gold/10'
-                      : 'border-white/10 bg-black/20 hover:border-molten-gold/30 hover:bg-molten-gold/5'
-                      }`}
-                    whileHover={{ x: 4 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-orbitron font-bold text-white truncate">
-                          {settings?.custom_name || formatWalletAddress(wallet.wallet_address)}
-                        </p>
-                        <p className="text-xs text-white/35 font-mono truncate mt-1">{wallet.wallet_address}</p>
-                      </div>
-                      <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border flex-shrink-0 ${walletEnabled ? 'text-molten-gold border-molten-gold/40 bg-molten-gold/10' : 'text-white/35 border-white/10 bg-white/5'}`}>
-                        {walletEnabled ? 'ON' : 'OFF'}
-                      </span>
-                    </div>
-                    <div className="mt-3 h-1 rounded-full bg-white/5 overflow-hidden">
-                      <div className={`h-full transition-all duration-700 ${walletEnabled ? 'w-full bg-molten-gold' : 'w-1/5 bg-white/20'}`} />
-                    </div>
-                    <p className="mt-2 text-[11px] text-white/40 font-space-grotesk">
-                      {walletLadders.length} ladder action{walletLadders.length === 1 ? '' : 's'}
-                    </p>
-                  </motion.button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="xl:col-span-4 border-b xl:border-b-0 xl:border-r border-molten-gold/10 p-4 md:p-5">
+        <div className="grid grid-cols-1 xl:grid-cols-12 grid-flow-dense gap-0 rounded-lg overflow-visible border border-molten-gold/20 bg-gradient-to-br from-gray-900/50 to-black/80">
+          <div className="xl:col-span-7 border-b xl:border-b-0 xl:border-r border-molten-gold/10 p-4 md:p-5">
             <div className="flex items-center justify-between gap-4 mb-5">
               <div>
-                <h2 className="text-lg font-orbitron font-bold text-molten-gold">Controls</h2>
+                <h2 className="text-lg font-orbitron font-bold text-molten-gold">Ladder Setup</h2>
                 <p className="text-xs text-white/45 font-space-grotesk mt-1">
-                  {selectedWallet ? formatWalletAddress(selectedWallet.wallet_address) : 'Select a wallet'}
+                  {selectedLadder ? `Editing ${tokenDisplayName(selectedLadder.token_address)}` : `New ${selectedCoin.toUpperCase()} ladder`}
                 </p>
               </div>
               <button
-                onClick={handleToggleDipLadder}
-                disabled={!selectedWallet || !selectedSettings || dipLadderSaving || walletSettingsLoading}
-                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${dipLadderEnabled ? 'bg-molten-gold' : 'bg-gray-700'}`}
+                onClick={() => setDipLadderForm(prev => ({ ...prev, is_active: !prev.is_active }))}
+                disabled={dipLadderSaving}
+                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${dipLadderForm.is_active ? 'bg-molten-gold' : 'bg-gray-700'}`}
               >
                 <motion.div
                   className="w-5 h-5 bg-white rounded-full flex items-center justify-center"
-                  animate={{ x: dipLadderEnabled ? 28 : 0 }}
+                  animate={{ x: dipLadderForm.is_active ? 28 : 0 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 >
-                  <Power size={11} className={dipLadderEnabled ? 'text-void-black' : 'text-gray-700'} />
+                  <Power size={11} className={dipLadderForm.is_active ? 'text-void-black' : 'text-gray-700'} />
                 </motion.div>
               </button>
             </div>
 
-            {!selectedWallet || !selectedSettings ? (
-              <div className="rounded-lg border border-dashed border-molten-gold/20 p-8 text-center">
-                <RefreshCw size={28} className="mx-auto mb-3 text-molten-gold/40 animate-spin" />
-                <p className="text-sm text-white/50 font-space-grotesk">Loading wallet settings...</p>
+            <div className="space-y-5">
+              <div className={`rounded-lg border p-4 ${dipLadderForm.is_active ? 'border-molten-gold/30 bg-molten-gold/10' : 'border-white/10 bg-black/20'}`}>
+                <p className="text-xs font-orbitron uppercase tracking-[0.22em] text-white/35 mb-2">Saved State</p>
+                <p className={`text-xl font-orbitron font-bold ${dipLadderForm.is_active ? 'text-molten-gold' : 'text-white/45'}`}>
+                  {dipLadderForm.is_active ? 'Enabled on Save' : 'Disabled on Save'}
+                </p>
+                <p className="mt-2 text-xs text-white/45 font-space-grotesk">Switch changes stay local until you press Save.</p>
               </div>
-            ) : (
-              <div className="space-y-5">
-                <div className={`rounded-lg border p-4 ${dipLadderEnabled ? 'border-molten-gold/30 bg-molten-gold/10' : 'border-white/10 bg-black/20'}`}>
-                  <p className="text-xs font-orbitron uppercase tracking-[0.22em] text-white/35 mb-2">Status</p>
-                  <p className={`text-xl font-orbitron font-bold ${dipLadderEnabled ? 'text-molten-gold' : 'text-white/45'}`}>
-                    {dipLadderEnabled ? 'Dip Ladder Enabled' : 'Dip Ladder Disabled'}
-                  </p>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Drop Step %</label>
-                    <input
-                      type="number"
-                      value={selectedSettings.dip_ladder_drop_percentage ?? 5}
-                      onChange={(e) => updateDipLadderSetting(selectedWallet.id, {
-                        dip_ladder_drop_percentage: parseFloat(e.target.value) || 0
-                      })}
-                      className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                      min="0.1"
-                      max="100"
-                      step="0.1"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Profit Target %</label>
-                    <input
-                      type="number"
-                      value={selectedSettings.dip_ladder_profit_percentage ?? 5}
-                      onChange={(e) => updateDipLadderSetting(selectedWallet.id, {
-                        dip_ladder_profit_percentage: parseFloat(e.target.value) || 0
-                      })}
-                      className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                      min="0.1"
-                      max="100"
-                      step="0.1"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-molten-gold/10 bg-black/20 p-4">
-                  <div className="flex items-center justify-between text-sm font-space-grotesk mb-2">
-                    <span className="text-white/45">Next buy after each fill</span>
-                    <span className="text-molten-gold font-orbitron font-bold">-{selectedSettings.dip_ladder_drop_percentage ?? 5}%</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm font-space-grotesk">
-                    <span className="text-white/45">Each lot sells at</span>
-                    <span className="text-green-400 font-orbitron font-bold">+{selectedSettings.dip_ladder_profit_percentage ?? 5}%</span>
-                  </div>
-                </div>
-
-                <motion.button
-                  onClick={handleSaveDipLadderSettings}
-                  disabled={dipLadderSaving || walletSettingsLoading || !selectedWallet || !selectedSettings}
-                  className="w-full px-4 py-3 rounded-lg bg-molten-gold text-void-black font-orbitron font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all disabled:opacity-50"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {dipLadderSaving || walletSettingsLoading ? (
-                    <RefreshCw size={18} className="animate-spin" />
-                  ) : (
-                    <Save size={18} />
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold">Token CA</label>
+                  {selectedLadder && (
+                    <button
+                      type="button"
+                      onClick={handleNewDipLadder}
+                      className="text-xs text-white/45 hover:text-molten-gold font-orbitron transition-colors"
+                    >
+                      New Token
+                    </button>
                   )}
-                  Save Dip Ladder
-                </motion.button>
+                </div>
+                <input
+                  type="text"
+                  value={dipLadderForm.token_address}
+                  onChange={(e) => {
+                    setDipLadderSelectedId(null)
+                    setDipLadderForm(prev => ({ ...prev, token_address: e.target.value }))
+                  }}
+                  placeholder={`Paste ${selectedCoin.toUpperCase()} token contract address`}
+                  className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-mono text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300 break-all [overflow-wrap:anywhere]"
+                />
               </div>
-            )}
+
+              <div>
+                <p className="text-sm font-orbitron text-molten-gold font-semibold mb-2">Quick Select</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(['sol', 'bnb'] as const).map(coin => {
+                    const option = DIP_LADDER_NATIVE_TOKENS[coin]
+                    const selected = selectedCoin === coin && dipLadderForm.token_address.toLowerCase() === option.address.toLowerCase()
+                    return (
+                      <button
+                        key={coin}
+                        type="button"
+                        onClick={() => handleSelectNativeDipLadder(coin)}
+                        className={`min-w-0 rounded-lg border p-3 text-left transition-all ${selected ? 'border-molten-gold/50 bg-molten-gold/10' : 'border-white/10 bg-black/20 hover:border-molten-gold/30 hover:bg-molten-gold/5'}`}
+                      >
+                        <span className="block text-sm font-orbitron font-bold text-white">{option.name}</span>
+                        <span className="mt-1 block text-[11px] text-white/35 font-mono break-all [overflow-wrap:anywhere]">{option.address}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Drop Step %</label>
+                  <input
+                    type="number"
+                    value={dipLadderForm.dip_ladder_drop_percentage}
+                    onChange={(e) => setDipLadderForm(prev => ({
+                      ...prev,
+                      dip_ladder_drop_percentage: parseFloat(e.target.value) || 0
+                    }))}
+                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Profit Target %</label>
+                  <input
+                    type="number"
+                    value={dipLadderForm.dip_ladder_profit_percentage}
+                    onChange={(e) => setDipLadderForm(prev => ({
+                      ...prev,
+                      dip_ladder_profit_percentage: parseFloat(e.target.value) || 0
+                    }))}
+                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-molten-gold/10 bg-black/20 p-4">
+                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk mb-2">
+                  <span className="text-white/45">Reference captured on save</span>
+                  <span className="min-w-0 break-all [overflow-wrap:anywhere] text-white font-mono">{selectedLadder ? formatUsdPrice(selectedLadder.anchor_price_usd) : 'After save'}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk mb-2">
+                  <span className="text-white/45">Current tracked price</span>
+                  <span className="min-w-0 break-all [overflow-wrap:anywhere] text-white font-mono">{selectedLadder ? formatUsdPrice(selectedLadder.last_price_usd) : 'After save'}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk mb-2">
+                  <span className="text-white/45">Next buy triggers at</span>
+                  <span className="min-w-0 break-all [overflow-wrap:anywhere] text-blue-300 font-mono font-bold">{selectedLadder ? formatUsdPrice(selectedLadder.next_buy_price_usd) : `-${dipLadderForm.dip_ladder_drop_percentage}% from saved reference`}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk">
+                  <span className="text-white/45">Each lot sells at</span>
+                  <span className="text-green-400 font-orbitron font-bold">+{dipLadderForm.dip_ladder_profit_percentage}%</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-4 text-xs text-blue-100/80 font-space-grotesk">
+                The reference price is the price captured when you save an enabled ladder. It sets the first buy trigger. After a buy fills, the next trigger is recalculated from that filled buy price.
+              </div>
+
+              <motion.button
+                onClick={handleSaveDipLadderSettings}
+                disabled={dipLadderSaving || !dipLadderForm.token_address.trim()}
+                className="w-full px-4 py-3 rounded-lg bg-molten-gold text-void-black font-orbitron font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all disabled:opacity-50"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {dipLadderSaving ? (
+                  <RefreshCw size={18} className="animate-spin" />
+                ) : (
+                  <Save size={18} />
+                )}
+                Save Dip Ladder
+              </motion.button>
+            </div>
           </div>
 
-          <div className="xl:col-span-4 p-4 md:p-5">
+          <div className="xl:col-span-5 p-4 md:p-5">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-orbitron font-bold text-molten-gold">Selected Wallet</h2>
-              <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${selectedWallet?.is_active ? 'text-green-400 border-green-500/40 bg-green-500/10' : 'text-red-400 border-red-500/40 bg-red-500/10'}`}>
-                {selectedWallet?.is_active ? 'TRACKING' : 'STOPPED'}
+              <h2 className="text-lg font-orbitron font-bold text-molten-gold">Current Selection</h2>
+              <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${isNativeSelection ? 'text-molten-gold border-molten-gold/40 bg-molten-gold/10' : 'text-white/45 border-white/15 bg-white/5'}`}>
+                {isNativeSelection ? nativeToken.label : selectedCoin.toUpperCase()}
               </span>
             </div>
             <div className="space-y-3">
-              {selectedLadders.length === 0 ? (
+              {!selectedLadder ? (
                 <div className="rounded-lg border border-dashed border-molten-gold/20 p-8 text-center">
                   <Activity size={30} className="mx-auto mb-3 text-molten-gold/40" />
-                  <p className="text-sm text-white/50 font-space-grotesk">No Dip Ladder actions for this wallet yet.</p>
+                  <p className="text-sm text-white/50 font-space-grotesk">Save this token to capture its first reference price.</p>
                 </div>
-              ) : selectedLadders.slice(0, 3).map(ladder => {
+              ) : [selectedLadder].map(ladder => {
                 const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
                 return (
                   <div key={ladder.id} className="rounded-lg border border-molten-gold/15 bg-black/25 p-4">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="min-w-0">
-                        <p className="text-sm text-white font-orbitron font-bold truncate">{formatWalletAddress(ladder.token_address)}</p>
+                        <p className="text-sm text-white font-orbitron font-bold truncate">{tokenDisplayName(ladder.token_address)}</p>
                         <p className="text-xs text-white/35 font-mono truncate mt-1">{ladder.token_address}</p>
                       </div>
                       <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
@@ -3488,7 +3574,7 @@ function ProfilePageContent() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
             <div>
               <h2 className="text-xl font-orbitron font-bold text-molten-gold">Current Dip Ladder Actions</h2>
-              <p className="text-sm text-white/45 font-space-grotesk mt-1">Statuses, cycle references, buy triggers, sell targets, and open lots across {selectedCoin.toUpperCase()}.</p>
+              <p className="text-sm text-white/45 font-space-grotesk mt-1">Statuses, reference prices, buy triggers, sell targets, and open lots across {selectedCoin.toUpperCase()}.</p>
             </div>
             <span className="text-xs text-white/40 font-space-grotesk">{dipLaddersLoading ? 'Refreshing...' : `${dipLadders.length} total`}</span>
           </div>
@@ -3497,14 +3583,13 @@ function ProfilePageContent() {
             <div className="rounded-lg border border-dashed border-molten-gold/20 p-10 text-center">
               <Target size={36} className="mx-auto mb-3 text-molten-gold/40" />
               <p className="text-white/60 font-orbitron text-sm">No Dip Ladder actions yet</p>
-              <p className="text-white/35 font-space-grotesk text-xs mt-2">A ladder appears after an enabled wallet mirrors a buy.</p>
+              <p className="text-white/35 font-space-grotesk text-xs mt-2">Paste a token CA, choose the ladder settings, then save.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {dipLadders.map((ladder, index) => {
                 const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
                 const closedLots = ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled') || []
-                const walletName = walletSettings[ladder.tracked_wallet_id]?.custom_name || trackedWallets.find(wallet => wallet.id === ladder.tracked_wallet_id)?.custom_name || formatWalletAddress(ladder.wallet_address)
 
                 return (
                   <motion.div
@@ -3512,21 +3597,25 @@ function ProfilePageContent() {
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.04 }}
-                    className="group relative z-10 rounded-lg border border-molten-gold/15 bg-void-black/45 p-4 md:p-5 overflow-visible hover:z-[90] hover:border-molten-gold/35 transition-colors"
+                    onClick={() => handleSelectDipLadder(ladder)}
+                    className={`group relative z-10 rounded-lg border bg-void-black/45 p-4 md:p-5 overflow-visible hover:z-[90] transition-colors cursor-pointer ${dipLadderSelectedId === ladder.id ? 'border-molten-gold/50' : 'border-molten-gold/15 hover:border-molten-gold/35'}`}
                   >
                     <div className="flex items-start justify-between gap-4 mb-4">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-lg font-orbitron font-bold text-white truncate">{formatWalletAddress(ladder.token_address)}</p>
+                          <p className="text-lg font-orbitron font-bold text-white truncate">{tokenDisplayName(ladder.token_address)}</p>
                           <button
-                            onClick={() => copyToClipboard(ladder.token_address, `dip-page-${ladder.id}`)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              copyToClipboard(ladder.token_address, `dip-page-${ladder.id}`)
+                            }}
                             className="text-molten-gold/60 hover:text-molten-gold transition-colors"
                             title="Copy token address"
                           >
                             <Copy size={13} />
                           </button>
                         </div>
-                        <p className="text-xs text-white/40 font-space-grotesk mt-1">Wallet: {walletName}</p>
+                        <p className="text-xs text-white/40 font-mono mt-1 break-all [overflow-wrap:anywhere]">{ladder.token_address}</p>
                       </div>
                       <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
                         {ladderStatusLabel(ladder.status)}
@@ -3534,7 +3623,7 @@ function ProfilePageContent() {
                     </div>
 
                     <div className="mb-3 rounded-lg border border-molten-gold/15 bg-molten-gold/5 px-3 py-2 text-[11px] text-white/55 font-space-grotesk">
-                      <span className="text-molten-gold/80 font-orbitron font-bold uppercase">Reference</span> starts the current cycle. The bot buys when current price reaches the Buy Trigger, then recalculates the next trigger from the filled buy price.
+                      <span className="text-molten-gold/80 font-orbitron font-bold uppercase">Reference</span> is captured when the ladder is saved enabled. The first buy trigger comes from it, then every next trigger comes from the last filled buy.
                     </div>
 
                     <div className="relative z-10 grid grid-cols-2 md:grid-cols-5 gap-0 rounded-lg overflow-visible border border-white/10 mb-4">
@@ -3843,7 +3932,7 @@ function ProfilePageContent() {
                                         </button>
                                       </div>
                                       <p className="text-xs text-white/40 font-space-grotesk truncate">
-                                        Copied: {walletSettings[ladder.tracked_wallet_id]?.custom_name || trackedWallets.find(w => w.id === ladder.tracked_wallet_id)?.custom_name || formatWalletAddress(ladder.wallet_address)}
+                                        Source: Dip Ladder
                                       </p>
                                     </div>
                                   </div>

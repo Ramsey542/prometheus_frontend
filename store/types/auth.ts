@@ -145,7 +145,7 @@ export interface DipLadderLot {
 export interface DipLadder {
   id: number;
   user_id: number;
-  tracked_wallet_id: number;
+  tracked_wallet_id?: number | null;
   wallet_address: string;
   token_address: string;
   coin_type: string;

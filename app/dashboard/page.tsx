@@ -1203,20 +1203,19 @@ export default function DashboardPage() {
                   />
                 </motion.button>
               </div>
-              {selectedCoin === 'sol' && (
-                <div className="border-t border-molten-gold/10 pt-5 space-y-4">
+              <div className="border-t border-molten-gold/10 pt-5 space-y-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <div>
                         <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Token Filters</h4>
-                        <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Filter copied SOL buys by market cap, holder count, and token age</p>
+                        <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Filter copied {selectedCoin.toUpperCase()} buys by market cap, holder count, and token age</p>
                       </div>
                       <div className="group relative">
                         <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
                           <Info size={12} className="text-molten-gold" />
                         </div>
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                          Market cap uses current price multiplied by current supply, so burned tokens are excluded. Blank min or max values are ignored.
+                          SOL uses RugCheck data. BNB uses GeckoTerminal token info, with holder last_updated used as the token age reference. Blank min or max values are ignored.
                         </div>
                       </div>
                     </div>
@@ -1244,7 +1243,7 @@ export default function DashboardPage() {
                           Min Market Cap USD
                           <span className="group relative">
                             <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens below this market cap, calculated from current supply after burns.</span>
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens below this market cap.</span>
                           </span>
                         </label>
                         <input
@@ -1262,7 +1261,7 @@ export default function DashboardPage() {
                           Max Market Cap USD
                           <span className="group relative">
                             <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens above this market cap, calculated from current supply after burns.</span>
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens above this market cap.</span>
                           </span>
                         </label>
                         <input
@@ -1316,7 +1315,7 @@ export default function DashboardPage() {
                           Min Token Age Minutes
                           <span className="group relative">
                             <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens younger than this detectedAt age.</span>
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens younger than this age. BNB uses GeckoTerminal holders.last_updated.</span>
                           </span>
                         </label>
                         <input
@@ -1334,7 +1333,7 @@ export default function DashboardPage() {
                           Max Token Age Minutes
                           <span className="group relative">
                             <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens older than this detectedAt age.</span>
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens older than this age. BNB uses GeckoTerminal holders.last_updated.</span>
                           </span>
                         </label>
                         <input
@@ -1349,9 +1348,8 @@ export default function DashboardPage() {
                       </div>
                     </motion.div>
                   )}
-                  <p className="text-xs text-molten-gold/70 font-space-grotesk">Applying these filters adds roughly 200-400ms latency to each copied SOL buy.</p>
+                  <p className="text-xs text-molten-gold/70 font-space-grotesk">Applying these filters adds a metadata check before each copied {selectedCoin.toUpperCase()} buy.</p>
                 </div>
-              )}
             </div>
           </div>
 
