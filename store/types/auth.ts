@@ -58,6 +58,8 @@ export interface UserProfile {
   private_key: string;
   sol_balance: string;
   bnb_balance: string;
+  stable_balance?: string;
+  stable_symbol?: string;
   total_trades: number;
   win_rate: number;
   active_trades: number;

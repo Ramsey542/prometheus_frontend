@@ -118,6 +118,24 @@ const formatUsdPrice = (price: number | null | undefined): string => {
   return `$${formatted}`
 }
 
+const formatProfileBalance = (value: string | number | null | undefined, maxDecimals: number = 6): string => {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount)) return '0'
+  return amount.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxDecimals,
+    useGrouping: false
+  })
+}
+
+const parseLogEventData = (eventData: string | null | undefined): any => {
+  try {
+    return eventData ? JSON.parse(eventData) : {}
+  } catch {
+    return {}
+  }
+}
+
 const formatDate = (dateString: string, includeSeconds: boolean = false): string => {
   if (!dateString) return 'N/A'
 
@@ -4601,12 +4619,14 @@ function ProfilePageContent() {
 
                         const isBuyOperation = log.event_type === 'user_purchase'
                         const isToken = !isBuyOperation
+                        const eData = parseLogEventData(log.event_data)
+                        const sentSymbol = isBuyOperation ? (eData.input_token_symbol || selectedCoin.toUpperCase()) : (log.token_name || selectedCoin.toUpperCase())
                         return (
                           <div>
                             <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
                             <p className="text-white font-space-grotesk font-mono text-sm">
                               {formatAmount(log.amount_in, selectedCoin, isToken, isToken ? log.token_decimals : null)}
-                              {isToken && log.token_name ? ` ${log.token_name}` : ` ${selectedCoin.toUpperCase()}`}
+                              {` ${sentSymbol}`}
                             </p>
                           </div>
                         )
@@ -4670,7 +4690,7 @@ function ProfilePageContent() {
                         <div>
                           <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Fee Amount</p>
                           <p className="text-white font-space-grotesk font-mono text-sm">
-                            {formatAmount(log.fee_amount, selectedCoin, false)} {selectedCoin.toUpperCase()}
+                            {formatAmount(log.fee_amount, selectedCoin, false)} {parseLogEventData(log.event_data).input_token_symbol || selectedCoin.toUpperCase()}
                           </p>
                         </div>
                       )}
@@ -5109,7 +5129,7 @@ function ProfilePageContent() {
                     <div className="flex items-center gap-3">
                       <TrendingUp size={16} className="text-molten-gold" />
                       <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
-                        {selectedCoin === 'sol' ? 'SOL Balance' : 'BNB Balance'}
+                        Wallet Balances
                       </span>
                     </div>
                     <motion.button
@@ -5122,9 +5142,24 @@ function ProfilePageContent() {
                       <RefreshCw size={16} className={balanceRefreshing ? 'animate-spin' : ''} />
                     </motion.button>
                   </div>
-                  <p className="text-xl md:text-2xl font-orbitron font-bold text-molten-gold break-words">
-                    {isLoading || balanceRefreshing ? '...' : `${parseFloat(profile?.sol_balance || '0').toFixed(4)} ${selectedCoin.toUpperCase()}`}
-                  </p>
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-xs font-orbitron uppercase tracking-wider text-white/45">
+                        {selectedCoin === 'sol' ? 'Native SOL' : 'Native BNB'}
+                      </span>
+                      <p className="min-w-0 text-right text-lg md:text-xl font-orbitron font-bold text-molten-gold break-all [overflow-wrap:anywhere]">
+                        {isLoading || balanceRefreshing ? '...' : `${formatProfileBalance(profile?.sol_balance, 4)} ${selectedCoin.toUpperCase()}`}
+                      </p>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 border-t border-molten-gold/10 pt-3">
+                      <span className="text-xs font-orbitron uppercase tracking-wider text-white/45">
+                        {profile?.stable_symbol || (selectedCoin === 'sol' ? 'USDT' : 'USDC')} Balance
+                      </span>
+                      <p className="min-w-0 text-right text-lg md:text-xl font-orbitron font-bold text-white break-all [overflow-wrap:anywhere]">
+                        {isLoading || balanceRefreshing ? '...' : `${formatProfileBalance(profile?.stable_balance, 6)} ${profile?.stable_symbol || (selectedCoin === 'sol' ? 'USDT' : 'USDC')}`}
+                      </p>
+                    </div>
+                  </div>
                   <div className="mt-3">
                     <motion.button
                       onClick={() => setShowWithdraw(true)}
