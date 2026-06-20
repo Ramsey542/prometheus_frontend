@@ -32,7 +32,8 @@ import {
   Info,
   Power,
   Save,
-  Target
+  Target,
+  AlertCircle
 } from 'lucide-react'
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { logout, getProfile, setCoin } from '../../store/slices/authSlice'
@@ -136,6 +137,10 @@ const parseLogEventData = (eventData: string | null | undefined): any => {
   }
 }
 
+const getStableTradeAmount = (profile: any, coin: 'sol' | 'bnb') => {
+  return coin === 'sol' ? profile?.usdt_trade_amount : profile?.usdc_trade_amount
+}
+
 const formatDate = (dateString: string, includeSeconds: boolean = false): string => {
   if (!dateString) return 'N/A'
 
@@ -230,6 +235,10 @@ function ProfilePageContent() {
   const [isEditingTradeAmount, setIsEditingTradeAmount] = useState(false)
   const [tradeAmountSuccess, setTradeAmountSuccess] = useState<string | null>(null)
   const [tradeAmountError, setTradeAmountError] = useState<string | null>(null)
+  const [stableTradeAmountUpdating, setStableTradeAmountUpdating] = useState(false)
+  const [stableTradeAmountValue, setStableTradeAmountValue] = useState<string>('')
+  const [isEditingStableTradeAmount, setIsEditingStableTradeAmount] = useState(false)
+  const [stableTradeAmountError, setStableTradeAmountError] = useState<string | null>(null)
   const [walletSettings, setWalletSettings] = useState<{ [key: string]: any }>({})
   const [showWalletSettings, setShowWalletSettings] = useState<number | string | null>(null)
   const [walletSettingsLoading, setWalletSettingsLoading] = useState(false)
@@ -390,6 +399,11 @@ function ProfilePageContent() {
       setTradeAmountValue(profile.trade_amount.toString())
     }
   }, [profile?.trade_amount])
+
+  useEffect(() => {
+    const stableAmount = getStableTradeAmount(profile, selectedCoin)
+    setStableTradeAmountValue(stableAmount !== null && stableAmount !== undefined ? stableAmount.toString() : '')
+  }, [profile?.usdt_trade_amount, profile?.usdc_trade_amount, selectedCoin])
 
   useEffect(() => {
     if (tradeAmountSuccess) {
@@ -630,6 +644,8 @@ function ProfilePageContent() {
 
   const handleSelectNativeDipLadder = (coin: 'sol' | 'bnb') => {
     const nativeToken = DIP_LADDER_NATIVE_TOKENS[coin]
+    const stableAmount = getStableTradeAmount(profile, coin)
+    const canActivateNative = stableAmount !== null && stableAmount !== undefined && Number(stableAmount) > 0
     if (coin !== selectedCoin) {
       dispatch(setCoin(coin))
     }
@@ -640,11 +656,15 @@ function ProfilePageContent() {
       handleSelectDipLadder(matchingLadder)
       return
     }
+    if (!canActivateNative) {
+      const stableSymbol = coin === 'sol' ? 'USDT' : 'USDC'
+      setWalletTrackerError(`Set a ${stableSymbol} trade amount before activating the native ${coin.toUpperCase()} Dip Ladder`)
+    }
     setDipLadderSelectedId(null)
     setDipLadderForm(prev => ({
       ...prev,
       token_address: nativeToken.address,
-      is_active: true
+      is_active: canActivateNative
     }))
   }
 
@@ -662,6 +682,13 @@ function ProfilePageContent() {
         : tokenLower === DIP_LADDER_NATIVE_TOKENS.sol.address.toLowerCase()
           ? 'sol'
           : selectedCoin
+      const isNativeSave = tokenLower === DIP_LADDER_NATIVE_TOKENS[saveCoin].address.toLowerCase()
+      const stableAmount = getStableTradeAmount(profile, saveCoin)
+      if (dipLadderForm.is_active && isNativeSave && (stableAmount === null || stableAmount === undefined || Number(stableAmount) <= 0)) {
+        const stableSymbol = saveCoin === 'sol' ? 'USDT' : 'USDC'
+        setWalletTrackerError(`Set a ${stableSymbol} trade amount before activating the native ${saveCoin.toUpperCase()} Dip Ladder`)
+        return
+      }
       const saved = await walletTrackerApi.saveDipLadder(saveCoin, {
         token_address: dipLadderForm.token_address.trim(),
         dip_ladder_drop_percentage: Number(dipLadderForm.dip_ladder_drop_percentage) || 0,
@@ -1010,6 +1037,13 @@ function ProfilePageContent() {
     }
   }
 
+  const handleStableTradeAmountChange = (value: string) => {
+    setStableTradeAmountValue(value)
+    if (stableTradeAmountError) {
+      setStableTradeAmountError(null)
+    }
+  }
+
   const handleEditTradeAmount = () => {
     setIsEditingTradeAmount(true)
     setTradeAmountValue(profile?.trade_amount?.toString() || '0')
@@ -1019,6 +1053,19 @@ function ProfilePageContent() {
     setIsEditingTradeAmount(false)
     setTradeAmountValue(profile?.trade_amount?.toString() || '0')
     setTradeAmountError(null)
+  }
+
+  const handleEditStableTradeAmount = () => {
+    const stableAmount = getStableTradeAmount(profile, selectedCoin)
+    setIsEditingStableTradeAmount(true)
+    setStableTradeAmountValue(stableAmount !== null && stableAmount !== undefined ? stableAmount.toString() : '')
+  }
+
+  const handleCancelStableTradeAmount = () => {
+    const stableAmount = getStableTradeAmount(profile, selectedCoin)
+    setIsEditingStableTradeAmount(false)
+    setStableTradeAmountValue(stableAmount !== null && stableAmount !== undefined ? stableAmount.toString() : '')
+    setStableTradeAmountError(null)
   }
 
   const handleUpdateTradeAmount = async () => {
@@ -1063,6 +1110,51 @@ function ProfilePageContent() {
       }
     } finally {
       setTradeAmountUpdating(false)
+    }
+  }
+
+  const handleUpdateStableTradeAmount = async () => {
+    const amount = parseFloat(stableTradeAmountValue)
+    const stableSymbol = selectedCoin === 'sol' ? 'USDT' : 'USDC'
+    if (isNaN(amount) || amount <= 0) {
+      setStableTradeAmountError(`${stableSymbol} trade amount must be positive`)
+      return
+    }
+
+    try {
+      setStableTradeAmountUpdating(true)
+      setStableTradeAmountError(null)
+      setWalletTrackerError(null)
+      setWalletTrackerSuccess(null)
+      setTradeAmountSuccess(null)
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/stable-trade-amount/${selectedCoin}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ trade_amount: amount }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      setTradeAmountSuccess(data.message || `${stableSymbol} trade amount updated successfully!`)
+
+      await dispatch(getProfile(selectedCoin))
+      setIsEditingStableTradeAmount(false)
+    } catch (err: any) {
+      const errorMessage = err.message || `Failed to update ${stableSymbol} trade amount`
+      setWalletTrackerError(errorMessage)
+
+      if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
+        router.push('/login')
+      }
+    } finally {
+      setStableTradeAmountUpdating(false)
     }
   }
 
@@ -3328,18 +3420,68 @@ function ProfilePageContent() {
     const activeLadders = dipLadders.filter(ladder => ladder.status === 'active')
     const openLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling').length || 0), 0)
     const soldLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled').length || 0), 0)
-    const nativeToken = DIP_LADDER_NATIVE_TOKENS[selectedCoin]
     const tokenValue = dipLadderForm.token_address.trim()
-    const isNativeSelection = tokenValue.toLowerCase() === nativeToken.address.toLowerCase()
+    const tokenLower = tokenValue.toLowerCase()
+    const formCoin = tokenLower === DIP_LADDER_NATIVE_TOKENS.bnb.address.toLowerCase()
+      ? 'bnb'
+      : tokenLower === DIP_LADDER_NATIVE_TOKENS.sol.address.toLowerCase()
+        ? 'sol'
+        : selectedCoin
+    const nativeToken = DIP_LADDER_NATIVE_TOKENS[formCoin]
+    const isNativeSelection = tokenLower === nativeToken.address.toLowerCase()
+    const nativeStableSymbol = formCoin === 'sol' ? 'USDT' : 'USDC'
+    const nativeStableAmount = getStableTradeAmount(profile, formCoin)
+    const nativeActivationBlocked = isNativeSelection && (nativeStableAmount === null || nativeStableAmount === undefined || Number(nativeStableAmount) <= 0)
     const ladderStatusLabel = (status: string) => status === 'stopped_no_cash' ? 'NO CASH' : status.toUpperCase()
     const ladderStatusClass = (status: string) => {
       if (status === 'active') return 'text-blue-300 border-blue-400/40 bg-blue-500/10'
       if (status === 'disabled') return 'text-white/45 border-white/15 bg-white/5'
       return 'text-yellow-300 border-yellow-400/40 bg-yellow-500/10'
     }
-    const tokenDisplayName = (address: string) => {
+    const tokenDisplayName = (address: string, ladder?: DipLadder | null) => {
       const match = Object.values(DIP_LADDER_NATIVE_TOKENS).find(token => token.address.toLowerCase() === address.toLowerCase())
-      return match ? match.name : formatWalletAddress(address)
+      return ladder?.token_name || ladder?.token_symbol || (match ? match.name : formatWalletAddress(address))
+    }
+    const tokenShortSymbol = (address: string, ladder?: DipLadder | null) => {
+      const match = Object.values(DIP_LADDER_NATIVE_TOKENS).find(token => token.address.toLowerCase() === address.toLowerCase())
+      return ladder?.token_symbol || match?.label || null
+    }
+    const dipLadderChartLinks = (ladder: DipLadder) => {
+      const gmgnNetwork = ladder.coin_type === 'sol' ? 'sol' : 'bsc'
+      const dexNetwork = ladder.coin_type === 'sol' ? 'solana' : 'bsc'
+      return {
+        gmgn: `https://gmgn.ai/${gmgnNetwork}/token/${ladder.token_address}`,
+        dexscreener: `https://dexscreener.com/${dexNetwork}/${ladder.token_address}${profile?.public_address ? `?maker=${profile.public_address}` : ''}`
+      }
+    }
+    const renderDipLadderTokenLinks = (ladder: DipLadder) => {
+      const links = dipLadderChartLinks(ladder)
+      return (
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <a
+            href={links.gmgn}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-blue-400/25 bg-blue-500/10 px-2 text-[10px] font-orbitron font-bold text-blue-300 hover:bg-blue-500/20 transition-colors"
+            title="Open GMGN chart"
+          >
+            GMGN
+            <ExternalLink size={10} />
+          </a>
+          <a
+            href={links.dexscreener}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-molten-gold/25 bg-molten-gold/10 px-2 text-[10px] font-orbitron font-bold text-molten-gold hover:bg-molten-gold/20 transition-colors"
+            title="Open DexScreener chart"
+          >
+            DEX
+            <ExternalLink size={10} />
+          </a>
+        </div>
+      )
     }
 
     return (
@@ -3397,13 +3539,20 @@ function ProfilePageContent() {
               <div>
                 <h2 className="text-lg font-orbitron font-bold text-molten-gold">Ladder Setup</h2>
                 <p className="text-xs text-white/45 font-space-grotesk mt-1">
-                  {selectedLadder ? `Editing ${tokenDisplayName(selectedLadder.token_address)}` : `New ${selectedCoin.toUpperCase()} ladder`}
+                  {selectedLadder ? `Editing ${tokenDisplayName(selectedLadder.token_address, selectedLadder)}` : `New ${selectedCoin.toUpperCase()} ladder`}
                 </p>
               </div>
               <button
-                onClick={() => setDipLadderForm(prev => ({ ...prev, is_active: !prev.is_active }))}
+                onClick={() => {
+                  if (!dipLadderForm.is_active && nativeActivationBlocked) {
+                    setWalletTrackerError(`Set a ${nativeStableSymbol} trade amount before activating the native ${formCoin.toUpperCase()} Dip Ladder`)
+                    return
+                  }
+                  setDipLadderForm(prev => ({ ...prev, is_active: !prev.is_active }))
+                }}
                 disabled={dipLadderSaving}
-                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${dipLadderForm.is_active ? 'bg-molten-gold' : 'bg-gray-700'}`}
+                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${dipLadderForm.is_active ? 'bg-molten-gold' : nativeActivationBlocked ? 'bg-red-950 border border-red-400/40' : 'bg-gray-700'}`}
+                title={nativeActivationBlocked ? `Set a ${nativeStableSymbol} trade amount before enabling native ${formCoin.toUpperCase()}` : undefined}
               >
                 <motion.div
                   className="w-5 h-5 bg-white rounded-full flex items-center justify-center"
@@ -3423,6 +3572,17 @@ function ProfilePageContent() {
                 </p>
                 <p className="mt-2 text-xs text-white/45 font-space-grotesk">Switch changes stay local until you press Save.</p>
               </div>
+
+              {nativeActivationBlocked && (
+                <div className="rounded-lg border border-yellow-400/25 bg-yellow-500/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-yellow-300" />
+                    <p className="text-xs text-yellow-100/80 font-space-grotesk leading-relaxed">
+                      Native {formCoin.toUpperCase()} ladders buy with {nativeStableSymbol}. Set a {nativeStableSymbol} trade amount on the profile overview before enabling this ladder.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between gap-3 mb-2">
@@ -3558,12 +3718,23 @@ function ProfilePageContent() {
                 </div>
               ) : [selectedLadder].map(ladder => {
                 const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
+                const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
                 return (
                   <div key={ladder.id} className="rounded-lg border border-molten-gold/15 bg-black/25 p-4">
                     <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="min-w-0">
-                        <p className="text-sm text-white font-orbitron font-bold truncate">{tokenDisplayName(ladder.token_address)}</p>
-                        <p className="text-xs text-white/35 font-mono truncate mt-1">{ladder.token_address}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="min-w-0 text-sm text-white font-orbitron font-bold truncate">{tokenDisplayName(ladder.token_address, ladder)}</p>
+                          {tokenSymbol && (
+                            <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/45 font-orbitron">
+                              {tokenSymbol}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
+                          <p className="min-w-0 text-xs text-white/35 font-mono break-all [overflow-wrap:anywhere]">{ladder.token_address}</p>
+                          {renderDipLadderTokenLinks(ladder)}
+                        </div>
                       </div>
                       <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
                         {ladderStatusLabel(ladder.status)}
@@ -3608,6 +3779,7 @@ function ProfilePageContent() {
               {dipLadders.map((ladder, index) => {
                 const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
                 const closedLots = ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled') || []
+                const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
 
                 return (
                   <motion.div
@@ -3619,9 +3791,14 @@ function ProfilePageContent() {
                     className={`group relative z-10 rounded-lg border bg-void-black/45 p-4 md:p-5 overflow-visible hover:z-[90] transition-colors cursor-pointer ${dipLadderSelectedId === ladder.id ? 'border-molten-gold/50' : 'border-molten-gold/15 hover:border-molten-gold/35'}`}
                   >
                     <div className="flex items-start justify-between gap-4 mb-4">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-lg font-orbitron font-bold text-white truncate">{tokenDisplayName(ladder.token_address)}</p>
+                          <p className="min-w-0 text-lg font-orbitron font-bold text-white truncate">{tokenDisplayName(ladder.token_address, ladder)}</p>
+                          {tokenSymbol && (
+                            <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/45 font-orbitron">
+                              {tokenSymbol}
+                            </span>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -3633,7 +3810,10 @@ function ProfilePageContent() {
                             <Copy size={13} />
                           </button>
                         </div>
-                        <p className="text-xs text-white/40 font-mono mt-1 break-all [overflow-wrap:anywhere]">{ladder.token_address}</p>
+                        <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
+                          <p className="min-w-0 text-xs text-white/40 font-mono break-all [overflow-wrap:anywhere]">{ladder.token_address}</p>
+                          {renderDipLadderTokenLinks(ladder)}
+                        </div>
                       </div>
                       <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
                         {ladderStatusLabel(ladder.status)}
@@ -3687,6 +3867,20 @@ function ProfilePageContent() {
                         </div>
                       ) : openLots.map(lot => (
                         <div key={lot.id} className="rounded-lg bg-black/25 border border-white/10 p-3">
+                          <div className="mb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="min-w-0 text-xs text-white font-orbitron font-bold truncate">{tokenDisplayName(ladder.token_address, ladder)}</p>
+                                {tokenSymbol && (
+                                  <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/45 font-orbitron">
+                                    {tokenSymbol}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 min-w-0 break-all [overflow-wrap:anywhere] text-[11px] text-white/35 font-mono leading-snug">{ladder.token_address}</p>
+                            </div>
+                            {renderDipLadderTokenLinks(ladder)}
+                          </div>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="min-w-0">
                               <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Entry</p>
@@ -4960,6 +5154,86 @@ function ProfilePageContent() {
                     </p>
                     <motion.button
                       onClick={handleEditTradeAmount}
+                      className="px-3 py-2 bg-molten-gold/10 border border-molten-gold/20 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300 flex items-center gap-2"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Edit3 size={14} />
+                      Update
+                    </motion.button>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Wallet size={16} className="text-molten-gold" />
+                  <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
+                    {selectedCoin === 'sol' ? 'USDT' : 'USDC'} Trade Amount
+                  </span>
+                </div>
+                <p className="mb-3 text-xs text-white/45 font-space-grotesk leading-relaxed">
+                  Used only when Dip Ladder buys native {selectedCoin.toUpperCase()}. Custom token ladders still use your {selectedCoin.toUpperCase()} trade amount.
+                </p>
+                {isEditingStableTradeAmount ? (
+                  <div className="space-y-3">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={stableTradeAmountValue}
+                      onChange={(e) => handleStableTradeAmountChange(e.target.value)}
+                      className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                      placeholder={`${selectedCoin === 'sol' ? 'USDT' : 'USDC'} amount for native ${selectedCoin.toUpperCase()}`}
+                    />
+                    {stableTradeAmountError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg"
+                      >
+                        <div className="flex items-center gap-2 text-red-400">
+                          <XCircle size={16} />
+                          <span className="text-sm font-orbitron font-bold">{stableTradeAmountError}</span>
+                        </div>
+                      </motion.div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <motion.button
+                        onClick={handleUpdateStableTradeAmount}
+                        disabled={stableTradeAmountUpdating}
+                        className="flex-1 px-3 py-2 bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors duration-300 flex items-center justify-center gap-2 disabled:opacity-50"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {stableTradeAmountUpdating ? (
+                          <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <CheckCircle size={14} />
+                        )}
+                        Save
+                      </motion.button>
+                      <motion.button
+                        onClick={handleCancelStableTradeAmount}
+                        disabled={stableTradeAmountUpdating}
+                        className="flex-1 px-3 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors duration-300 flex items-center justify-center gap-2 disabled:opacity-50"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <XCircle size={14} />
+                        Cancel
+                      </motion.button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <p className="text-white font-space-grotesk flex-1">
+                      {getStableTradeAmount(profile, selectedCoin) !== null && getStableTradeAmount(profile, selectedCoin) !== undefined
+                        ? `${getStableTradeAmount(profile, selectedCoin)} ${selectedCoin === 'sol' ? 'USDT' : 'USDC'}`
+                        : 'Not set'}
+                    </p>
+                    <motion.button
+                      onClick={handleEditStableTradeAmount}
                       className="px-3 py-2 bg-molten-gold/10 border border-molten-gold/20 text-molten-gold rounded-lg hover:bg-molten-gold/20 transition-colors duration-300 flex items-center gap-2"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}

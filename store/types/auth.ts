@@ -60,6 +60,8 @@ export interface UserProfile {
   bnb_balance: string;
   stable_balance?: string;
   stable_symbol?: string;
+  usdt_trade_amount?: number | null;
+  usdc_trade_amount?: number | null;
   total_trades: number;
   win_rate: number;
   active_trades: number;
@@ -151,6 +153,9 @@ export interface DipLadder {
   wallet_address: string;
   token_address: string;
   coin_type: string;
+  token_name?: string | null;
+  token_symbol?: string | null;
+  token_logo_uri?: string | null;
   anchor_price_usd: number;
   next_buy_price_usd: number;
   last_price_usd?: number | null;
