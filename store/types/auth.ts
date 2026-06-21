@@ -131,6 +131,18 @@ export interface TrackedWalletListCreate {
   tracking_type?: any;
 }
 
+export interface DipLadderLotPnl {
+  cost_basis_usd: number;
+  current_value_usd: number;
+  unrealized_pnl_usd: number;
+  unrealized_pnl_percentage?: number | null;
+  realized_pnl_usd: number;
+  realized_pnl_percentage?: number | null;
+  final_pnl_usd?: number | null;
+  final_pnl_percentage?: number | null;
+  basis_source: string;
+}
+
 export interface DipLadderLot {
   id: number;
   entry_price_usd: number;
@@ -144,6 +156,7 @@ export interface DipLadderLot {
   last_error?: string | null;
   created_at: string;
   updated_at: string;
+  pnl?: DipLadderLotPnl | null;
 }
 
 export interface DipLadder {
@@ -167,6 +180,11 @@ export interface DipLadder {
   created_at: string;
   updated_at: string;
   lots: DipLadderLot[];
+  total_cost_basis_usd?: number;
+  total_unrealized_pnl_usd?: number;
+  total_realized_pnl_usd?: number;
+  total_pnl_usd?: number;
+  total_pnl_percentage?: number | null;
 }
 
 export interface CopyTradingLog {

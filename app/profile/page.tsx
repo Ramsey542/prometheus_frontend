@@ -3456,6 +3456,9 @@ function ProfilePageContent() {
     const activeLadders = dipLadders.filter(ladder => ladder.status === 'active')
     const openLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling').length || 0), 0)
     const soldLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled').length || 0), 0)
+    const totalUnrealizedPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_unrealized_pnl_usd || 0), 0)
+    const totalRealizedPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_realized_pnl_usd || 0), 0)
+    const totalNetPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_pnl_usd || 0), 0)
     const tokenValue = dipLadderForm.token_address.trim()
     const tokenLower = tokenValue.toLowerCase()
     const formCoin = tokenLower === DIP_LADDER_NATIVE_TOKENS.bnb.address.toLowerCase()
@@ -3519,6 +3522,33 @@ function ProfilePageContent() {
         </div>
       )
     }
+    const formatPnlUsd = (value: number | null | undefined) => {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A'
+      const amount = Number(value)
+      const sign = amount > 0 ? '+' : amount < 0 ? '-' : ''
+      return `${sign}$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    }
+    const formatPnlPercent = (value: number | null | undefined) => {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return ''
+      const amount = Number(value)
+      return `${amount > 0 ? '+' : ''}${amount.toFixed(2)}%`
+    }
+    const pnlTone = (value: number | null | undefined) => {
+      const amount = Number(value || 0)
+      if (amount > 0) return 'text-green-400'
+      if (amount < 0) return 'text-red-400'
+      return 'text-white/55'
+    }
+    const renderPnlValue = (value: number | null | undefined, percentage?: number | null, size: 'sm' | 'md' = 'sm') => (
+      <div className="min-w-0">
+        <p className={`font-mono font-bold leading-snug break-all [overflow-wrap:anywhere] ${size === 'md' ? 'text-base' : 'text-sm'} ${pnlTone(value)}`}>
+          {formatPnlUsd(value)}
+        </p>
+        {percentage !== null && percentage !== undefined && (
+          <p className={`mt-0.5 text-[10px] font-orbitron ${pnlTone(value)}`}>{formatPnlPercent(percentage)}</p>
+        )}
+      </div>
+    )
 
     return (
       <section className="max-w-7xl mx-auto overflow-visible w-full max-w-full space-y-8 md:space-y-10">
@@ -3594,15 +3624,20 @@ function ProfilePageContent() {
           </motion.div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 rounded-lg overflow-hidden border border-molten-gold/20 bg-void-black/40">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-0 rounded-lg overflow-hidden border border-molten-gold/20 bg-void-black/40">
           {[
             { label: 'Active Ladders', value: activeLadders.length, tone: 'text-blue-300' },
             { label: 'Open Lots', value: openLotsCount, tone: 'text-molten-gold' },
-            { label: 'Closed Lots', value: soldLotsCount, tone: 'text-green-400' }
+            { label: 'UPNL', value: formatPnlUsd(totalUnrealizedPnl), tone: pnlTone(totalUnrealizedPnl) },
+            { label: 'Realized PNL', value: formatPnlUsd(totalRealizedPnl), tone: pnlTone(totalRealizedPnl) },
+            { label: 'Net PNL', value: formatPnlUsd(totalNetPnl), tone: pnlTone(totalNetPnl) }
           ].map((metric, index) => (
-            <div key={metric.label} className={`p-5 md:p-6 ${index < 2 ? 'border-b md:border-b-0 md:border-r border-molten-gold/10' : ''}`}>
+            <div key={metric.label} className={`p-5 md:p-6 ${index < 4 ? 'border-b xl:border-b-0 xl:border-r border-molten-gold/10' : ''}`}>
               <p className="text-xs font-orbitron uppercase tracking-[0.22em] text-white/35 mb-2">{metric.label}</p>
-              <p className={`text-3xl font-orbitron font-bold ${metric.tone}`}>{metric.value}</p>
+              <p className={`break-all [overflow-wrap:anywhere] text-2xl md:text-3xl font-orbitron font-bold ${metric.tone}`}>{metric.value}</p>
+              {metric.label === 'Realized PNL' && (
+                <p className="mt-1 text-[10px] text-white/30 font-space-grotesk">{soldLotsCount} closed lot{soldLotsCount === 1 ? '' : 's'}</p>
+              )}
             </div>
           ))}
         </div>
@@ -3835,6 +3870,20 @@ function ProfilePageContent() {
                         <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.last_price_usd)}</p>
                       </div>
                     </div>
+                    <div className="mt-3 grid grid-cols-3 gap-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+                      <div className="min-w-0 border-r border-white/10 p-2">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">UPNL</p>
+                        {renderPnlValue(ladder.total_unrealized_pnl_usd, null)}
+                      </div>
+                      <div className="min-w-0 border-r border-white/10 p-2">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Realized</p>
+                        {renderPnlValue(ladder.total_realized_pnl_usd, null)}
+                      </div>
+                      <div className="min-w-0 p-2">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Net</p>
+                        {renderPnlValue(ladder.total_pnl_usd, ladder.total_pnl_percentage)}
+                      </div>
+                    </div>
                     <p className="mt-3 text-xs text-white/40 font-space-grotesk">{openLots.length} open lot{openLots.length === 1 ? '' : 's'}</p>
                   </div>
                 )
@@ -3863,6 +3912,7 @@ function ProfilePageContent() {
               {dipLadders.map((ladder, index) => {
                 const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
                 const closedLots = ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled') || []
+                const displayLots = [...openLots, ...closedLots]
                 const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
 
                 return (
@@ -3940,16 +3990,36 @@ function ProfilePageContent() {
                       </div>
                     </div>
 
+                    <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+                      <div className="min-w-0 border-b sm:border-b-0 sm:border-r border-white/10 p-3">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">UPNL</p>
+                        {renderPnlValue(ladder.total_unrealized_pnl_usd, null, 'md')}
+                      </div>
+                      <div className="min-w-0 border-b sm:border-b-0 sm:border-r border-white/10 p-3">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Realized</p>
+                        {renderPnlValue(ladder.total_realized_pnl_usd, null, 'md')}
+                      </div>
+                      <div className="min-w-0 p-3">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Net PNL</p>
+                        {renderPnlValue(ladder.total_pnl_usd, ladder.total_pnl_percentage, 'md')}
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-orbitron text-molten-gold/80 uppercase tracking-[0.18em]">Lots</p>
                         <p className="text-[11px] text-white/40 font-space-grotesk">{openLots.length} open, {closedLots.length} closed</p>
                       </div>
-                      {openLots.length === 0 ? (
+                      {displayLots.length === 0 ? (
                         <div className="rounded-lg border border-dashed border-white/10 p-3 text-sm text-white/35 font-space-grotesk">
                           Waiting for the next configured drop.
                         </div>
-                      ) : openLots.map(lot => (
+                      ) : displayLots.map(lot => {
+                        const isClosedLot = lot.status === 'sold' || lot.status === 'settled'
+                        const lotPnl = lot.pnl
+                        const pnlValue = isClosedLot ? lotPnl?.final_pnl_usd ?? lotPnl?.realized_pnl_usd : lotPnl?.unrealized_pnl_usd
+                        const pnlPercent = isClosedLot ? lotPnl?.final_pnl_percentage ?? lotPnl?.realized_pnl_percentage : lotPnl?.unrealized_pnl_percentage
+                        return (
                         <div key={lot.id} className="rounded-lg bg-black/25 border border-white/10 p-3">
                           <div className="mb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                             <div className="min-w-0">
@@ -3960,12 +4030,20 @@ function ProfilePageContent() {
                                     {tokenSymbol}
                                   </span>
                                 )}
+                                <span className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-orbitron ${isClosedLot ? 'border-green-400/25 bg-green-500/10 text-green-300' : 'border-blue-400/25 bg-blue-500/10 text-blue-300'}`}>
+                                  {isClosedLot ? 'SOLD' : lot.status.toUpperCase()}
+                                </span>
+                                {lotPnl?.basis_source === 'estimated' && (
+                                  <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/40 font-orbitron">
+                                    EST
+                                  </span>
+                                )}
                               </div>
                               <p className="mt-1 min-w-0 break-all [overflow-wrap:anywhere] text-[11px] text-white/35 font-mono leading-snug">{ladder.token_address}</p>
                             </div>
                             {renderDipLadderTokenLinks(ladder)}
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                             <div className="min-w-0">
                               <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Entry</p>
                               <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-white font-mono leading-snug">{formatUsdPrice(lot.entry_price_usd)}</p>
@@ -3978,9 +4056,13 @@ function ProfilePageContent() {
                               <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Remaining</p>
                               <p className="text-sm text-molten-gold font-mono">{lot.remaining_amount_tokens.toLocaleString(undefined, { maximumFractionDigits: 6 })}</p>
                             </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">{isClosedLot ? 'Final PNL' : 'UPNL'}</p>
+                              {renderPnlValue(pnlValue, pnlPercent)}
+                            </div>
                           </div>
                         </div>
-                      ))}
+                      )})}
                     </div>
                   </motion.div>
                 )
