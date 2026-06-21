@@ -17,11 +17,39 @@ class WalletTrackerApiError extends Error {
   }
 }
 
+const getErrorMessage = (errorData: any, status: number) => {
+  const detail = errorData?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => item?.msg || item?.message || item?.detail)
+      .filter(Boolean);
+    if (messages.length) {
+      return messages.join('. ');
+    }
+  }
+  if (detail && typeof detail === 'object') {
+    return detail.message || detail.detail || 'Request failed. Please check the form and try again.';
+  }
+  if (typeof errorData?.message === 'string' && errorData.message.trim()) {
+    return errorData.message;
+  }
+  if (status >= 500) {
+    return 'Something went wrong on the server. Please try again in a moment.';
+  }
+  if (status === 400) {
+    return 'Request could not be saved. Please check the form and try again.';
+  }
+  return `HTTP error! status: ${status}`;
+};
+
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new WalletTrackerApiError(
-      errorData.detail || `HTTP error! status: ${response.status}`,
+      getErrorMessage(errorData, response.status),
       response.status
     );
   }
@@ -377,6 +405,22 @@ export const walletTrackerApi = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+      });
+      return await handleResponse(response);
+    });
+  },
+
+  async deleteDipLadderLot(lotId: number): Promise<{ message: string; lot_id: number; ladder_id: number }> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/dip-ladder-lots/${lotId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
       });
       return await handleResponse(response);
     });
