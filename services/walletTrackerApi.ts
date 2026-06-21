@@ -410,12 +410,12 @@ export const walletTrackerApi = {
     });
   },
 
-  async deleteDipLadderLot(lotId: number): Promise<{ message: string; lot_id: number; ladder_id: number }> {
+  async deleteDipLadder(ladderId: number): Promise<{ message: string; ladder_id: number; token_address: string }> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
 
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/dip-ladder-lots/${lotId}`, {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/dip-ladders/${ladderId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

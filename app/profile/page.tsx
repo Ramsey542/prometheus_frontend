@@ -38,10 +38,11 @@ import {
 import { useAppDispatch, useAppSelector } from '../../store/hooks'
 import { logout, getProfile, setCoin } from '../../store/slices/authSlice'
 import { useState, useEffect, Suspense, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileLayout from '../../components/ProfileLayout'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
-import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, DipLadder, DipLadderLot } from '../../store/types/auth'
+import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, DipLadder } from '../../store/types/auth'
 import { authApi } from '@/services/authApi'
 import { config } from '../../lib/config'
 import CreateWalletModal from '../../components/CreateWalletModal'
@@ -291,8 +292,8 @@ function ProfilePageContent() {
     is_active: false
   })
   const [dipLadderSaving, setDipLadderSaving] = useState(false)
-  const [dipLadderLotDeleteModal, setDipLadderLotDeleteModal] = useState<{ open: boolean; lot: DipLadderLot | null; ladder: DipLadder | null }>({ open: false, lot: null, ladder: null })
-  const [dipLadderLotDeleting, setDipLadderLotDeleting] = useState(false)
+  const [dipLadderDeleteModal, setDipLadderDeleteModal] = useState<{ open: boolean; ladder: DipLadder | null }>({ open: false, ladder: null })
+  const [dipLadderDeleting, setDipLadderDeleting] = useState(false)
 
   const handleToggleDebugMode = async () => {
     if (!profile?.is_admin) return
@@ -720,27 +721,36 @@ function ProfilePageContent() {
     }
   }
 
-  const handleRequestDeleteDipLadderLot = (ladder: DipLadder, lot: DipLadderLot, event?: { stopPropagation: () => void }) => {
+  const handleRequestDeleteDipLadder = (ladder: DipLadder, event?: { stopPropagation: () => void }) => {
     event?.stopPropagation()
-    setDipLadderLotDeleteModal({ open: true, ladder, lot })
+    setDipLadderDeleteModal({ open: true, ladder })
     setWalletTrackerError(null)
   }
 
-  const handleDeleteDipLadderLot = async () => {
-    const lot = dipLadderLotDeleteModal.lot
-    if (!lot) return
+  const handleDeleteDipLadder = async () => {
+    const ladder = dipLadderDeleteModal.ladder
+    if (!ladder) return
     try {
-      setDipLadderLotDeleting(true)
+      setDipLadderDeleting(true)
       setWalletTrackerError(null)
       setWalletTrackerSuccess(null)
-      const response = await walletTrackerApi.deleteDipLadderLot(lot.id)
-      setWalletTrackerSuccess(response.message || 'Open Dip Ladder lot deleted')
-      setDipLadderLotDeleteModal({ open: false, lot: null, ladder: null })
+      const response = await walletTrackerApi.deleteDipLadder(ladder.id)
+      setWalletTrackerSuccess(response.message || 'Dip Ladder entry deleted')
+      setDipLadderDeleteModal({ open: false, ladder: null })
+      if (dipLadderSelectedId === ladder.id) {
+        setDipLadderSelectedId(null)
+        setDipLadderForm({
+          token_address: '',
+          dip_ladder_drop_percentage: 5,
+          dip_ladder_profit_percentage: 5,
+          is_active: false
+        })
+      }
       await fetchDipLadders()
     } catch (err: any) {
-      setWalletTrackerError(err.message || 'Failed to delete Dip Ladder lot')
+      setWalletTrackerError(err.message || 'Failed to delete Dip Ladder entry')
     } finally {
-      setDipLadderLotDeleting(false)
+      setDipLadderDeleting(false)
     }
   }
 
@@ -3800,9 +3810,19 @@ function ProfilePageContent() {
                           {renderDipLadderTokenLinks(ladder)}
                         </div>
                       </div>
-                      <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
-                        {ladderStatusLabel(ladder.status)}
-                      </span>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
+                          {ladderStatusLabel(ladder.status)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleRequestDeleteDipLadder(ladder, e)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-400/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
+                          title="Delete Dip Ladder entry"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="min-w-0">
@@ -3943,17 +3963,7 @@ function ProfilePageContent() {
                               </div>
                               <p className="mt-1 min-w-0 break-all [overflow-wrap:anywhere] text-[11px] text-white/35 font-mono leading-snug">{ladder.token_address}</p>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {renderDipLadderTokenLinks(ladder)}
-                              <button
-                                type="button"
-                                onClick={(e) => handleRequestDeleteDipLadderLot(ladder, lot, e)}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-400/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
-                                title="Delete open lot"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
+                            {renderDipLadderTokenLinks(ladder)}
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="min-w-0">
@@ -4222,9 +4232,19 @@ function ProfilePageContent() {
                                       </p>
                                     </div>
                                   </div>
-                                  <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladder.status === 'active' ? 'bg-blue-500/20 text-blue-300 border-blue-400/40' : ladder.status === 'disabled' ? 'bg-white/5 text-white/45 border-white/15' : 'bg-yellow-500/20 text-yellow-300 border-yellow-400/40'}`}>
-                                    {ladder.status === 'stopped_no_cash' ? 'NO CASH' : ladder.status.toUpperCase()}
-                                  </span>
+                                  <div className="flex flex-shrink-0 items-center gap-2">
+                                    <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladder.status === 'active' ? 'bg-blue-500/20 text-blue-300 border-blue-400/40' : ladder.status === 'disabled' ? 'bg-white/5 text-white/45 border-white/15' : 'bg-yellow-500/20 text-yellow-300 border-yellow-400/40'}`}>
+                                      {ladder.status === 'stopped_no_cash' ? 'NO CASH' : ladder.status.toUpperCase()}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleRequestDeleteDipLadder(ladder, e)}
+                                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-400/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
+                                      title="Delete Dip Ladder entry"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3 mb-4">
@@ -4256,14 +4276,6 @@ function ProfilePageContent() {
                                     <div key={lot.id} className="min-w-0 bg-black/20 rounded-lg p-2 space-y-1">
                                       <div className="flex items-center justify-between gap-2">
                                         <span className="text-[10px] text-white/35 font-orbitron uppercase">Open Lot</span>
-                                        <button
-                                          type="button"
-                                          onClick={(e) => handleRequestDeleteDipLadderLot(ladder, lot, e)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-red-400/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
-                                          title="Delete open lot"
-                                        >
-                                          <Trash2 size={12} />
-                                        </button>
                                       </div>
                                       <div className="flex justify-between items-start gap-2 text-xs">
                                         <span className="text-white/50 font-orbitron">Entry</span>
@@ -5686,27 +5698,27 @@ function ProfilePageContent() {
         </motion.div>
       )}
 
-      {dipLadderLotDeleteModal.open && dipLadderLotDeleteModal.lot && dipLadderLotDeleteModal.ladder && (
+      {dipLadderDeleteModal.open && dipLadderDeleteModal.ladder && typeof document !== 'undefined' && createPortal(
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
         >
           <motion.div
             initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.96, opacity: 0 }}
-            className="w-full max-w-md rounded-lg border border-red-400/30 bg-gradient-to-br from-void-black/95 to-black/95 p-5 shadow-2xl"
+            className="relative z-[2147483647] w-full max-w-md rounded-lg border border-red-400/30 bg-gradient-to-br from-void-black/95 to-black/95 p-5 shadow-2xl"
           >
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-red-400/30 bg-red-500/10 text-red-300">
                 <Trash2 size={18} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-orbitron font-bold text-red-300">Delete Open Lot</h3>
+                <h3 className="text-lg font-orbitron font-bold text-red-300">Delete Dip Ladder Entry</h3>
                 <p className="mt-2 text-sm text-white/60 font-space-grotesk leading-relaxed">
-                  This deletes only the Dip Ladder lot record. It does not sell tokens in your wallet.
+                  This removes the token from Dip Ladder entirely. The bot will stop tracking its price, stop buying new drops, and remove all saved lots for this entry. It does not sell tokens in your wallet.
                 </p>
               </div>
             </div>
@@ -5715,21 +5727,21 @@ function ProfilePageContent() {
               <div className="min-w-0">
                 <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Token</p>
                 <p className="text-sm text-white font-orbitron font-bold truncate">
-                  {dipLadderLotDeleteModal.ladder.token_name || dipLadderLotDeleteModal.ladder.token_symbol || formatWalletAddress(dipLadderLotDeleteModal.ladder.token_address)}
+                  {dipLadderDeleteModal.ladder.token_name || dipLadderDeleteModal.ladder.token_symbol || formatWalletAddress(dipLadderDeleteModal.ladder.token_address)}
                 </p>
                 <p className="mt-1 break-all [overflow-wrap:anywhere] text-[11px] text-white/35 font-mono">
-                  {dipLadderLotDeleteModal.ladder.token_address}
+                  {dipLadderDeleteModal.ladder.token_address}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Entry</p>
-                  <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-mono">{formatUsdPrice(dipLadderLotDeleteModal.lot.entry_price_usd)}</p>
+                  <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Status</p>
+                  <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-orbitron font-bold">{dipLadderDeleteModal.ladder.status.toUpperCase()}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Remaining</p>
+                  <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Saved Lots</p>
                   <p className="break-all [overflow-wrap:anywhere] text-sm text-molten-gold font-mono">
-                    {dipLadderLotDeleteModal.lot.remaining_amount_tokens.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                    {dipLadderDeleteModal.ladder.lots?.length || 0}
                   </p>
                 </div>
               </div>
@@ -5738,30 +5750,31 @@ function ProfilePageContent() {
             <div className="mt-5 flex flex-col sm:flex-row gap-3">
               <button
                 type="button"
-                onClick={() => setDipLadderLotDeleteModal({ open: false, lot: null, ladder: null })}
-                disabled={dipLadderLotDeleting}
+                onClick={() => setDipLadderDeleteModal({ open: false, ladder: null })}
+                disabled={dipLadderDeleting}
                 className="flex-1 rounded-lg border border-white/10 px-4 py-3 text-sm font-orbitron font-bold text-white/70 hover:bg-white/5 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <motion.button
                 type="button"
-                onClick={handleDeleteDipLadderLot}
-                disabled={dipLadderLotDeleting}
+                onClick={handleDeleteDipLadder}
+                disabled={dipLadderDeleting}
                 className="flex-1 rounded-lg border border-red-400/30 bg-red-500/15 px-4 py-3 text-sm font-orbitron font-bold text-red-300 hover:bg-red-500/25 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                {dipLadderLotDeleting ? (
+                {dipLadderDeleting ? (
                   <div className="h-4 w-4 rounded-full border-2 border-red-300 border-t-transparent animate-spin" />
                 ) : (
                   <Trash2 size={15} />
                 )}
-                Delete Lot
+                Delete Entry
               </motion.button>
             </div>
           </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.body
       )}
 
       {currentSection === 'wallet-tracker' ? renderWalletTrackerSection() :
