@@ -289,6 +289,9 @@ function ProfilePageContent() {
     token_address: '',
     dip_ladder_drop_percentage: 5,
     dip_ladder_profit_percentage: 5,
+    max_buy_count: '',
+    max_drawdown_percentage: '',
+    update_buy_trigger_on_sell: false,
     is_active: false
   })
   const [dipLadderSaving, setDipLadderSaving] = useState(false)
@@ -487,6 +490,9 @@ function ProfilePageContent() {
         token_address: firstLadder.token_address,
         dip_ladder_drop_percentage: firstLadder.drop_percentage,
         dip_ladder_profit_percentage: firstLadder.profit_percentage,
+        max_buy_count: firstLadder.max_buy_count ? firstLadder.max_buy_count.toString() : '',
+        max_drawdown_percentage: firstLadder.max_drawdown_percentage ? firstLadder.max_drawdown_percentage.toString() : '',
+        update_buy_trigger_on_sell: Boolean(firstLadder.update_buy_trigger_on_sell),
         is_active: firstLadder.status === 'active'
       })
     } else {
@@ -631,6 +637,9 @@ function ProfilePageContent() {
       token_address: ladder.token_address,
       dip_ladder_drop_percentage: ladder.drop_percentage,
       dip_ladder_profit_percentage: ladder.profit_percentage,
+      max_buy_count: ladder.max_buy_count ? ladder.max_buy_count.toString() : '',
+      max_drawdown_percentage: ladder.max_drawdown_percentage ? ladder.max_drawdown_percentage.toString() : '',
+      update_buy_trigger_on_sell: Boolean(ladder.update_buy_trigger_on_sell),
       is_active: ladder.status === 'active'
     })
   }
@@ -641,6 +650,9 @@ function ProfilePageContent() {
       token_address: '',
       dip_ladder_drop_percentage: 5,
       dip_ladder_profit_percentage: 5,
+      max_buy_count: '',
+      max_drawdown_percentage: '',
+      update_buy_trigger_on_sell: false,
       is_active: false
     })
   }
@@ -696,6 +708,9 @@ function ProfilePageContent() {
         token_address: dipLadderForm.token_address.trim(),
         dip_ladder_drop_percentage: Number(dipLadderForm.dip_ladder_drop_percentage) || 0,
         dip_ladder_profit_percentage: Number(dipLadderForm.dip_ladder_profit_percentage) || 0,
+        max_buy_count: optionalIntFromInput(dipLadderForm.max_buy_count),
+        max_drawdown_percentage: optionalFloatFromInput(dipLadderForm.max_drawdown_percentage),
+        update_buy_trigger_on_sell: dipLadderForm.update_buy_trigger_on_sell,
         is_active: dipLadderForm.is_active
       })
       if (saveCoin !== selectedCoin) {
@@ -706,6 +721,9 @@ function ProfilePageContent() {
         token_address: saved.token_address,
         dip_ladder_drop_percentage: saved.drop_percentage,
         dip_ladder_profit_percentage: saved.profit_percentage,
+        max_buy_count: saved.max_buy_count ? saved.max_buy_count.toString() : '',
+        max_drawdown_percentage: saved.max_drawdown_percentage ? saved.max_drawdown_percentage.toString() : '',
+        update_buy_trigger_on_sell: Boolean(saved.update_buy_trigger_on_sell),
         is_active: saved.status === 'active'
       })
       if (saveCoin === selectedCoin) {
@@ -727,6 +745,50 @@ function ProfilePageContent() {
     setWalletTrackerError(null)
   }
 
+  const handleToggleDipLadderToken = async (ladder: DipLadder, event?: { stopPropagation: () => void }) => {
+    event?.stopPropagation()
+    const nextActive = ladder.status !== 'active'
+    const coin = ladder.coin_type as 'sol' | 'bnb'
+    const isNativeToken = ladder.token_address.toLowerCase() === DIP_LADDER_NATIVE_TOKENS[coin].address.toLowerCase()
+    const stableAmount = getStableTradeAmount(profile, coin)
+    if (nextActive && isNativeToken && (stableAmount === null || stableAmount === undefined || Number(stableAmount) <= 0)) {
+      const stableSymbol = coin === 'sol' ? 'USDT' : 'USDC'
+      setWalletTrackerError(`Set a ${stableSymbol} trade amount before activating the native ${coin.toUpperCase()} Dip Ladder`)
+      return
+    }
+    try {
+      setDipLadderSaving(true)
+      setWalletTrackerError(null)
+      setWalletTrackerSuccess(null)
+      const saved = await walletTrackerApi.saveDipLadder(coin, {
+        token_address: ladder.token_address,
+        dip_ladder_drop_percentage: ladder.drop_percentage,
+        dip_ladder_profit_percentage: ladder.profit_percentage,
+        max_buy_count: ladder.max_buy_count ?? null,
+        max_drawdown_percentage: ladder.max_drawdown_percentage ?? null,
+        update_buy_trigger_on_sell: Boolean(ladder.update_buy_trigger_on_sell),
+        is_active: nextActive
+      })
+      setWalletTrackerSuccess(nextActive ? 'Dip Ladder token enabled' : 'Dip Ladder token disabled')
+      if (dipLadderSelectedId === ladder.id) {
+        setDipLadderForm({
+          token_address: saved.token_address,
+          dip_ladder_drop_percentage: saved.drop_percentage,
+          dip_ladder_profit_percentage: saved.profit_percentage,
+          max_buy_count: saved.max_buy_count ? saved.max_buy_count.toString() : '',
+          max_drawdown_percentage: saved.max_drawdown_percentage ? saved.max_drawdown_percentage.toString() : '',
+          update_buy_trigger_on_sell: Boolean(saved.update_buy_trigger_on_sell),
+          is_active: saved.status === 'active'
+        })
+      }
+      await fetchDipLadders()
+    } catch (err: any) {
+      setWalletTrackerError(err.message || 'Failed to update Dip Ladder token')
+    } finally {
+      setDipLadderSaving(false)
+    }
+  }
+
   const handleDeleteDipLadder = async () => {
     const ladder = dipLadderDeleteModal.ladder
     if (!ladder) return
@@ -743,6 +805,9 @@ function ProfilePageContent() {
           token_address: '',
           dip_ladder_drop_percentage: 5,
           dip_ladder_profit_percentage: 5,
+          max_buy_count: '',
+          max_drawdown_percentage: '',
+          update_buy_trigger_on_sell: false,
           is_active: false
         })
       }
@@ -3471,10 +3536,15 @@ function ProfilePageContent() {
     const nativeStableSymbol = formCoin === 'sol' ? 'USDT' : 'USDC'
     const nativeStableAmount = getStableTradeAmount(profile, formCoin)
     const nativeActivationBlocked = isNativeSelection && (nativeStableAmount === null || nativeStableAmount === undefined || Number(nativeStableAmount) <= 0)
-    const ladderStatusLabel = (status: string) => status === 'stopped_no_cash' ? 'NO CASH' : status.toUpperCase()
+    const ladderStatusLabel = (status: string) => {
+      if (status === 'stopped_no_cash') return 'NO CASH'
+      if (status === 'stopped_depth_limit') return 'DEPTH STOP'
+      return status.toUpperCase()
+    }
     const ladderStatusClass = (status: string) => {
       if (status === 'active') return 'text-blue-300 border-blue-400/40 bg-blue-500/10'
       if (status === 'disabled') return 'text-white/45 border-white/15 bg-white/5'
+      if (status === 'stopped_depth_limit') return 'text-red-300 border-red-400/40 bg-red-500/10'
       return 'text-yellow-300 border-yellow-400/40 bg-yellow-500/10'
     }
     const tokenDisplayName = (address: string, ladder?: DipLadder | null) => {
@@ -3538,6 +3608,10 @@ function ProfilePageContent() {
       if (amount > 0) return 'text-green-400'
       if (amount < 0) return 'text-red-400'
       return 'text-white/55'
+    }
+    const formatOptionalCap = (value: number | null | undefined, suffix = '') => {
+      if (value === null || value === undefined) return 'No cap'
+      return `${value}${suffix}`
     }
     const renderPnlValue = (value: number | null | undefined, percentage?: number | null, size: 'sm' | 'md' = 'sm') => (
       <div className="min-w-0">
@@ -3772,6 +3846,70 @@ function ProfilePageContent() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Max Cycle Buys</label>
+                  <input
+                    type="number"
+                    value={dipLadderForm.max_buy_count}
+                    onChange={(e) => setDipLadderForm(prev => ({
+                      ...prev,
+                      max_buy_count: e.target.value
+                    }))}
+                    placeholder="No cap"
+                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="1"
+                    step="1"
+                  />
+                  <p className="mt-1 text-[11px] text-white/35 font-space-grotesk">Counts every buy in this cycle, including lots already sold.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Max Drawdown %</label>
+                  <input
+                    type="number"
+                    value={dipLadderForm.max_drawdown_percentage}
+                    onChange={(e) => setDipLadderForm(prev => ({
+                      ...prev,
+                      max_drawdown_percentage: e.target.value
+                    }))}
+                    placeholder="No cap"
+                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0.1"
+                    max="100"
+                    step="0.1"
+                  />
+                  <p className="mt-1 text-[11px] text-white/35 font-space-grotesk">Stops new buys when price falls this far from the saved reference.</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-orbitron font-bold text-blue-200">Move Buy Trigger After Sells</p>
+                      <span className="group/reference relative inline-flex">
+                        <Info size={13} className="text-blue-200/70 cursor-help" />
+                        <span className="absolute bottom-full left-1/2 z-[9999] mb-2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-blue-300/30 bg-void-black/95 p-3 text-[11px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-200 pointer-events-none group-hover/reference:opacity-100 font-space-grotesk">
+                          When a lot sells, the next buy trigger moves to the sell/current price minus your drop step. This helps the ladder re-enter after a deep recovery. The saved reference price does not move.
+                        </span>
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-blue-100/70 font-space-grotesk">Useful after a deep dip recovers and your old buy trigger is too far below market.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDipLadderForm(prev => ({ ...prev, update_buy_trigger_on_sell: !prev.update_buy_trigger_on_sell }))}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${dipLadderForm.update_buy_trigger_on_sell ? 'bg-blue-300' : 'bg-gray-700'}`}
+                  >
+                    <motion.div
+                      className="w-4 h-4 bg-white rounded-full"
+                      animate={{ x: dipLadderForm.update_buy_trigger_on_sell ? 24 : 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
+              </div>
+
               <div className="rounded-lg border border-molten-gold/10 bg-black/20 p-4">
                 <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk mb-2">
                   <span className="text-white/45">Reference captured on save</span>
@@ -3792,7 +3930,7 @@ function ProfilePageContent() {
               </div>
 
               <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-4 text-xs text-blue-100/80 font-space-grotesk">
-                The reference price is the price captured when you save an enabled ladder. It sets the first buy trigger. After a buy fills, the next trigger is recalculated from that filled buy price.
+                The reference price is captured when you save an enabled ladder. It sets the first buy trigger and stays fixed for drawdown limits. After a buy fills, the next trigger is recalculated from that filled buy price. If sell updates are enabled, a successful sell moves only the next buy trigger.
               </div>
 
               <motion.button
@@ -3851,6 +3989,15 @@ function ProfilePageContent() {
                         </span>
                         <button
                           type="button"
+                          onClick={(e) => handleToggleDipLadderToken(ladder, e)}
+                          disabled={dipLadderSaving}
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:opacity-40 ${ladder.status === 'active' ? 'border-molten-gold/25 bg-molten-gold/10 text-molten-gold hover:bg-molten-gold/20' : 'border-blue-400/25 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'}`}
+                          title={ladder.status === 'active' ? 'Disable this Dip Ladder token' : 'Enable this Dip Ladder token'}
+                        >
+                          <Power size={13} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={(e) => handleRequestDeleteDipLadder(ladder, e)}
                           className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-400/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
                           title="Delete Dip Ladder entry"
@@ -3882,6 +4029,20 @@ function ProfilePageContent() {
                       <div className="min-w-0 p-2">
                         <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Net</p>
                         {renderPnlValue(ladder.total_pnl_usd, ladder.total_pnl_percentage)}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+                      <div className="min-w-0 border-r border-white/10 p-2">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Cycle Buys</p>
+                        <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold">
+                          {ladder.cycle_buy_count || 0} / {formatOptionalCap(ladder.max_buy_count)}
+                        </p>
+                      </div>
+                      <div className="min-w-0 p-2">
+                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Drawdown</p>
+                        <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold">
+                          {(ladder.cycle_drawdown_percentage ?? 0).toFixed(2)}% / {formatOptionalCap(ladder.max_drawdown_percentage, '%')}
+                        </p>
                       </div>
                     </div>
                     <p className="mt-3 text-xs text-white/40 font-space-grotesk">{openLots.length} open lot{openLots.length === 1 ? '' : 's'}</p>
@@ -3949,24 +4110,34 @@ function ProfilePageContent() {
                           {renderDipLadderTokenLinks(ladder)}
                         </div>
                       </div>
-                      <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
-                        {ladderStatusLabel(ladder.status)}
-                      </span>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
+                          {ladderStatusLabel(ladder.status)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleDipLadderToken(ladder, e)}
+                          disabled={dipLadderSaving}
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:opacity-40 ${ladder.status === 'active' ? 'border-molten-gold/25 bg-molten-gold/10 text-molten-gold hover:bg-molten-gold/20' : 'border-blue-400/25 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'}`}
+                          title={ladder.status === 'active' ? 'Disable this Dip Ladder token' : 'Enable this Dip Ladder token'}
+                        >
+                          <Power size={13} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mb-3 rounded-lg border border-molten-gold/15 bg-molten-gold/5 px-3 py-2 text-[11px] text-white/55 font-space-grotesk">
-                      <span className="text-molten-gold/80 font-orbitron font-bold uppercase">Reference</span> is captured when the ladder is saved enabled. The first buy trigger comes from it, then every next trigger comes from the last filled buy.
+                      <span className="text-molten-gold/80 font-orbitron font-bold uppercase">Reference</span> is captured when the ladder is saved enabled. It stays fixed for drawdown limits. Buy triggers move after buys, and after sells when that option is enabled.
                     </div>
 
-                    <div className="relative z-10 grid grid-cols-2 md:grid-cols-5 gap-0 rounded-lg overflow-visible border border-white/10 mb-4">
+                    <div className="relative z-10 grid grid-cols-2 md:grid-cols-6 gap-0 rounded-lg overflow-visible border border-white/10 mb-4">
                       <div className="min-w-0 p-3 border-r border-b md:border-b-0 border-white/10">
                         <div className="flex items-center gap-1.5 mb-1">
                           <p className="text-[10px] text-white/35 font-orbitron uppercase">Cycle Ref</p>
                           <span className="group/reference relative z-[120] inline-flex">
                             <Info size={11} className="text-molten-gold/70 cursor-help" />
-                            <span className="absolute left-0 top-full z-[250] mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-molten-gold/30 bg-void-black/95 p-3 text-[10px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-300 pointer-events-none group-hover/reference:opacity-100 md:left-1/2 md:-translate-x-1/2 font-space-grotesk normal-case">
-                              Cycle starting price. It seeds the first buy trigger only. After each buy, the next trigger is calculated from that buy price, then the reference resets after all lots sell.
-                            </span>
+                            <span className="absolute bottom-full left-0 z-[9999] mb-2 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-molten-gold/30 bg-void-black/95 p-3 text-[10px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-200 pointer-events-none group-hover/reference:opacity-100 md:left-1/2 md:-translate-x-1/2 font-space-grotesk normal-case">
+Cycle starting price. It seeds the first buy trigger only. After each buy and/or sell, the next trigger is calculated from that price.                            </span>
                           </span>
                         </div>
                         <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.anchor_price_usd)}</p>
@@ -3984,9 +4155,14 @@ function ProfilePageContent() {
                         <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Drop</p>
                         <p className="text-xs text-molten-gold font-orbitron font-bold">{ladder.drop_percentage}%</p>
                       </div>
-                      <div className="p-3">
+                      <div className="p-3 border-r border-white/10">
                         <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Target</p>
                         <p className="text-xs text-green-400 font-orbitron font-bold">{ladder.profit_percentage}%</p>
+                      </div>
+                      <div className="min-w-0 p-3">
+                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Cycle Buys</p>
+                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-white font-mono font-bold leading-snug">{ladder.cycle_buy_count || 0} / {formatOptionalCap(ladder.max_buy_count)}</p>
+                        <p className="mt-1 text-[10px] text-white/35 font-space-grotesk">{(ladder.cycle_drawdown_percentage ?? 0).toFixed(2)}% / {formatOptionalCap(ladder.max_drawdown_percentage, '%')} drawdown</p>
                       </div>
                     </div>
 
@@ -4315,8 +4491,8 @@ function ProfilePageContent() {
                                     </div>
                                   </div>
                                   <div className="flex flex-shrink-0 items-center gap-2">
-                                    <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladder.status === 'active' ? 'bg-blue-500/20 text-blue-300 border-blue-400/40' : ladder.status === 'disabled' ? 'bg-white/5 text-white/45 border-white/15' : 'bg-yellow-500/20 text-yellow-300 border-yellow-400/40'}`}>
-                                      {ladder.status === 'stopped_no_cash' ? 'NO CASH' : ladder.status.toUpperCase()}
+                                    <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladder.status === 'active' ? 'bg-blue-500/20 text-blue-300 border-blue-400/40' : ladder.status === 'disabled' ? 'bg-white/5 text-white/45 border-white/15' : ladder.status === 'stopped_depth_limit' ? 'bg-red-500/20 text-red-300 border-red-400/40' : 'bg-yellow-500/20 text-yellow-300 border-yellow-400/40'}`}>
+                                      {ladder.status === 'stopped_no_cash' ? 'NO CASH' : ladder.status === 'stopped_depth_limit' ? 'DEPTH STOP' : ladder.status.toUpperCase()}
                                     </span>
                                     <button
                                       type="button"
@@ -5818,7 +5994,9 @@ function ProfilePageContent() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Status</p>
-                  <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-orbitron font-bold">{dipLadderDeleteModal.ladder.status.toUpperCase()}</p>
+                  <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-orbitron font-bold">
+                    {dipLadderDeleteModal.ladder.status === 'stopped_no_cash' ? 'NO CASH' : dipLadderDeleteModal.ladder.status === 'stopped_depth_limit' ? 'DEPTH STOP' : dipLadderDeleteModal.ladder.status.toUpperCase()}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Saved Lots</p>

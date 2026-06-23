@@ -393,7 +393,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async saveDipLadder(coin: string = 'sol', payload: { token_address: string; dip_ladder_drop_percentage: number; dip_ladder_profit_percentage: number; is_active: boolean }): Promise<DipLadder> {
+  async saveDipLadder(coin: string = 'sol', payload: { token_address: string; dip_ladder_drop_percentage: number; dip_ladder_profit_percentage: number; max_buy_count?: number | null; max_drawdown_percentage?: number | null; update_buy_trigger_on_sell?: boolean; is_active: boolean }): Promise<DipLadder> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);

@@ -174,6 +174,11 @@ export interface DipLadder {
   last_price_usd?: number | null;
   drop_percentage: number;
   profit_percentage: number;
+  max_buy_count?: number | null;
+  max_drawdown_percentage?: number | null;
+  update_buy_trigger_on_sell: boolean;
+  cycle_buy_count?: number;
+  cycle_drawdown_percentage?: number | null;
   status: string;
   last_error?: string | null;
   last_checked_at?: string | null;
