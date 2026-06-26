@@ -154,6 +154,8 @@ export interface DipLadderLot {
   sell_tx_signature?: string | null;
   status: string;
   last_error?: string | null;
+  sell_failure_count?: number;
+  sell_retry_after?: string | null;
   created_at: string;
   updated_at: string;
   pnl?: DipLadderLotPnl | null;

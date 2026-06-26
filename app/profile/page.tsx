@@ -202,6 +202,26 @@ const minutesToSecondsInput = (value: string): number | null => {
   return minutes === null ? null : Math.floor(minutes * 60)
 }
 
+const isOpenDipLadderLot = (status: string) => status === 'open' || status === 'selling' || status === 'sell_blocked'
+const isClosedDipLadderLot = (status: string) => status === 'sold' || status === 'settled'
+const isDipLadderLotRetryCoolingDown = (lot: DipLadder['lots'][number]) => {
+  if (lot.status !== 'open' || !lot.sell_retry_after) return false
+  const retryTime = new Date(lot.sell_retry_after).getTime()
+  return Number.isFinite(retryTime) && retryTime > Date.now()
+}
+const dipLadderLotStatusLabel = (lot: DipLadder['lots'][number], isClosedLot: boolean) => {
+  if (isClosedLot) return 'SOLD'
+  if (lot.status === 'sell_blocked') return 'SELL BLOCKED'
+  if (isDipLadderLotRetryCoolingDown(lot)) return 'COOLDOWN'
+  return lot.status.toUpperCase()
+}
+const dipLadderLotStatusClass = (lot: DipLadder['lots'][number], isClosedLot: boolean) => {
+  if (isClosedLot) return 'border-green-400/25 bg-green-500/10 text-green-300'
+  if (lot.status === 'sell_blocked') return 'border-red-400/35 bg-red-500/10 text-red-300'
+  if (isDipLadderLotRetryCoolingDown(lot)) return 'border-yellow-400/35 bg-yellow-500/10 text-yellow-300'
+  return 'border-blue-400/25 bg-blue-500/10 text-blue-300'
+}
+
 function ProfilePageContent() {
   const dispatch = useAppDispatch()
   const router = useRouter()
@@ -297,6 +317,7 @@ function ProfilePageContent() {
   const [dipLadderSaving, setDipLadderSaving] = useState(false)
   const [dipLadderDeleteModal, setDipLadderDeleteModal] = useState<{ open: boolean; ladder: DipLadder | null }>({ open: false, ladder: null })
   const [dipLadderDeleting, setDipLadderDeleting] = useState(false)
+  const [dipLadderRetryingLotId, setDipLadderRetryingLotId] = useState<number | null>(null)
 
   const handleToggleDebugMode = async () => {
     if (!profile?.is_admin) return
@@ -816,6 +837,22 @@ function ProfilePageContent() {
       setWalletTrackerError(err.message || 'Failed to delete Dip Ladder entry')
     } finally {
       setDipLadderDeleting(false)
+    }
+  }
+
+  const handleRetryDipLadderLotSell = async (lotId: number, event?: { stopPropagation: () => void }) => {
+    event?.stopPropagation()
+    try {
+      setDipLadderRetryingLotId(lotId)
+      setWalletTrackerError(null)
+      setWalletTrackerSuccess(null)
+      const response = await walletTrackerApi.retryDipLadderLotSell(lotId)
+      setWalletTrackerSuccess(response.message || 'Dip Ladder lot sell retry queued')
+      await fetchDipLadders()
+    } catch (err: any) {
+      setWalletTrackerError(err.message || 'Failed to queue Dip Ladder sell retry')
+    } finally {
+      setDipLadderRetryingLotId(null)
     }
   }
 
@@ -3519,8 +3556,8 @@ function ProfilePageContent() {
   const renderDipLadderSection = () => {
     const selectedLadder = dipLadders.find(ladder => ladder.id === dipLadderSelectedId) || null
     const activeLadders = dipLadders.filter(ladder => ladder.status === 'active')
-    const openLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling').length || 0), 0)
-    const soldLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled').length || 0), 0)
+    const openLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)).length || 0), 0)
+    const soldLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => isClosedDipLadderLot(lot.status)).length || 0), 0)
     const totalUnrealizedPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_unrealized_pnl_usd || 0), 0)
     const totalRealizedPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_realized_pnl_usd || 0), 0)
     const totalNetPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_pnl_usd || 0), 0)
@@ -3964,7 +4001,7 @@ function ProfilePageContent() {
                   <p className="text-sm text-white/50 font-space-grotesk">Save this token to capture its first reference price.</p>
                 </div>
               ) : [selectedLadder].map(ladder => {
-                const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
+                const openLots = ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)) || []
                 const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
                 return (
                   <div key={ladder.id} className="rounded-lg border border-molten-gold/15 bg-black/25 p-4">
@@ -4071,8 +4108,8 @@ function ProfilePageContent() {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {dipLadders.map((ladder, index) => {
-                const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
-                const closedLots = ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled') || []
+                const openLots = ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)) || []
+                const closedLots = ladder.lots?.filter(lot => isClosedDipLadderLot(lot.status)) || []
                 const displayLots = [...openLots, ...closedLots]
                 const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
 
@@ -4191,7 +4228,10 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                           Waiting for the next configured drop.
                         </div>
                       ) : displayLots.map(lot => {
-                        const isClosedLot = lot.status === 'sold' || lot.status === 'settled'
+                        const isClosedLot = isClosedDipLadderLot(lot.status)
+                        const lotInCooldown = isDipLadderLotRetryCoolingDown(lot)
+                        const showSellIssue = !isClosedLot && (lot.status === 'sell_blocked' || lotInCooldown || Boolean(lot.last_error))
+                        const canRetryLotSell = ladder.status === 'active' || ladder.status === 'stopped_depth_limit'
                         const lotPnl = lot.pnl
                         const pnlValue = isClosedLot ? lotPnl?.final_pnl_usd ?? lotPnl?.realized_pnl_usd : lotPnl?.unrealized_pnl_usd
                         const pnlPercent = isClosedLot ? lotPnl?.final_pnl_percentage ?? lotPnl?.realized_pnl_percentage : lotPnl?.unrealized_pnl_percentage
@@ -4206,9 +4246,17 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                                     {tokenSymbol}
                                   </span>
                                 )}
-                                <span className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-orbitron ${isClosedLot ? 'border-green-400/25 bg-green-500/10 text-green-300' : 'border-blue-400/25 bg-blue-500/10 text-blue-300'}`}>
-                                  {isClosedLot ? 'SOLD' : lot.status.toUpperCase()}
+                                <span className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-orbitron ${dipLadderLotStatusClass(lot, isClosedLot)}`}>
+                                  {dipLadderLotStatusLabel(lot, isClosedLot)}
                                 </span>
+                                {showSellIssue && (
+                                  <span className="group/lot-error relative z-[80] inline-flex flex-shrink-0">
+                                    <AlertCircle size={13} className={lot.status === 'sell_blocked' ? 'text-red-300 cursor-help' : 'text-yellow-300 cursor-help'} />
+                                    <span className="pointer-events-none absolute bottom-full left-1/2 z-[9999] mb-2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-red-400/30 bg-void-black/95 p-3 text-[11px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-200 group-hover/lot-error:opacity-100 font-space-grotesk normal-case">
+                                      {lot.last_error || (lotInCooldown ? 'Sell retry is cooling down before the next automatic attempt.' : 'Sell needs attention.')}
+                                    </span>
+                                  </span>
+                                )}
                                 {lotPnl?.basis_source === 'estimated' && (
                                   <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/40 font-orbitron">
                                     EST
@@ -4237,6 +4285,33 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                               {renderPnlValue(pnlValue, pnlPercent)}
                             </div>
                           </div>
+                          {showSellIssue && (
+                            <div className={`mt-3 rounded-lg border p-3 ${lot.status === 'sell_blocked' ? 'border-red-400/25 bg-red-500/10' : 'border-yellow-400/25 bg-yellow-500/10'}`}>
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className={`text-[11px] font-orbitron font-bold uppercase ${lot.status === 'sell_blocked' ? 'text-red-300' : 'text-yellow-300'}`}>
+                                    {lot.status === 'sell_blocked' ? 'Sell blocked' : 'Sell retry cooling down'}
+                                  </p>
+                                  <p className="mt-1 text-[11px] text-white/50 font-space-grotesk">
+                                    Failures: {lot.sell_failure_count || 0} / 3{lot.sell_retry_after ? ` | next auto retry ${formatDate(lot.sell_retry_after, true)}` : ''}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleRetryDipLadderLotSell(lot.id, e)}
+                                  disabled={dipLadderRetryingLotId === lot.id || !canRetryLotSell}
+                                  title={canRetryLotSell ? 'Retry this lot sell' : 'Enable this Dip Ladder before retrying sells'}
+                                  className="inline-flex h-8 flex-shrink-0 items-center justify-center gap-2 rounded-md border border-molten-gold/25 bg-molten-gold/10 px-3 text-[10px] font-orbitron font-bold text-molten-gold transition-colors hover:bg-molten-gold/20 disabled:opacity-50"
+                                >
+                                  <RefreshCw size={12} className={dipLadderRetryingLotId === lot.id ? 'animate-spin' : ''} />
+                                  {canRetryLotSell ? 'Retry Sell' : 'Enable Ladder'}
+                                </button>
+                              </div>
+                              {lot.last_error && (
+                                <p className="mt-2 break-words text-[11px] text-white/65 font-space-grotesk [overflow-wrap:anywhere]">{lot.last_error}</p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )})}
                     </div>
@@ -4441,8 +4516,8 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {dipLadders.map((ladder, index) => {
-                            const openLots = ladder.lots?.filter(lot => lot.status === 'open' || lot.status === 'selling') || []
-                            const soldLots = ladder.lots?.filter(lot => lot.status === 'sold' || lot.status === 'settled') || []
+                            const openLots = ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)) || []
+                            const soldLots = ladder.lots?.filter(lot => isClosedDipLadderLot(lot.status)) || []
                             const tokenInfo = trackerLogs.find(l => l.target_token?.toLowerCase() === ladder.token_address.toLowerCase())
                             const tokenName = tokenInfo?.token_name
                             const tokenSymbol = tokenInfo?.token_symbol
@@ -4530,10 +4605,28 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                                     <p className="text-[11px] font-orbitron text-blue-300/70 uppercase tracking-widest">Lots</p>
                                     <p className="text-[10px] text-white/40 font-space-grotesk">{openLots.length} open, {soldLots.length} sold</p>
                                   </div>
-                                  {openLots.length > 0 ? openLots.map((lot) => (
+                                  {openLots.length > 0 ? openLots.map((lot) => {
+                                    const lotInCooldown = isDipLadderLotRetryCoolingDown(lot)
+                                    const showSellIssue = lot.status === 'sell_blocked' || lotInCooldown || Boolean(lot.last_error)
+                                    const canRetryLotSell = ladder.status === 'active' || ladder.status === 'stopped_depth_limit'
+                                    return (
                                     <div key={lot.id} className="min-w-0 bg-black/20 rounded-lg p-2 space-y-1">
                                       <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[10px] text-white/35 font-orbitron uppercase">Open Lot</span>
+                                        <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-orbitron uppercase ${dipLadderLotStatusClass(lot, false)}`}>
+                                          {dipLadderLotStatusLabel(lot, false)}
+                                        </span>
+                                        {showSellIssue && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => handleRetryDipLadderLotSell(lot.id, e)}
+                                            disabled={dipLadderRetryingLotId === lot.id || !canRetryLotSell}
+                                            title={canRetryLotSell ? 'Retry this lot sell' : 'Enable this Dip Ladder before retrying sells'}
+                                            className="inline-flex h-6 items-center gap-1 rounded-md border border-molten-gold/25 bg-molten-gold/10 px-2 text-[9px] font-orbitron font-bold text-molten-gold hover:bg-molten-gold/20 disabled:opacity-50"
+                                          >
+                                            <RefreshCw size={10} className={dipLadderRetryingLotId === lot.id ? 'animate-spin' : ''} />
+                                            {canRetryLotSell ? 'Retry' : 'Enable'}
+                                          </button>
+                                        )}
                                       </div>
                                       <div className="flex justify-between items-start gap-2 text-xs">
                                         <span className="text-white/50 font-orbitron">Entry</span>
@@ -4547,8 +4640,13 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                                         <span className="text-white/40 font-space-grotesk">Remaining</span>
                                         <span className="text-white/60 font-mono">{lot.remaining_amount_tokens.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
                                       </div>
+                                      {showSellIssue && (
+                                        <p className={`break-words text-[10px] font-space-grotesk [overflow-wrap:anywhere] ${lot.status === 'sell_blocked' ? 'text-red-300/85' : 'text-yellow-300/85'}`}>
+                                          {lot.last_error || (lotInCooldown ? `Retry after ${formatDate(lot.sell_retry_after || '', true)}` : 'Sell needs attention')}
+                                        </p>
+                                      )}
                                     </div>
-                                  )) : (
+                                  )}) : (
                                     <p className="text-xs text-white/30 italic font-orbitron">Waiting for next drop</p>
                                   )}
                                   {ladder.last_error && (
