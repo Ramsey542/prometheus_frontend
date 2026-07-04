@@ -59,6 +59,11 @@ interface WalletSettings {
   max_token_age_seconds: number | null
   min_holders: number | null
   max_holders: number | null
+  copy_only_new_positions: boolean
+  spike_entry_enabled: boolean
+  spike_entry_pullback_percentage: number
+  spike_entry_margin_percentage: number
+  spike_entry_timeout_seconds: number
 }
 
 const optionalFloatFromInput = (value: string): number | null => {
@@ -115,7 +120,12 @@ export default function DashboardPage() {
     min_token_age_seconds: null,
     max_token_age_seconds: null,
     min_holders: null,
-    max_holders: null
+    max_holders: null,
+    copy_only_new_positions: false,
+    spike_entry_enabled: false,
+    spike_entry_pullback_percentage: 5,
+    spike_entry_margin_percentage: 0,
+    spike_entry_timeout_seconds: 300
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -272,7 +282,12 @@ export default function DashboardPage() {
           min_token_age_seconds: data.min_token_age_seconds ?? null,
           max_token_age_seconds: data.max_token_age_seconds ?? null,
           min_holders: data.min_holders ?? null,
-          max_holders: data.max_holders ?? null
+          max_holders: data.max_holders ?? null,
+          copy_only_new_positions: data.copy_only_new_positions ?? false,
+          spike_entry_enabled: data.spike_entry_enabled ?? false,
+          spike_entry_pullback_percentage: data.spike_entry_pullback_percentage ?? 5,
+          spike_entry_margin_percentage: data.spike_entry_margin_percentage ?? 0,
+          spike_entry_timeout_seconds: data.spike_entry_timeout_seconds ?? 300
         })
         setTpSlIsActive(data.tp_sl_is_active !== undefined ? data.tp_sl_is_active : true)
       } else if (response.status === 401) {
@@ -332,6 +347,11 @@ export default function DashboardPage() {
         max_token_age_seconds: settings.max_token_age_seconds ?? null,
         min_holders: settings.min_holders ?? null,
         max_holders: settings.max_holders ?? null,
+        copy_only_new_positions: selectedCoin === 'sol' ? settings.copy_only_new_positions : false,
+        spike_entry_enabled: selectedCoin === 'sol' ? settings.spike_entry_enabled : false,
+        spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
+        spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
+        spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
         coin_type: selectedCoin
       }
       console.log('the selected coin is', selectedCoin)
@@ -1154,6 +1174,142 @@ export default function DashboardPage() {
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />
                 </motion.button>
+              </div>
+
+              <div className={`${selectedCoin !== 'sol' ? 'opacity-50 grayscale pointer-events-none' : ''} space-y-5 border-t border-molten-gold/10 pt-5`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Only New Mirror Positions</h4>
+                      <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Only copy a SOL buy if the mirror wallet held zero of that token immediately before buying</p>
+                    </div>
+                    <div className="group relative">
+                      <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                        <Info size={12} className="text-molten-gold" />
+                      </div>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                        SOL only. Uses the decoded gRPC pre-token balance from the mirror wallet, so no extra latency is added.
+                      </div>
+                    </div>
+                  </div>
+                  <motion.button
+                    onClick={() => setSettings(prev => ({ ...prev, copy_only_new_positions: !prev.copy_only_new_positions }))}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.copy_only_new_positions ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <motion.div
+                      className="w-4 h-4 bg-white rounded-full"
+                      animate={{ x: settings.copy_only_new_positions ? 24 : 0 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  </motion.button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Enter On Spike Pullback</h4>
+                        <p className="text-white/40 font-space-grotesk text-xs md:text-sm">For fixed buys, wait for a spike above the mirror entry, then buy the pullback</p>
+                      </div>
+                      <div className="group relative">
+                        <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                          <Info size={12} className="text-molten-gold" />
+                        </div>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                          SOL fixed buys only. The bot records the mirror entry price from the decoded gRPC swap. With 5% pullback and 1% margin, price must first reach 6% above entry, then return to 5% above entry before buying.
+                        </div>
+                      </div>
+                    </div>
+                    <motion.button
+                      onClick={() => setSettings(prev => ({ ...prev, spike_entry_enabled: !prev.spike_entry_enabled }))}
+                      className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.spike_entry_enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <motion.div
+                        className="w-4 h-4 bg-white rounded-full"
+                        animate={{ x: settings.spike_entry_enabled ? 24 : 0 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                      />
+                    </motion.button>
+                  </div>
+
+                  {settings.spike_entry_enabled && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-lg border border-molten-gold/10 bg-black/20 p-4"
+                    >
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Pullback %
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">The buy level above mirror entry after a valid spike. Example: 5 means buy when price returns to entry +5%.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.spike_entry_pullback_percentage}
+                          onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_pullback_percentage: parseFloat(e.target.value) || 0 }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Margin %
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Extra spike confirmation above the pullback. Pullback 5 and margin 1 requires a 6% spike, then a pullback to 5%.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.spike_entry_margin_percentage}
+                          onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_margin_percentage: parseFloat(e.target.value) || 0 }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Timeout Seconds
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">How long the bot waits for the spike and pullback before cancelling. Indefinite stores -1.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.spike_entry_timeout_seconds === -1 ? '' : settings.spike_entry_timeout_seconds}
+                          onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_timeout_seconds: parseInt(e.target.value, 10) || 0 }))}
+                          disabled={settings.spike_entry_timeout_seconds === -1}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300 disabled:opacity-50"
+                          min="0"
+                          step="1"
+                          placeholder="Indefinite"
+                        />
+                        <label className="mt-2 flex items-center gap-2 text-[11px] text-white/50 font-space-grotesk">
+                          <input
+                            type="checkbox"
+                            checked={settings.spike_entry_timeout_seconds === -1}
+                            onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_timeout_seconds: e.target.checked ? -1 : 300 }))}
+                            className="h-4 w-4 accent-molten-gold"
+                          />
+                          Indefinite timeout
+                        </label>
+                      </div>
+                    </motion.div>
+                  )}
+                  {selectedCoin !== 'sol' && (
+                    <p className="text-xs text-molten-gold/70 font-space-grotesk">Spike and new-position controls are SOL-only in v1.</p>
+                  )}
+                </div>
               </div>
 
               {/* Mirror Sells Toggle */}

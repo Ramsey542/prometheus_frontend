@@ -81,6 +81,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       } else {
         setActiveItem('account-overview')
       }
+    } else if (pathname === '/profile/dip-ladder') {
+      setActiveItem('dip-ladder')
     } else if (pathname === '/dashboard') {
       setActiveItem('controls')
     } else if (pathname === '/custom-buys') {
@@ -186,7 +188,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                     case 'wallet-tracker':
                       return '/profile?section=wallet-tracker'
                     case 'dip-ladder':
-                      return '/profile?section=dip-ladder'
+                      return '/profile/dip-ladder'
                     case 'tracker-logs':
                       return '/profile?section=tracker-logs'
                     case 'controls':

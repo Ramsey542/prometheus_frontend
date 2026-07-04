@@ -7,7 +7,8 @@ import {
   CopyTradingLog,
   CopyTradingStats,
   WalletStats,
-  DipLadder
+  DipLadder,
+  SpikeEntryMonitor
 } from '../store/types/auth';
 
 class WalletTrackerApiError extends Error {
@@ -182,6 +183,29 @@ export const walletTrackerApi = {
         if (filters.side && filters.side !== 'all') url += `&side=${filters.side}`;
         if (filters.wallet_address && filters.wallet_address !== 'all') url += `&wallet_address=${filters.wallet_address}`;
       }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async getSpikeEntryMonitors(coin: string = 'sol', status?: string): Promise<SpikeEntryMonitor[]> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+
+      if (!accessToken) {
+        throw new WalletTrackerApiError('No access token found', 401);
+      }
+
+      let url = `${config.apiBaseUrl}/copy-trading/spike-entry-monitors?coin_type=${coin}`;
+      if (status) url += `&status=${status}`;
 
       const response = await fetch(url, {
         method: 'GET',

@@ -111,6 +111,11 @@ export interface TrackedWallet {
   slippage?: number;
   entry_on_first_swap?: boolean;
   buy_once_per_token?: boolean;
+  copy_only_new_positions?: boolean;
+  spike_entry_enabled?: boolean;
+  spike_entry_pullback_percentage?: number;
+  spike_entry_margin_percentage?: number;
+  spike_entry_timeout_seconds?: number;
   mirror_sells_enabled?: boolean;
   swap_notifications_enabled?: boolean;
   swap_notification_sound?: string;
@@ -230,9 +235,39 @@ export interface CopyTradingLog {
   tp_sl_trigger_value?: number | null;
   tp_sl_trigger_price?: number | null;
   tp_sl_buy_price?: number | null;
+  is_spike_entry?: boolean | null;
+  spike_entry_is_active?: boolean | null;
+  spike_entry_monitor?: SpikeEntryMonitor | null;
   entry_on_first_swap?: boolean;
   buy_once_per_token?: boolean;
+  copy_only_new_positions?: boolean;
+  spike_entry_enabled?: boolean;
+  spike_entry_pullback_percentage?: number;
+  spike_entry_margin_percentage?: number;
+  spike_entry_timeout_seconds?: number;
   mirror_sells_enabled?: boolean;
+}
+
+export interface SpikeEntryMonitor {
+  id: number;
+  tracked_wallet_id: number;
+  wallet_address: string;
+  token_address: string;
+  coin_type: string;
+  mirror_tx_signature?: string | null;
+  base_token?: string | null;
+  mirror_entry_price: number;
+  spike_target_price: number;
+  pullback_target_price: number;
+  pullback_percentage: number;
+  margin_percentage: number;
+  timeout_seconds: number;
+  max_seen_price?: number | null;
+  current_price?: number | null;
+  status: string;
+  last_error?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WalletStats {

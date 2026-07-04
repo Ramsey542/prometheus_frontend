@@ -46,6 +46,7 @@ import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, D
 import { authApi } from '@/services/authApi'
 import { config } from '../../lib/config'
 import CreateWalletModal from '../../components/CreateWalletModal'
+import DipLadderPageContent from './dip-ladder/DipLadderPageContent'
 
 const DIP_LADDER_NATIVE_TOKENS = {
   sol: {
@@ -135,6 +136,70 @@ const parseLogEventData = (eventData: string | null | undefined): any => {
     return eventData ? JSON.parse(eventData) : {}
   } catch {
     return {}
+  }
+}
+
+const SPIKE_ENTRY_ACTIVE_STATUSES = new Set(['waiting_spike', 'waiting_pullback'])
+
+const toFiniteNumber = (value: unknown): number | null => {
+  const num = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+const formatSpikeEntryPrice = (price: unknown): string => {
+  const value = toFiniteNumber(price)
+  if (value === null) return 'N/A'
+  const absPrice = Math.abs(value)
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: absPrice > 0 && absPrice < 0.0001 ? 6 : 0,
+    maximumFractionDigits: absPrice > 0 && absPrice < 0.0001 ? 12 : 8,
+    useGrouping: false
+  })
+}
+
+const formatSpikeEntryPercentage = (value: unknown): string => {
+  const num = toFiniteNumber(value)
+  if (num === null) return 'N/A'
+  return `${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: false })}%`
+}
+
+const formatSpikeEntryStatus = (status: string | null | undefined): string => {
+  if (!status) return 'Unknown'
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+const formatSpikeEntryTimeout = (seconds: unknown): string => {
+  const value = toFiniteNumber(seconds)
+  if (value === null) return 'N/A'
+  if (value === -1) return 'Indefinite'
+  return formatDurationTooltip(value)
+}
+
+const isSpikeEntryLog = (log: CopyTradingLog, eventData: any = parseLogEventData(log.event_data)): boolean => {
+  return Boolean(
+    log.is_spike_entry ||
+    log.event_type === 'spike_entry' ||
+    log.spike_entry_monitor ||
+    eventData?.strategy === 'spike_entry' ||
+    eventData?.spike_entry === true ||
+    eventData?.spike_entry_id
+  )
+}
+
+const getSpikeEntryDetails = (log: CopyTradingLog, eventData: any = parseLogEventData(log.event_data)) => {
+  const monitor = log.spike_entry_monitor
+  return {
+    id: monitor?.id ?? eventData?.spike_entry_id ?? null,
+    status: monitor?.status ?? eventData?.status ?? log.status ?? null,
+    token: monitor?.token_address ?? eventData?.target_token ?? log.target_token ?? null,
+    mirrorEntryPrice: monitor?.mirror_entry_price ?? eventData?.mirror_entry_price ?? null,
+    spikeTargetPrice: monitor?.spike_target_price ?? eventData?.spike_target_price ?? null,
+    pullbackTargetPrice: monitor?.pullback_target_price ?? eventData?.pullback_target_price ?? null,
+    pullbackPercentage: monitor?.pullback_percentage ?? eventData?.pullback_percentage ?? null,
+    marginPercentage: monitor?.margin_percentage ?? eventData?.margin_percentage ?? null,
+    timeoutSeconds: monitor?.timeout_seconds ?? eventData?.timeout_seconds ?? null,
+    currentPrice: monitor?.current_price ?? eventData?.current_price ?? null,
+    maxSeenPrice: monitor?.max_seen_price ?? eventData?.max_seen_price ?? null
   }
 }
 
@@ -442,7 +507,7 @@ function ProfilePageContent() {
   }, [tradeAmountSuccess])
 
   useEffect(() => {
-    if (user && (currentSection === 'wallet-tracker' || currentSection === 'tracker-logs' || currentSection === 'dip-ladder')) {
+    if (user && (currentSection === 'wallet-tracker' || currentSection === 'tracker-logs')) {
       setCoinSwitching(true)
       setTrackedWallets([])
       setTrackerLogs([])
@@ -461,17 +526,13 @@ function ProfilePageContent() {
       setLogWalletFilter('all')
 
       const fetchData = async () => {
-        if (currentSection === 'dip-ladder') {
-          await fetchDipLadders()
-        } else {
-          await Promise.all([
-            fetchTrackedWallets(),
-            fetchCopyTradingStats(),
-            fetchTrackedPositions(),
-            fetchDipLadders(),
-            currentSection === 'tracker-logs' ? fetchAllLogs() : Promise.resolve()
-          ])
-        }
+        await Promise.all([
+          fetchTrackedWallets(),
+          fetchCopyTradingStats(),
+          fetchTrackedPositions(),
+          fetchDipLadders(),
+          currentSection === 'tracker-logs' ? fetchAllLogs() : Promise.resolve()
+        ])
         setCoinSwitching(false)
       }
 
@@ -1326,7 +1387,12 @@ function ProfilePageContent() {
           min_token_age_seconds: settings.min_token_age_seconds ?? null,
           max_token_age_seconds: settings.max_token_age_seconds ?? null,
           min_holders: settings.min_holders ?? null,
-          max_holders: settings.max_holders ?? null
+          max_holders: settings.max_holders ?? null,
+          copy_only_new_positions: settings.copy_only_new_positions ?? false,
+          spike_entry_enabled: settings.spike_entry_enabled ?? false,
+          spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
+          spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
+          spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300
         }
       }))
       setTpSlIsActive(prev => ({
@@ -1479,7 +1545,12 @@ function ProfilePageContent() {
         min_token_age_seconds: settings.min_token_age_seconds ?? null,
         max_token_age_seconds: settings.max_token_age_seconds ?? null,
         min_holders: settings.min_holders ?? null,
-        max_holders: settings.max_holders ?? null
+        max_holders: settings.max_holders ?? null,
+        copy_only_new_positions: selectedCoin === 'sol' ? (settings.copy_only_new_positions ?? false) : false,
+        spike_entry_enabled: selectedCoin === 'sol' ? (settings.spike_entry_enabled ?? false) : false,
+        spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
+        spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
+        spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type, walletId)
 
@@ -1556,7 +1627,12 @@ function ProfilePageContent() {
         min_token_age_seconds: settings.min_token_age_seconds ?? null,
         max_token_age_seconds: settings.max_token_age_seconds ?? null,
         min_holders: settings.min_holders ?? null,
-        max_holders: settings.max_holders ?? null
+        max_holders: settings.max_holders ?? null,
+        copy_only_new_positions: selectedCoin === 'sol' ? (settings.copy_only_new_positions ?? false) : false,
+        spike_entry_enabled: selectedCoin === 'sol' ? (settings.spike_entry_enabled ?? false) : false,
+        spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
+        spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
+        spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300
       }
 
       const foundId = trackedWallets.find(w => w.wallet_address === walletAddress)?.id
@@ -2250,7 +2326,17 @@ function ProfilePageContent() {
                       >
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Buy Dip %</label>
+                            <div className="flex items-center gap-2 mb-2">
+                              <label className="block text-sm font-orbitron text-molten-gold font-semibold">Buy Dip %</label>
+                              <div className="group relative">
+                                <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                  <span className="text-xs text-molten-gold">?</span>
+                                </div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                  The percentage drop from the market cap at the time the signal is received that must occur before the bot initiates a buy.
+                                </div>
+                              </div>
+                            </div>
                             <input
                               type="number"
                               value={walletSettings[showWalletSettings].buy_dip_percentage || 10}
@@ -2268,7 +2354,17 @@ function ProfilePageContent() {
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Max Dip %</label>
+                            <div className="flex items-center gap-2 mb-2">
+                              <label className="block text-sm font-orbitron text-molten-gold font-semibold">Max Dip %</label>
+                              <div className="group relative">
+                                <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                  <span className="text-xs text-molten-gold">?</span>
+                                </div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                  This only applies if you are using dip recovery. In the instance the set max dip % is met before the recovery happens then the buy order will be cancelled.
+                                </div>
+                              </div>
+                            </div>
                             <input
                               type="number"
                               value={walletSettings[showWalletSettings].max_dip_percentage || 50}
@@ -2287,7 +2383,17 @@ function ProfilePageContent() {
                           </div>
                           <div>
                             <div className="flex items-center justify-between mb-2">
-                              <label className="block text-sm font-orbitron text-molten-gold font-semibold">Buy Dip Timeout (seconds)</label>
+                              <div className="flex items-center gap-2">
+                                <label className="block text-sm font-orbitron text-molten-gold font-semibold">Buy Dip Timeout (seconds)</label>
+                                <div className="group relative">
+                                  <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                    <span className="text-xs text-molten-gold">?</span>
+                                  </div>
+                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                    Sets a time limit (in seconds) for the dip to occur. Helps avoid buying tokens that are continuously dumping.
+                                  </div>
+                                </div>
+                              </div>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs text-white/60 font-space-grotesk">Indefinite</span>
                                 <input
@@ -2323,7 +2429,17 @@ function ProfilePageContent() {
                           </div>
                           <div>
                             <div className="flex items-center justify-between mb-2">
-                              <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery</label>
+                              <div className="flex items-center gap-2">
+                                <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery</label>
+                                <div className="group relative">
+                                  <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                    <span className="text-xs text-molten-gold">?</span>
+                                  </div>
+                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                    After the dip is triggered, this is the percentage rebound required before confirming the buy. This is not taken from the lowest point on the chart but instead a recovery from the % you set in buy dip above. E.G. If market cap was $100k and you set 10% dip and 5% recovery. It would start waiting for recovery once it hit $90k and would not buy until it got to $94.5k. Even if it went down to 40k before the recovery, it would only buy once $94.5k is reached.
+                                  </div>
+                                </div>
+                              </div>
                               <motion.button
                                 onClick={() => setWalletSettings(prev => ({
                                   ...prev,
@@ -2354,7 +2470,17 @@ function ProfilePageContent() {
                             className="grid grid-cols-2 gap-4"
                           >
                             <div>
-                              <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Dip Recovery %</label>
+                              <div className="flex items-center gap-2 mb-2">
+                                <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery %</label>
+                                <div className="group relative">
+                                  <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                    <span className="text-xs text-molten-gold">?</span>
+                                  </div>
+                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                    The percentage rebound required before confirming the buy after the dip is triggered.
+                                  </div>
+                                </div>
+                              </div>
                               <input
                                 type="number"
                                 value={walletSettings[showWalletSettings].dip_recovery_percentage || 5}
@@ -2373,7 +2499,17 @@ function ProfilePageContent() {
                             </div>
                             <div>
                               <div className="flex items-center justify-between mb-2">
-                                <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery Timeout (seconds)</label>
+                                <div className="flex items-center gap-2">
+                                  <label className="block text-sm font-orbitron text-molten-gold font-semibold">Dip Recovery Timeout (seconds)</label>
+                                  <div className="group relative">
+                                    <div className="w-4 h-4 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                      <span className="text-xs text-molten-gold">?</span>
+                                    </div>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                      Maximum time allowed (in seconds) for the recovery to happen. If the price doesn&apos;t rebound within this window, the bot will skip the trade.
+                                    </div>
+                                  </div>
+                                </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-white/60 font-space-grotesk">Indefinite</span>
                                   <input
@@ -2862,6 +2998,178 @@ function ProfilePageContent() {
                             transition={{ type: "spring", stiffness: 500, damping: 30 }}
                           />
                         </motion.button>
+                      </div>
+
+                      <div className={`${selectedCoin !== 'sol' ? 'opacity-50 grayscale pointer-events-none' : ''} space-y-4 border-t border-molten-gold/10 pt-4`}>
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <h5 className="text-sm font-orbitron font-semibold text-white mb-1">Only New Mirror Positions</h5>
+                              <p className="text-white/40 font-space-grotesk text-[10px] md:text-xs">Only copy a SOL buy if the mirror wallet held zero of that token immediately before buying</p>
+                            </div>
+                            <div className="group relative">
+                              <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                <Info size={12} className="text-molten-gold" />
+                              </div>
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                SOL only. Uses the decoded gRPC pre-token balance from the mirror wallet, so no extra latency is added.
+                              </div>
+                            </div>
+                          </div>
+                          <motion.button
+                            onClick={() => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                copy_only_new_positions: !prev[showWalletSettings].copy_only_new_positions
+                              }
+                            }))}
+                            className={`w-10 h-5 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${walletSettings[showWalletSettings].copy_only_new_positions ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <motion.div
+                              className="w-3 h-3 bg-white rounded-full"
+                              animate={{ x: walletSettings[showWalletSettings].copy_only_new_positions ? 20 : 0 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                            />
+                          </motion.button>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div>
+                                <h5 className="text-sm font-orbitron font-semibold text-white mb-1">Enter On Spike Pullback</h5>
+                                <p className="text-white/40 font-space-grotesk text-[10px] md:text-xs">For fixed buys, wait for a spike above the mirror entry, then buy the pullback</p>
+                              </div>
+                              <div className="group relative">
+                                <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
+                                  <Info size={12} className="text-molten-gold" />
+                                </div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                                  SOL fixed buys only. The bot records the mirror entry price from the decoded gRPC swap. With 5% pullback and 1% margin, price must first reach 6% above entry, then return to 5% above entry before buying.
+                                </div>
+                              </div>
+                            </div>
+                            <motion.button
+                              onClick={() => setWalletSettings(prev => ({
+                                ...prev,
+                                [showWalletSettings]: {
+                                  ...prev[showWalletSettings],
+                                  spike_entry_enabled: !prev[showWalletSettings].spike_entry_enabled
+                                }
+                              }))}
+                              className={`w-10 h-5 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${walletSettings[showWalletSettings].spike_entry_enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <motion.div
+                                className="w-3 h-3 bg-white rounded-full"
+                                animate={{ x: walletSettings[showWalletSettings].spike_entry_enabled ? 20 : 0 }}
+                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                              />
+                            </motion.button>
+                          </div>
+
+                          {walletSettings[showWalletSettings].spike_entry_enabled && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-lg border border-molten-gold/10 bg-black/20 p-3"
+                            >
+                              <div>
+                                <label className="flex items-center gap-2 text-[10px] md:text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                                  Pullback %
+                                  <span className="group relative">
+                                    <Info size={12} className="text-molten-gold cursor-help" />
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">The buy level above mirror entry after a valid spike. Example: 5 means buy when price returns to entry +5%.</span>
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  value={walletSettings[showWalletSettings].spike_entry_pullback_percentage}
+                                  onChange={(e) => setWalletSettings(prev => ({
+                                    ...prev,
+                                    [showWalletSettings]: {
+                                      ...prev[showWalletSettings],
+                                      spike_entry_pullback_percentage: parseFloat(e.target.value) || 0
+                                    }
+                                  }))}
+                                  className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                />
+                              </div>
+                              <div>
+                                <label className="flex items-center gap-2 text-[10px] md:text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                                  Margin %
+                                  <span className="group relative">
+                                    <Info size={12} className="text-molten-gold cursor-help" />
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Extra spike confirmation above the pullback. Pullback 5 and margin 1 requires a 6% spike, then a pullback to 5%.</span>
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  value={walletSettings[showWalletSettings].spike_entry_margin_percentage}
+                                  onChange={(e) => setWalletSettings(prev => ({
+                                    ...prev,
+                                    [showWalletSettings]: {
+                                      ...prev[showWalletSettings],
+                                      spike_entry_margin_percentage: parseFloat(e.target.value) || 0
+                                    }
+                                  }))}
+                                  className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                />
+                              </div>
+                              <div>
+                                <label className="flex items-center gap-2 text-[10px] md:text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                                  Timeout Seconds
+                                  <span className="group relative">
+                                    <Info size={12} className="text-molten-gold cursor-help" />
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">How long the bot waits for the spike and pullback before cancelling. Indefinite stores -1.</span>
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  value={walletSettings[showWalletSettings].spike_entry_timeout_seconds === -1 ? '' : walletSettings[showWalletSettings].spike_entry_timeout_seconds}
+                                  onChange={(e) => setWalletSettings(prev => ({
+                                    ...prev,
+                                    [showWalletSettings]: {
+                                      ...prev[showWalletSettings],
+                                      spike_entry_timeout_seconds: parseInt(e.target.value, 10) || 0
+                                    }
+                                  }))}
+                                  disabled={walletSettings[showWalletSettings].spike_entry_timeout_seconds === -1}
+                                  className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300 disabled:opacity-50"
+                                  min="0"
+                                  step="1"
+                                  placeholder="Indefinite"
+                                />
+                                <label className="mt-2 flex items-center gap-2 text-[11px] text-white/50 font-space-grotesk">
+                                  <input
+                                    type="checkbox"
+                                    checked={walletSettings[showWalletSettings].spike_entry_timeout_seconds === -1}
+                                    onChange={(e) => setWalletSettings(prev => ({
+                                      ...prev,
+                                      [showWalletSettings]: {
+                                        ...prev[showWalletSettings],
+                                        spike_entry_timeout_seconds: e.target.checked ? -1 : 300
+                                      }
+                                    }))}
+                                    className="h-4 w-4 accent-molten-gold"
+                                  />
+                                  Indefinite timeout
+                                </label>
+                              </div>
+                            </motion.div>
+                          )}
+                          {selectedCoin !== 'sol' && (
+                            <p className="text-[10px] md:text-xs text-molten-gold/70 font-space-grotesk">Spike and new-position controls are SOL-only in v1.</p>
+                          )}
+                        </div>
                       </div>
 
                       {/* Mirror Sells Toggle */}
@@ -3553,778 +3861,6 @@ function ProfilePageContent() {
       </div>
     </div>
   );
-  const renderDipLadderSection = () => {
-    const selectedLadder = dipLadders.find(ladder => ladder.id === dipLadderSelectedId) || null
-    const activeLadders = dipLadders.filter(ladder => ladder.status === 'active')
-    const openLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)).length || 0), 0)
-    const soldLotsCount = dipLadders.reduce((total, ladder) => total + (ladder.lots?.filter(lot => isClosedDipLadderLot(lot.status)).length || 0), 0)
-    const totalUnrealizedPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_unrealized_pnl_usd || 0), 0)
-    const totalRealizedPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_realized_pnl_usd || 0), 0)
-    const totalNetPnl = dipLadders.reduce((total, ladder) => total + (ladder.total_pnl_usd || 0), 0)
-    const tokenValue = dipLadderForm.token_address.trim()
-    const tokenLower = tokenValue.toLowerCase()
-    const formCoin = tokenLower === DIP_LADDER_NATIVE_TOKENS.bnb.address.toLowerCase()
-      ? 'bnb'
-      : tokenLower === DIP_LADDER_NATIVE_TOKENS.sol.address.toLowerCase()
-        ? 'sol'
-        : selectedCoin
-    const nativeToken = DIP_LADDER_NATIVE_TOKENS[formCoin]
-    const isNativeSelection = tokenLower === nativeToken.address.toLowerCase()
-    const nativeStableSymbol = formCoin === 'sol' ? 'USDT' : 'USDC'
-    const nativeStableAmount = getStableTradeAmount(profile, formCoin)
-    const nativeActivationBlocked = isNativeSelection && (nativeStableAmount === null || nativeStableAmount === undefined || Number(nativeStableAmount) <= 0)
-    const ladderStatusLabel = (status: string) => {
-      if (status === 'stopped_no_cash') return 'NO CASH'
-      if (status === 'stopped_depth_limit') return 'DEPTH STOP'
-      return status.toUpperCase()
-    }
-    const ladderStatusClass = (status: string) => {
-      if (status === 'active') return 'text-blue-300 border-blue-400/40 bg-blue-500/10'
-      if (status === 'disabled') return 'text-white/45 border-white/15 bg-white/5'
-      if (status === 'stopped_depth_limit') return 'text-red-300 border-red-400/40 bg-red-500/10'
-      return 'text-yellow-300 border-yellow-400/40 bg-yellow-500/10'
-    }
-    const tokenDisplayName = (address: string, ladder?: DipLadder | null) => {
-      const match = Object.values(DIP_LADDER_NATIVE_TOKENS).find(token => token.address.toLowerCase() === address.toLowerCase())
-      return ladder?.token_name || ladder?.token_symbol || (match ? match.name : formatWalletAddress(address))
-    }
-    const tokenShortSymbol = (address: string, ladder?: DipLadder | null) => {
-      const match = Object.values(DIP_LADDER_NATIVE_TOKENS).find(token => token.address.toLowerCase() === address.toLowerCase())
-      return ladder?.token_symbol || match?.label || null
-    }
-    const dipLadderChartLinks = (ladder: DipLadder) => {
-      const gmgnNetwork = ladder.coin_type === 'sol' ? 'sol' : 'bsc'
-      const dexNetwork = ladder.coin_type === 'sol' ? 'solana' : 'bsc'
-      return {
-        gmgn: `https://gmgn.ai/${gmgnNetwork}/token/${ladder.token_address}`,
-        dexscreener: `https://dexscreener.com/${dexNetwork}/${ladder.token_address}${profile?.public_address ? `?maker=${profile.public_address}` : ''}`
-      }
-    }
-    const renderDipLadderTokenLinks = (ladder: DipLadder) => {
-      const links = dipLadderChartLinks(ladder)
-      return (
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <a
-            href={links.gmgn}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-blue-400/25 bg-blue-500/10 px-2 text-[10px] font-orbitron font-bold text-blue-300 hover:bg-blue-500/20 transition-colors"
-            title="Open GMGN chart"
-          >
-            GMGN
-            <ExternalLink size={10} />
-          </a>
-          <a
-            href={links.dexscreener}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-molten-gold/25 bg-molten-gold/10 px-2 text-[10px] font-orbitron font-bold text-molten-gold hover:bg-molten-gold/20 transition-colors"
-            title="Open DexScreener chart"
-          >
-            DEX
-            <ExternalLink size={10} />
-          </a>
-        </div>
-      )
-    }
-    const formatPnlUsd = (value: number | null | undefined) => {
-      if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A'
-      const amount = Number(value)
-      const sign = amount > 0 ? '+' : amount < 0 ? '-' : ''
-      return `${sign}$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    }
-    const formatPnlPercent = (value: number | null | undefined) => {
-      if (value === null || value === undefined || Number.isNaN(Number(value))) return ''
-      const amount = Number(value)
-      return `${amount > 0 ? '+' : ''}${amount.toFixed(2)}%`
-    }
-    const pnlTone = (value: number | null | undefined) => {
-      const amount = Number(value || 0)
-      if (amount > 0) return 'text-green-400'
-      if (amount < 0) return 'text-red-400'
-      return 'text-white/55'
-    }
-    const formatOptionalCap = (value: number | null | undefined, suffix = '') => {
-      if (value === null || value === undefined) return 'No cap'
-      return `${value}${suffix}`
-    }
-    const renderPnlValue = (value: number | null | undefined, percentage?: number | null, size: 'sm' | 'md' = 'sm') => (
-      <div className="min-w-0">
-        <p className={`font-mono font-bold leading-snug break-all [overflow-wrap:anywhere] ${size === 'md' ? 'text-base' : 'text-sm'} ${pnlTone(value)}`}>
-          {formatPnlUsd(value)}
-        </p>
-        {percentage !== null && percentage !== undefined && (
-          <p className={`mt-0.5 text-[10px] font-orbitron ${pnlTone(value)}`}>{formatPnlPercent(percentage)}</p>
-        )}
-      </div>
-    )
-
-    return (
-      <section className="max-w-7xl mx-auto overflow-visible w-full max-w-full space-y-8 md:space-y-10">
-        <div className="relative overflow-hidden rounded-lg border border-molten-gold/20 bg-gradient-to-br from-void-black via-black to-molten-gold/10 p-5 md:p-8">
-          <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_15%_20%,rgba(245,158,11,0.22),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(59,130,246,0.16),transparent_28%)]" />
-          <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-            <div className="max-w-5xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-molten-gold/15 border border-molten-gold/30 flex items-center justify-center">
-                  <Target size={20} className="text-molten-gold" />
-                </div>
-                <span className="text-xs font-orbitron font-bold uppercase tracking-[0.28em] text-molten-gold/80">
-                  Dip Ladder Strategy
-                </span>
-              </div>
-              <h1 className="text-3xl md:text-5xl font-orbitron font-bold text-white leading-tight max-w-5xl">
-                Run a ladder directly on any token CA.
-              </h1>
-              <p className="mt-4 text-sm md:text-base text-white/60 font-space-grotesk max-w-3xl">
-                Paste a token contract, save the ladder, and the reference price is captured from that moment. Native SOL and BNB are one click away.
-              </p>
-            </div>
-            <motion.button
-              onClick={async () => {
-                await fetchDipLadders()
-              }}
-              disabled={walletTrackerLoading || dipLaddersLoading}
-              className="w-full lg:w-auto px-4 py-3 rounded-lg bg-molten-gold text-void-black font-orbitron font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all disabled:opacity-50"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <RefreshCw size={18} className={dipLaddersLoading ? 'animate-spin' : ''} />
-              Refresh
-            </motion.button>
-          </div>
-        </div>
-
-        {walletTrackerError && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-lg border border-red-400/40 bg-red-500/10 p-4"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex min-w-0 items-start gap-3">
-                <XCircle size={18} className="mt-0.5 flex-shrink-0 text-red-400" />
-                <div className="min-w-0">
-                  <p className="text-sm font-orbitron font-bold text-red-300">Dip Ladder action failed</p>
-                  <p className="mt-1 break-words text-sm text-red-100/80 font-space-grotesk">{walletTrackerError}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setWalletTrackerError(null)}
-                className="flex-shrink-0 rounded-md border border-red-400/20 bg-red-500/10 px-2 py-1 text-[10px] font-orbitron font-bold text-red-300 hover:bg-red-500/20 transition-colors"
-              >
-                Dismiss
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {walletTrackerSuccess && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-lg border border-green-400/35 bg-green-500/10 p-4"
-          >
-            <div className="flex items-start gap-3">
-              <CheckCircle size={18} className="mt-0.5 flex-shrink-0 text-green-400" />
-              <p className="break-words text-sm font-orbitron font-bold text-green-300">{walletTrackerSuccess}</p>
-            </div>
-          </motion.div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-0 rounded-lg overflow-hidden border border-molten-gold/20 bg-void-black/40">
-          {[
-            { label: 'Active Ladders', value: activeLadders.length, tone: 'text-blue-300' },
-            { label: 'Open Lots', value: openLotsCount, tone: 'text-molten-gold' },
-            { label: 'UPNL', value: formatPnlUsd(totalUnrealizedPnl), tone: pnlTone(totalUnrealizedPnl) },
-            { label: 'Realized PNL', value: formatPnlUsd(totalRealizedPnl), tone: pnlTone(totalRealizedPnl) },
-            { label: 'Net PNL', value: formatPnlUsd(totalNetPnl), tone: pnlTone(totalNetPnl) }
-          ].map((metric, index) => (
-            <div key={metric.label} className={`p-5 md:p-6 ${index < 4 ? 'border-b xl:border-b-0 xl:border-r border-molten-gold/10' : ''}`}>
-              <p className="text-xs font-orbitron uppercase tracking-[0.22em] text-white/35 mb-2">{metric.label}</p>
-              <p className={`break-all [overflow-wrap:anywhere] text-2xl md:text-3xl font-orbitron font-bold ${metric.tone}`}>{metric.value}</p>
-              {metric.label === 'Realized PNL' && (
-                <p className="mt-1 text-[10px] text-white/30 font-space-grotesk">{soldLotsCount} closed lot{soldLotsCount === 1 ? '' : 's'}</p>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-12 grid-flow-dense gap-0 rounded-lg overflow-visible border border-molten-gold/20 bg-gradient-to-br from-gray-900/50 to-black/80">
-          <div className="xl:col-span-7 border-b xl:border-b-0 xl:border-r border-molten-gold/10 p-4 md:p-5">
-            <div className="flex items-center justify-between gap-4 mb-5">
-              <div>
-                <h2 className="text-lg font-orbitron font-bold text-molten-gold">Ladder Setup</h2>
-                <p className="text-xs text-white/45 font-space-grotesk mt-1">
-                  {selectedLadder ? `Editing ${tokenDisplayName(selectedLadder.token_address, selectedLadder)}` : `New ${selectedCoin.toUpperCase()} ladder`}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  if (!dipLadderForm.is_active && nativeActivationBlocked) {
-                    setWalletTrackerError(`Set a ${nativeStableSymbol} trade amount before activating the native ${formCoin.toUpperCase()} Dip Ladder`)
-                    return
-                  }
-                  setDipLadderForm(prev => ({ ...prev, is_active: !prev.is_active }))
-                }}
-                disabled={dipLadderSaving}
-                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${dipLadderForm.is_active ? 'bg-molten-gold' : nativeActivationBlocked ? 'bg-red-950 border border-red-400/40' : 'bg-gray-700'}`}
-                title={nativeActivationBlocked ? `Set a ${nativeStableSymbol} trade amount before enabling native ${formCoin.toUpperCase()}` : undefined}
-              >
-                <motion.div
-                  className="w-5 h-5 bg-white rounded-full flex items-center justify-center"
-                  animate={{ x: dipLadderForm.is_active ? 28 : 0 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                >
-                  <Power size={11} className={dipLadderForm.is_active ? 'text-void-black' : 'text-gray-700'} />
-                </motion.div>
-              </button>
-            </div>
-
-            <div className="space-y-5">
-              <div className={`rounded-lg border p-4 ${dipLadderForm.is_active ? 'border-molten-gold/30 bg-molten-gold/10' : 'border-white/10 bg-black/20'}`}>
-                <p className="text-xs font-orbitron uppercase tracking-[0.22em] text-white/35 mb-2">Saved State</p>
-                <p className={`text-xl font-orbitron font-bold ${dipLadderForm.is_active ? 'text-molten-gold' : 'text-white/45'}`}>
-                  {dipLadderForm.is_active ? 'Enabled on Save' : 'Disabled on Save'}
-                </p>
-                <p className="mt-2 text-xs text-white/45 font-space-grotesk">Switch changes stay local until you press Save.</p>
-              </div>
-
-              {nativeActivationBlocked && (
-                <div className="rounded-lg border border-yellow-400/25 bg-yellow-500/10 p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-yellow-300" />
-                    <p className="text-xs text-yellow-100/80 font-space-grotesk leading-relaxed">
-                      Native {formCoin.toUpperCase()} ladders buy with {nativeStableSymbol}. Set a {nativeStableSymbol} trade amount on the profile overview before enabling this ladder.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <label className="block text-sm font-orbitron text-molten-gold font-semibold">Token CA</label>
-                  {selectedLadder && (
-                    <button
-                      type="button"
-                      onClick={handleNewDipLadder}
-                      className="text-xs text-white/45 hover:text-molten-gold font-orbitron transition-colors"
-                    >
-                      New Token
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={dipLadderForm.token_address}
-                  onChange={(e) => {
-                    setDipLadderSelectedId(null)
-                    setDipLadderForm(prev => ({ ...prev, token_address: e.target.value }))
-                  }}
-                  placeholder={`Paste ${selectedCoin.toUpperCase()} token contract address`}
-                  className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-mono text-sm focus:border-molten-gold focus:outline-none transition-colors duration-300 break-all [overflow-wrap:anywhere]"
-                />
-              </div>
-
-              <div>
-                <p className="text-sm font-orbitron text-molten-gold font-semibold mb-2">Quick Select</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {(['sol', 'bnb'] as const).map(coin => {
-                    const option = DIP_LADDER_NATIVE_TOKENS[coin]
-                    const selected = selectedCoin === coin && dipLadderForm.token_address.toLowerCase() === option.address.toLowerCase()
-                    return (
-                      <button
-                        key={coin}
-                        type="button"
-                        onClick={() => handleSelectNativeDipLadder(coin)}
-                        className={`min-w-0 rounded-lg border p-3 text-left transition-all ${selected ? 'border-molten-gold/50 bg-molten-gold/10' : 'border-white/10 bg-black/20 hover:border-molten-gold/30 hover:bg-molten-gold/5'}`}
-                      >
-                        <span className="block text-sm font-orbitron font-bold text-white">{option.name}</span>
-                        <span className="mt-1 block text-[11px] text-white/35 font-mono break-all [overflow-wrap:anywhere]">{option.address}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Drop Step %</label>
-                  <input
-                    type="number"
-                    value={dipLadderForm.dip_ladder_drop_percentage}
-                    onChange={(e) => setDipLadderForm(prev => ({
-                      ...prev,
-                      dip_ladder_drop_percentage: parseFloat(e.target.value) || 0
-                    }))}
-                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                    min="0.1"
-                    max="100"
-                    step="0.1"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Profit Target %</label>
-                  <input
-                    type="number"
-                    value={dipLadderForm.dip_ladder_profit_percentage}
-                    onChange={(e) => setDipLadderForm(prev => ({
-                      ...prev,
-                      dip_ladder_profit_percentage: parseFloat(e.target.value) || 0
-                    }))}
-                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                    min="0.1"
-                    max="100"
-                    step="0.1"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Max Cycle Buys</label>
-                  <input
-                    type="number"
-                    value={dipLadderForm.max_buy_count}
-                    onChange={(e) => setDipLadderForm(prev => ({
-                      ...prev,
-                      max_buy_count: e.target.value
-                    }))}
-                    placeholder="No cap"
-                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                    min="1"
-                    step="1"
-                  />
-                  <p className="mt-1 text-[11px] text-white/35 font-space-grotesk">Counts every buy in this cycle, including lots already sold.</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Max Drawdown %</label>
-                  <input
-                    type="number"
-                    value={dipLadderForm.max_drawdown_percentage}
-                    onChange={(e) => setDipLadderForm(prev => ({
-                      ...prev,
-                      max_drawdown_percentage: e.target.value
-                    }))}
-                    placeholder="No cap"
-                    className="w-full bg-void-black/60 border border-molten-gold/20 rounded-lg px-3 py-3 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                    min="0.1"
-                    max="100"
-                    step="0.1"
-                  />
-                  <p className="mt-1 text-[11px] text-white/35 font-space-grotesk">Stops new buys when price falls this far from the saved reference.</p>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-orbitron font-bold text-blue-200">Move Buy Trigger After Sells</p>
-                      <span className="group/reference relative inline-flex">
-                        <Info size={13} className="text-blue-200/70 cursor-help" />
-                        <span className="absolute bottom-full left-1/2 z-[9999] mb-2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-blue-300/30 bg-void-black/95 p-3 text-[11px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-200 pointer-events-none group-hover/reference:opacity-100 font-space-grotesk">
-                          When a lot sells, the next buy trigger moves to the sell/current price minus your drop step. This helps the ladder re-enter after a deep recovery. The saved reference price does not move.
-                        </span>
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-blue-100/70 font-space-grotesk">Useful after a deep dip recovers and your old buy trigger is too far below market.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDipLadderForm(prev => ({ ...prev, update_buy_trigger_on_sell: !prev.update_buy_trigger_on_sell }))}
-                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${dipLadderForm.update_buy_trigger_on_sell ? 'bg-blue-300' : 'bg-gray-700'}`}
-                  >
-                    <motion.div
-                      className="w-4 h-4 bg-white rounded-full"
-                      animate={{ x: dipLadderForm.update_buy_trigger_on_sell ? 24 : 0 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-molten-gold/10 bg-black/20 p-4">
-                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk mb-2">
-                  <span className="text-white/45">Reference captured on save</span>
-                  <span className="min-w-0 break-all [overflow-wrap:anywhere] text-white font-mono">{selectedLadder ? formatUsdPrice(selectedLadder.anchor_price_usd) : 'After save'}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk mb-2">
-                  <span className="text-white/45">Current tracked price</span>
-                  <span className="min-w-0 break-all [overflow-wrap:anywhere] text-white font-mono">{selectedLadder ? formatUsdPrice(selectedLadder.last_price_usd) : 'After save'}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk mb-2">
-                  <span className="text-white/45">Next buy triggers at</span>
-                  <span className="min-w-0 break-all [overflow-wrap:anywhere] text-blue-300 font-mono font-bold">{selectedLadder ? formatUsdPrice(selectedLadder.next_buy_price_usd) : `-${dipLadderForm.dip_ladder_drop_percentage}% from saved reference`}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm font-space-grotesk">
-                  <span className="text-white/45">Each lot sells at</span>
-                  <span className="text-green-400 font-orbitron font-bold">+{dipLadderForm.dip_ladder_profit_percentage}%</span>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-4 text-xs text-blue-100/80 font-space-grotesk">
-                The reference price is captured when you save an enabled ladder. It sets the first buy trigger and stays fixed for drawdown limits. After a buy fills, the next trigger is recalculated from that filled buy price. If sell updates are enabled, a successful sell moves only the next buy trigger.
-              </div>
-
-              <motion.button
-                onClick={handleSaveDipLadderSettings}
-                disabled={dipLadderSaving || !dipLadderForm.token_address.trim()}
-                className="w-full px-4 py-3 rounded-lg bg-molten-gold text-void-black font-orbitron font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all disabled:opacity-50"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {dipLadderSaving ? (
-                  <RefreshCw size={18} className="animate-spin" />
-                ) : (
-                  <Save size={18} />
-                )}
-                Save Dip Ladder
-              </motion.button>
-            </div>
-          </div>
-
-          <div className="xl:col-span-5 p-4 md:p-5">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-orbitron font-bold text-molten-gold">Current Selection</h2>
-              <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${isNativeSelection ? 'text-molten-gold border-molten-gold/40 bg-molten-gold/10' : 'text-white/45 border-white/15 bg-white/5'}`}>
-                {isNativeSelection ? nativeToken.label : selectedCoin.toUpperCase()}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {!selectedLadder ? (
-                <div className="rounded-lg border border-dashed border-molten-gold/20 p-8 text-center">
-                  <Activity size={30} className="mx-auto mb-3 text-molten-gold/40" />
-                  <p className="text-sm text-white/50 font-space-grotesk">Save this token to capture its first reference price.</p>
-                </div>
-              ) : [selectedLadder].map(ladder => {
-                const openLots = ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)) || []
-                const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
-                return (
-                  <div key={ladder.id} className="rounded-lg border border-molten-gold/15 bg-black/25 p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="min-w-0 text-sm text-white font-orbitron font-bold truncate">{tokenDisplayName(ladder.token_address, ladder)}</p>
-                          {tokenSymbol && (
-                            <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/45 font-orbitron">
-                              {tokenSymbol}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
-                          <p className="min-w-0 text-xs text-white/35 font-mono break-all [overflow-wrap:anywhere]">{ladder.token_address}</p>
-                          {renderDipLadderTokenLinks(ladder)}
-                        </div>
-                      </div>
-                      <div className="flex flex-shrink-0 items-center gap-2">
-                        <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
-                          {ladderStatusLabel(ladder.status)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleDipLadderToken(ladder, e)}
-                          disabled={dipLadderSaving}
-                          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:opacity-40 ${ladder.status === 'active' ? 'border-molten-gold/25 bg-molten-gold/10 text-molten-gold hover:bg-molten-gold/20' : 'border-blue-400/25 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'}`}
-                          title={ladder.status === 'active' ? 'Disable this Dip Ladder token' : 'Enable this Dip Ladder token'}
-                        >
-                          <Power size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleRequestDeleteDipLadder(ladder, e)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-400/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
-                          title="Delete Dip Ladder entry"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Buy Trigger</p>
-                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-blue-300 font-mono font-bold leading-snug">{formatUsdPrice(ladder.next_buy_price_usd)}</p>
-                        <p className="mt-1 text-[10px] text-white/30 font-space-grotesk">Current at or below trigger</p>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Current Price</p>
-                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.last_price_usd)}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-3 gap-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
-                      <div className="min-w-0 border-r border-white/10 p-2">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">UPNL</p>
-                        {renderPnlValue(ladder.total_unrealized_pnl_usd, null)}
-                      </div>
-                      <div className="min-w-0 border-r border-white/10 p-2">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Realized</p>
-                        {renderPnlValue(ladder.total_realized_pnl_usd, null)}
-                      </div>
-                      <div className="min-w-0 p-2">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Net</p>
-                        {renderPnlValue(ladder.total_pnl_usd, ladder.total_pnl_percentage)}
-                      </div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
-                      <div className="min-w-0 border-r border-white/10 p-2">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Cycle Buys</p>
-                        <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold">
-                          {ladder.cycle_buy_count || 0} / {formatOptionalCap(ladder.max_buy_count)}
-                        </p>
-                      </div>
-                      <div className="min-w-0 p-2">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Drawdown</p>
-                        <p className="break-all [overflow-wrap:anywhere] text-sm text-white font-mono font-bold">
-                          {(ladder.cycle_drawdown_percentage ?? 0).toFixed(2)}% / {formatOptionalCap(ladder.max_drawdown_percentage, '%')}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="mt-3 text-xs text-white/40 font-space-grotesk">{openLots.length} open lot{openLots.length === 1 ? '' : 's'}</p>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-molten-gold/20 bg-gradient-to-br from-gray-900/50 to-black/80 p-4 md:p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-            <div>
-              <h2 className="text-xl font-orbitron font-bold text-molten-gold">Current Dip Ladder Actions</h2>
-              <p className="text-sm text-white/45 font-space-grotesk mt-1">Statuses, reference prices, buy triggers, sell targets, and open lots across {selectedCoin.toUpperCase()}.</p>
-            </div>
-            <span className="text-xs text-white/40 font-space-grotesk">{dipLaddersLoading ? 'Refreshing...' : `${dipLadders.length} total`}</span>
-          </div>
-
-          {dipLadders.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-molten-gold/20 p-10 text-center">
-              <Target size={36} className="mx-auto mb-3 text-molten-gold/40" />
-              <p className="text-white/60 font-orbitron text-sm">No Dip Ladder actions yet</p>
-              <p className="text-white/35 font-space-grotesk text-xs mt-2">Paste a token CA, choose the ladder settings, then save.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {dipLadders.map((ladder, index) => {
-                const openLots = ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)) || []
-                const closedLots = ladder.lots?.filter(lot => isClosedDipLadderLot(lot.status)) || []
-                const displayLots = [...openLots, ...closedLots]
-                const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
-
-                return (
-                  <motion.div
-                    key={ladder.id}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.04 }}
-                    onClick={() => handleSelectDipLadder(ladder)}
-                    className={`group relative z-10 rounded-lg border bg-void-black/45 p-4 md:p-5 overflow-visible hover:z-[90] transition-colors cursor-pointer ${dipLadderSelectedId === ladder.id ? 'border-molten-gold/50' : 'border-molten-gold/15 hover:border-molten-gold/35'}`}
-                  >
-                    <div className="flex items-start justify-between gap-4 mb-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="min-w-0 text-lg font-orbitron font-bold text-white truncate">{tokenDisplayName(ladder.token_address, ladder)}</p>
-                          {tokenSymbol && (
-                            <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/45 font-orbitron">
-                              {tokenSymbol}
-                            </span>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              copyToClipboard(ladder.token_address, `dip-page-${ladder.id}`)
-                            }}
-                            className="text-molten-gold/60 hover:text-molten-gold transition-colors"
-                            title="Copy token address"
-                          >
-                            <Copy size={13} />
-                          </button>
-                        </div>
-                        <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
-                          <p className="min-w-0 text-xs text-white/40 font-mono break-all [overflow-wrap:anywhere]">{ladder.token_address}</p>
-                          {renderDipLadderTokenLinks(ladder)}
-                        </div>
-                      </div>
-                      <div className="flex flex-shrink-0 items-center gap-2">
-                        <span className={`text-[10px] font-orbitron font-bold px-2 py-1 rounded-full border ${ladderStatusClass(ladder.status)}`}>
-                          {ladderStatusLabel(ladder.status)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleDipLadderToken(ladder, e)}
-                          disabled={dipLadderSaving}
-                          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors disabled:opacity-40 ${ladder.status === 'active' ? 'border-molten-gold/25 bg-molten-gold/10 text-molten-gold hover:bg-molten-gold/20' : 'border-blue-400/25 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'}`}
-                          title={ladder.status === 'active' ? 'Disable this Dip Ladder token' : 'Enable this Dip Ladder token'}
-                        >
-                          <Power size={13} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mb-3 rounded-lg border border-molten-gold/15 bg-molten-gold/5 px-3 py-2 text-[11px] text-white/55 font-space-grotesk">
-                      <span className="text-molten-gold/80 font-orbitron font-bold uppercase">Reference</span> is captured when the ladder is saved enabled. It stays fixed for drawdown limits. Buy triggers move after buys, and after sells when that option is enabled.
-                    </div>
-
-                    <div className="relative z-10 grid grid-cols-2 md:grid-cols-6 gap-0 rounded-lg overflow-visible border border-white/10 mb-4">
-                      <div className="min-w-0 p-3 border-r border-b md:border-b-0 border-white/10">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <p className="text-[10px] text-white/35 font-orbitron uppercase">Cycle Ref</p>
-                          <span className="group/reference relative z-[120] inline-flex">
-                            <Info size={11} className="text-molten-gold/70 cursor-help" />
-                            <span className="absolute bottom-full left-0 z-[9999] mb-2 w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-molten-gold/30 bg-void-black/95 p-3 text-[10px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-200 pointer-events-none group-hover/reference:opacity-100 md:left-1/2 md:-translate-x-1/2 font-space-grotesk normal-case">
-Cycle starting price. It seeds the first buy trigger only. After each buy and/or sell, the next trigger is calculated from that price.                            </span>
-                          </span>
-                        </div>
-                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.anchor_price_usd)}</p>
-                      </div>
-                      <div className="min-w-0 p-3 md:border-r border-b md:border-b-0 border-white/10">
-                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Buy Trigger</p>
-                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-blue-300 font-mono font-bold leading-snug">{formatUsdPrice(ladder.next_buy_price_usd)}</p>
-                        <p className="mt-1 text-[10px] text-white/35 font-space-grotesk">Current at or below trigger</p>
-                      </div>
-                      <div className="min-w-0 p-3 border-r border-b md:border-b-0 border-white/10">
-                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Current</p>
-                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-white font-mono font-bold leading-snug">{formatUsdPrice(ladder.last_price_usd)}</p>
-                      </div>
-                      <div className="p-3 border-r border-white/10">
-                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Drop</p>
-                        <p className="text-xs text-molten-gold font-orbitron font-bold">{ladder.drop_percentage}%</p>
-                      </div>
-                      <div className="p-3 border-r border-white/10">
-                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Target</p>
-                        <p className="text-xs text-green-400 font-orbitron font-bold">{ladder.profit_percentage}%</p>
-                      </div>
-                      <div className="min-w-0 p-3">
-                        <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Cycle Buys</p>
-                        <p className="min-w-0 break-all [overflow-wrap:anywhere] text-xs text-white font-mono font-bold leading-snug">{ladder.cycle_buy_count || 0} / {formatOptionalCap(ladder.max_buy_count)}</p>
-                        <p className="mt-1 text-[10px] text-white/35 font-space-grotesk">{(ladder.cycle_drawdown_percentage ?? 0).toFixed(2)}% / {formatOptionalCap(ladder.max_drawdown_percentage, '%')} drawdown</p>
-                      </div>
-                    </div>
-
-                    <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
-                      <div className="min-w-0 border-b sm:border-b-0 sm:border-r border-white/10 p-3">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">UPNL</p>
-                        {renderPnlValue(ladder.total_unrealized_pnl_usd, null, 'md')}
-                      </div>
-                      <div className="min-w-0 border-b sm:border-b-0 sm:border-r border-white/10 p-3">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Realized</p>
-                        {renderPnlValue(ladder.total_realized_pnl_usd, null, 'md')}
-                      </div>
-                      <div className="min-w-0 p-3">
-                        <p className="mb-1 text-[10px] text-white/35 font-orbitron uppercase">Net PNL</p>
-                        {renderPnlValue(ladder.total_pnl_usd, ladder.total_pnl_percentage, 'md')}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-orbitron text-molten-gold/80 uppercase tracking-[0.18em]">Lots</p>
-                        <p className="text-[11px] text-white/40 font-space-grotesk">{openLots.length} open, {closedLots.length} closed</p>
-                      </div>
-                      {displayLots.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-white/10 p-3 text-sm text-white/35 font-space-grotesk">
-                          Waiting for the next configured drop.
-                        </div>
-                      ) : displayLots.map(lot => {
-                        const isClosedLot = isClosedDipLadderLot(lot.status)
-                        const lotInCooldown = isDipLadderLotRetryCoolingDown(lot)
-                        const showSellIssue = !isClosedLot && (lot.status === 'sell_blocked' || lotInCooldown || Boolean(lot.last_error))
-                        const canRetryLotSell = ladder.status === 'active' || ladder.status === 'stopped_depth_limit'
-                        const lotPnl = lot.pnl
-                        const pnlValue = isClosedLot ? lotPnl?.final_pnl_usd ?? lotPnl?.realized_pnl_usd : lotPnl?.unrealized_pnl_usd
-                        const pnlPercent = isClosedLot ? lotPnl?.final_pnl_percentage ?? lotPnl?.realized_pnl_percentage : lotPnl?.unrealized_pnl_percentage
-                        return (
-                        <div key={lot.id} className="rounded-lg bg-black/25 border border-white/10 p-3">
-                          <div className="mb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="min-w-0 text-xs text-white font-orbitron font-bold truncate">{tokenDisplayName(ladder.token_address, ladder)}</p>
-                                {tokenSymbol && (
-                                  <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/45 font-orbitron">
-                                    {tokenSymbol}
-                                  </span>
-                                )}
-                                <span className={`flex-shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-orbitron ${dipLadderLotStatusClass(lot, isClosedLot)}`}>
-                                  {dipLadderLotStatusLabel(lot, isClosedLot)}
-                                </span>
-                                {showSellIssue && (
-                                  <span className="group/lot-error relative z-[80] inline-flex flex-shrink-0">
-                                    <AlertCircle size={13} className={lot.status === 'sell_blocked' ? 'text-red-300 cursor-help' : 'text-yellow-300 cursor-help'} />
-                                    <span className="pointer-events-none absolute bottom-full left-1/2 z-[9999] mb-2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-red-400/30 bg-void-black/95 p-3 text-[11px] text-white/80 opacity-0 shadow-2xl transition-opacity duration-200 group-hover/lot-error:opacity-100 font-space-grotesk normal-case">
-                                      {lot.last_error || (lotInCooldown ? 'Sell retry is cooling down before the next automatic attempt.' : 'Sell needs attention.')}
-                                    </span>
-                                  </span>
-                                )}
-                                {lotPnl?.basis_source === 'estimated' && (
-                                  <span className="flex-shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/40 font-orbitron">
-                                    EST
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-1 min-w-0 break-all [overflow-wrap:anywhere] text-[11px] text-white/35 font-mono leading-snug">{ladder.token_address}</p>
-                            </div>
-                            {renderDipLadderTokenLinks(ladder)}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                            <div className="min-w-0">
-                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Entry</p>
-                              <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-white font-mono leading-snug">{formatUsdPrice(lot.entry_price_usd)}</p>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Sell Target</p>
-                              <p className="min-w-0 break-all [overflow-wrap:anywhere] text-sm text-green-400 font-mono leading-snug">{formatUsdPrice(lot.target_price_usd)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">Remaining</p>
-                              <p className="text-sm text-molten-gold font-mono">{lot.remaining_amount_tokens.toLocaleString(undefined, { maximumFractionDigits: 6 })}</p>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[10px] text-white/35 font-orbitron uppercase mb-1">{isClosedLot ? 'Final PNL' : 'UPNL'}</p>
-                              {renderPnlValue(pnlValue, pnlPercent)}
-                            </div>
-                          </div>
-                          {showSellIssue && (
-                            <div className={`mt-3 rounded-lg border p-3 ${lot.status === 'sell_blocked' ? 'border-red-400/25 bg-red-500/10' : 'border-yellow-400/25 bg-yellow-500/10'}`}>
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className={`text-[11px] font-orbitron font-bold uppercase ${lot.status === 'sell_blocked' ? 'text-red-300' : 'text-yellow-300'}`}>
-                                    {lot.status === 'sell_blocked' ? 'Sell blocked' : 'Sell retry cooling down'}
-                                  </p>
-                                  <p className="mt-1 text-[11px] text-white/50 font-space-grotesk">
-                                    Failures: {lot.sell_failure_count || 0} / 3{lot.sell_retry_after ? ` | next auto retry ${formatDate(lot.sell_retry_after, true)}` : ''}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleRetryDipLadderLotSell(lot.id, e)}
-                                  disabled={dipLadderRetryingLotId === lot.id || !canRetryLotSell}
-                                  title={canRetryLotSell ? 'Retry this lot sell' : 'Enable this Dip Ladder before retrying sells'}
-                                  className="inline-flex h-8 flex-shrink-0 items-center justify-center gap-2 rounded-md border border-molten-gold/25 bg-molten-gold/10 px-3 text-[10px] font-orbitron font-bold text-molten-gold transition-colors hover:bg-molten-gold/20 disabled:opacity-50"
-                                >
-                                  <RefreshCw size={12} className={dipLadderRetryingLotId === lot.id ? 'animate-spin' : ''} />
-                                  {canRetryLotSell ? 'Retry Sell' : 'Enable Ladder'}
-                                </button>
-                              </div>
-                              {lot.last_error && (
-                                <p className="mt-2 break-words text-[11px] text-white/65 font-space-grotesk [overflow-wrap:anywhere]">{lot.last_error}</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )})}
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-    )
-  }
-
   const renderTrackerLogs = () => {
     return (
       <section className="max-w-6xl mx-auto space-y-4 md:space-y-8">
@@ -4888,7 +4424,8 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                       <span className={`text-xs md:text-sm font-orbitron font-semibold tracking-wider uppercase ${log.event_type === 'tracked_wallet_activity' ? 'text-green-400' :
                         log.event_type === 'user_purchase' ? 'text-blue-400' :
                           log.event_type === 'user_sell' ? 'text-orange-400' :
-                            log.event_type === 'admin_fee' ? 'text-purple-400' : 'text-gray-400'
+                            log.event_type === 'spike_entry' ? 'text-fuchsia-300' :
+                              log.event_type === 'admin_fee' ? 'text-purple-400' : 'text-gray-400'
                         }`}>
                         {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
                       </span>
@@ -4930,6 +4467,7 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                         const isManual = eData.mirror_wallet_address === 'manual_buy';
                         const isTpSl = eData.tp_sl_sell === true || log.is_tp_sl_sell;
                         const isDipLadder = eData.strategy === 'dip_ladder' || eData.dip_ladder === true || eData.dip_ladder_buy === true || eData.dip_ladder_sell === true;
+                        const isSpikeEntry = isSpikeEntryLog(log, eData);
 
                         if (isTpSl) {
                           const triggerType = eData.tp_sl_trigger_type || log.tp_sl_trigger_type;
@@ -4982,7 +4520,7 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                           );
                         }
 
-                        if (eData.mirror_wallet_address) {
+                        if (eData.mirror_wallet_address && !isSpikeEntry) {
                           return (
                             <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-yellow-200 border border-yellow-400/40 rounded-full bg-yellow-500/10 shadow-[0_0_12px_rgba(234,179,8,0.45)]">
                               Copy Trade
@@ -4991,6 +4529,16 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                         }
 
                         return null;
+                      })()}
+                      {(() => {
+                        const eData = parseLogEventData(log.event_data);
+                        if (!isSpikeEntryLog(log, eData)) return null;
+                        const label = log.event_type === 'user_purchase' ? 'Spike Buy' : log.event_type === 'user_sell' ? 'Spike Sell' : 'Spike Entry';
+                        return (
+                          <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-fuchsia-200 border border-fuchsia-400/40 rounded-full bg-fuchsia-500/10 shadow-[0_0_12px_rgba(217,70,239,0.45)]">
+                            {label}
+                          </span>
+                        );
                       })()}
                       {log.tp_sl_is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
                         <div className="group relative">
@@ -5035,6 +4583,86 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                           </div>
                         </div>
                       )}
+                      {(() => {
+                        const eData = parseLogEventData(log.event_data);
+                        if (!isSpikeEntryLog(log, eData)) return null;
+                        const details = getSpikeEntryDetails(log, eData);
+                        const spikeEntryActive = Boolean(log.spike_entry_is_active && SPIKE_ENTRY_ACTIVE_STATUSES.has(String(details.status)));
+                        const baseSymbol = selectedCoin.toUpperCase();
+                        return (
+                          <div className="group/spike relative">
+                            <div className="flex items-center gap-2">
+                              {spikeEntryActive ? (
+                                <div className="relative flex h-3 w-3">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-fuchsia-400 opacity-60" />
+                                  <span className="relative inline-flex h-3 w-3 rounded-full bg-fuchsia-300 shadow-[0_0_14px_rgba(217,70,239,0.75)]" />
+                                </div>
+                              ) : (
+                                <div className="h-3 w-3 rounded-full border border-fuchsia-300/40 bg-white/20 shadow-[0_0_10px_rgba(217,70,239,0.25)]" />
+                              )}
+                              <span className={`text-xs font-orbitron font-semibold ${spikeEntryActive ? 'text-fuchsia-300' : 'text-white/45'}`}>
+                                {spikeEntryActive ? 'SPIKE ACTIVE' : 'SPIKE INACTIVE'}
+                              </span>
+                            </div>
+                            <div className={`absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border rounded-lg p-4 text-xs text-white opacity-0 group-hover/spike:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl ${spikeEntryActive ? 'border-fuchsia-400/30 shadow-fuchsia-950/40' : 'border-white/15 shadow-black/40'}`}>
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
+                                  <p className={`font-orbitron font-semibold ${spikeEntryActive ? 'text-fuchsia-300' : 'text-white/60'}`}>{spikeEntryActive ? 'Spike entry active' : 'Spike entry inactive'}</p>
+                                  {details.id && (
+                                    <span className="text-[10px] font-orbitron text-white/50">Lot #{details.id}</span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Status</p>
+                                    <p className="text-fuchsia-200 font-space-grotesk">{formatSpikeEntryStatus(details.status)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Timeout</p>
+                                    <p className="text-white font-space-grotesk">{formatSpikeEntryTimeout(details.timeoutSeconds)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Mirror Entry</p>
+                                    <p className="text-molten-gold font-space-grotesk">{formatSpikeEntryPrice(details.mirrorEntryPrice)} {baseSymbol}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Spike Target</p>
+                                    <p className="text-fuchsia-200 font-space-grotesk">{formatSpikeEntryPrice(details.spikeTargetPrice)} {baseSymbol}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Pullback Entry</p>
+                                    <p className="text-blue-200 font-space-grotesk">{formatSpikeEntryPrice(details.pullbackTargetPrice)} {baseSymbol}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Current</p>
+                                    <p className="text-white font-space-grotesk">{formatSpikeEntryPrice(details.currentPrice)} {baseSymbol}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Pullback</p>
+                                    <p className="text-white font-space-grotesk">{formatSpikeEntryPercentage(details.pullbackPercentage)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider mb-1">Margin</p>
+                                    <p className="text-white font-space-grotesk">{formatSpikeEntryPercentage(details.marginPercentage)}</p>
+                                  </div>
+                                </div>
+                                <div className="border-t border-white/10 pt-2">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider">Max Seen</span>
+                                    <span className="text-white font-space-grotesk">{formatSpikeEntryPrice(details.maxSeenPrice)} {baseSymbol}</span>
+                                  </div>
+                                  {details.token && (
+                                    <div className="mt-2 flex items-center justify-between gap-3">
+                                      <span className="text-white/50 font-orbitron text-[10px] uppercase tracking-wider">Token</span>
+                                      <span className="text-white/80 font-space-grotesk font-mono truncate">{details.token}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {log.is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
                         <div className="group relative">
                           <div className="flex items-center gap-2">
@@ -5344,7 +4972,7 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
                     </div>
 
                     {/* Event Data - Only show for non-user purchase/sell events */}
-                    {log.event_data && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
+                    {log.event_data && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && !isSpikeEntryLog(log) && (
                       <div>
                         <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Event Data</p>
                         <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-3">
@@ -6136,7 +5764,7 @@ Cycle starting price. It seeds the first buy trigger only. After each buy and/or
       )}
 
       {currentSection === 'wallet-tracker' ? renderWalletTrackerSection() :
-        currentSection === 'dip-ladder' ? renderDipLadderSection() :
+        currentSection === 'dip-ladder' ? <DipLadderPageContent /> :
         currentSection === 'tracker-logs' ? renderTrackerLogs() :
           renderProfileOverview()}
 
