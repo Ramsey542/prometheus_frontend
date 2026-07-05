@@ -114,10 +114,14 @@ const formatWalletAddress = (address: any) => {
 }
 
 const getLotSortTime = (lot: DipLadder['lots'][number]) => {
-  const createdTime = lot.created_at ? new Date(lot.created_at).getTime() : NaN
-  if (Number.isFinite(createdTime)) return createdTime
   const updatedTime = lot.updated_at ? new Date(lot.updated_at).getTime() : NaN
-  return Number.isFinite(updatedTime) ? updatedTime : 0
+  if (Number.isFinite(updatedTime)) return updatedTime
+  const createdTime = lot.created_at ? new Date(lot.created_at).getTime() : NaN
+  return Number.isFinite(createdTime) ? createdTime : 0
+}
+
+const sortLotsByRecentActivity = (lots: DipLadder['lots']) => {
+  return [...lots].sort((a, b) => getLotSortTime(b) - getLotSortTime(a) || b.id - a.id)
 }
 
 export default function DipLadderPageContent() {
@@ -1039,7 +1043,7 @@ export default function DipLadderPageContent() {
               {dipLadders.map((ladder, index) => {
                 const openLots = ladder.lots?.filter(lot => isOpenDipLadderLot(lot.status)) || []
                 const closedLots = ladder.lots?.filter(lot => isClosedDipLadderLot(lot.status)) || []
-                const displayLots = [...openLots, ...closedLots].sort((a, b) => getLotSortTime(b) - getLotSortTime(a) || b.id - a.id)
+                const displayLots = [...sortLotsByRecentActivity(openLots), ...sortLotsByRecentActivity(closedLots)]
                 const tokenSymbol = tokenShortSymbol(ladder.token_address, ladder)
                 const logsExpanded = Boolean(expandedMobileLogs[ladder.id])
 
