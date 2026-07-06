@@ -480,6 +480,28 @@ export default function DipLadderPageContent() {
       </div>
     )
   }
+  const renderLotSignature = (label: string, signature: string | null | undefined, copyKey: string) => {
+    if (!signature) return null
+    return (
+      <div className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1">
+        <span className="flex-shrink-0 text-[9px] text-white/35 font-orbitron uppercase">{label}</span>
+        <span className="min-w-0 max-w-[8.5rem] truncate text-[11px] text-white/45 font-mono" title={signature}>
+          {formatWalletAddress(signature)}
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            copyToClipboard(signature, copyKey)
+          }}
+          className="flex-shrink-0 text-molten-gold/60 hover:text-molten-gold transition-colors"
+          title={copiedKey === copyKey ? 'Copied' : `Copy ${label} signature`}
+        >
+          <Copy size={12} />
+        </button>
+      </div>
+    )
+  }
   const formatPnlUsd = (value: number | null | undefined) => {
     if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A'
     const amount = Number(value)
@@ -1215,6 +1237,12 @@ export default function DipLadderPageContent() {
                                         )}
                                       </div>
                                       <p className="mt-1 min-w-0 break-all [overflow-wrap:anywhere] text-[11px] text-white/35 font-mono leading-snug">{ladder.token_address}</p>
+                                      {(lot.buy_tx_signature || lot.sell_tx_signature) && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                          {renderLotSignature('Buy TX', lot.buy_tx_signature, `dip-lot-buy-${lot.id}`)}
+                                          {renderLotSignature('Sell TX', lot.sell_tx_signature, `dip-lot-sell-${lot.id}`)}
+                                        </div>
+                                      )}
                                     </div>
                                     {renderDipLadderTokenLinks(ladder)}
                                   </div>

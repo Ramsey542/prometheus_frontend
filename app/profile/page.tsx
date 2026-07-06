@@ -2967,11 +2967,16 @@ function ProfilePageContent() {
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
                     <h4 className="text-lg font-orbitron font-semibold text-white mb-4">Trading Filters</h4>
                     <div className="space-y-4">
-                      {/* Entry on first swap */}
+                      <div className="flex items-start gap-2 rounded-lg border border-molten-gold/15 bg-molten-gold/[0.06] p-3">
+                        <Info size={14} className="mt-0.5 flex-shrink-0 text-molten-gold/80" />
+                        <p className="text-[10px] md:text-xs text-white/55 font-space-grotesk leading-relaxed">
+                          When enabled, each mirror wallet can trigger one copied buy per token. If that wallet already bought the same token in your successful logs, the new buy is skipped; other tokens can still be copied.
+                        </p>
+                      </div>
                       <div className="flex items-center justify-between">
                         <div>
                           <h5 className="text-sm font-orbitron font-semibold text-white mb-1">First Purchase Only</h5>
-                          <p className="text-white/40 font-space-grotesk text-[10px] md:text-xs">Only entry on the first purchase swap of a mirror wallet</p>
+                          <p className="text-white/40 font-space-grotesk text-[10px] md:text-xs">Only copy the first purchase per token for each mirror wallet</p>
                         </div>
                         <motion.button
                           onClick={() => setWalletSettings(prev => ({
