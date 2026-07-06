@@ -1165,19 +1165,19 @@ export default function DipLadderPageContent() {
                             e.stopPropagation()
                             setExpandedMobileLogs(prev => ({ ...prev, [ladder.id]: !prev[ladder.id] }))
                           }}
-                          className="md:hidden inline-flex items-center gap-2 rounded-md border border-molten-gold/20 bg-molten-gold/10 px-3 py-2 text-[10px] font-orbitron font-bold text-molten-gold"
+                          className="inline-flex items-center gap-2 rounded-md border border-molten-gold/20 bg-molten-gold/10 px-3 py-2 text-[10px] font-orbitron font-bold text-molten-gold"
                         >
-                          {logsExpanded ? 'Hide Swaps' : `Show Swaps (${displayLots.length})`}
+                          {logsExpanded ? 'Hide Lots' : `Show Lots (${displayLots.length})`}
                           {logsExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                         </button>
                       </div>
-                      <div className={`${logsExpanded ? 'block' : 'hidden'} md:block`}>
+                      <div className={logsExpanded ? 'block' : 'hidden'}>
                         {displayLots.length === 0 ? (
                           <div className="rounded-lg border border-dashed border-white/10 p-3 text-sm text-white/35 font-space-grotesk">
                             Waiting for the next configured drop.
                           </div>
                         ) : (
-                          <div className="max-h-[22rem] md:max-h-none overflow-y-auto md:overflow-visible space-y-2 pr-1 md:pr-0 custom-scrollbar">
+                          <div className="max-h-[22rem] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                             {displayLots.map(lot => {
                               const isClosedLot = isClosedDipLadderLot(lot.status)
                               const lotInCooldown = isDipLadderLotRetryCoolingDown(lot)

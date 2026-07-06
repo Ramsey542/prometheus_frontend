@@ -102,6 +102,8 @@ export interface TrackedWallet {
   max_dip_percentage?: number;
   dip_ladder_drop_percentage?: number;
   dip_ladder_profit_percentage?: number;
+  min_liquidity_usd?: number | null;
+  max_liquidity_usd?: number | null;
   buy_dip_timeout?: number;
   dip_recovery?: boolean;
   custom_name?: string;
@@ -116,6 +118,7 @@ export interface TrackedWallet {
   spike_entry_pullback_percentage?: number;
   spike_entry_margin_percentage?: number;
   spike_entry_timeout_seconds?: number;
+  spike_entry_require_unsold_mirror?: boolean;
   mirror_sells_enabled?: boolean;
   swap_notifications_enabled?: boolean;
   swap_notification_sound?: string;
@@ -245,6 +248,7 @@ export interface CopyTradingLog {
   spike_entry_pullback_percentage?: number;
   spike_entry_margin_percentage?: number;
   spike_entry_timeout_seconds?: number;
+  spike_entry_require_unsold_mirror?: boolean;
   mirror_sells_enabled?: boolean;
 }
 

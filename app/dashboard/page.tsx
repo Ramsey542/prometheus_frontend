@@ -55,6 +55,8 @@ interface WalletSettings {
   rugcheck_filters_enabled: boolean
   min_market_cap_usd: number | null
   max_market_cap_usd: number | null
+  min_liquidity_usd: number | null
+  max_liquidity_usd: number | null
   min_token_age_seconds: number | null
   max_token_age_seconds: number | null
   min_holders: number | null
@@ -64,6 +66,7 @@ interface WalletSettings {
   spike_entry_pullback_percentage: number
   spike_entry_margin_percentage: number
   spike_entry_timeout_seconds: number
+  spike_entry_require_unsold_mirror: boolean
 }
 
 const optionalFloatFromInput = (value: string): number | null => {
@@ -117,6 +120,8 @@ export default function DashboardPage() {
     rugcheck_filters_enabled: false,
     min_market_cap_usd: null,
     max_market_cap_usd: null,
+    min_liquidity_usd: null,
+    max_liquidity_usd: null,
     min_token_age_seconds: null,
     max_token_age_seconds: null,
     min_holders: null,
@@ -125,7 +130,8 @@ export default function DashboardPage() {
     spike_entry_enabled: false,
     spike_entry_pullback_percentage: 5,
     spike_entry_margin_percentage: 0,
-    spike_entry_timeout_seconds: 300
+    spike_entry_timeout_seconds: 300,
+    spike_entry_require_unsold_mirror: false
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -279,6 +285,8 @@ export default function DashboardPage() {
           rugcheck_filters_enabled: data.rugcheck_filters_enabled ?? false,
           min_market_cap_usd: data.min_market_cap_usd ?? null,
           max_market_cap_usd: data.max_market_cap_usd ?? null,
+          min_liquidity_usd: data.min_liquidity_usd ?? null,
+          max_liquidity_usd: data.max_liquidity_usd ?? null,
           min_token_age_seconds: data.min_token_age_seconds ?? null,
           max_token_age_seconds: data.max_token_age_seconds ?? null,
           min_holders: data.min_holders ?? null,
@@ -287,7 +295,8 @@ export default function DashboardPage() {
           spike_entry_enabled: data.spike_entry_enabled ?? false,
           spike_entry_pullback_percentage: data.spike_entry_pullback_percentage ?? 5,
           spike_entry_margin_percentage: data.spike_entry_margin_percentage ?? 0,
-          spike_entry_timeout_seconds: data.spike_entry_timeout_seconds ?? 300
+          spike_entry_timeout_seconds: data.spike_entry_timeout_seconds ?? 300,
+          spike_entry_require_unsold_mirror: data.spike_entry_require_unsold_mirror ?? false
         })
         setTpSlIsActive(data.tp_sl_is_active !== undefined ? data.tp_sl_is_active : true)
       } else if (response.status === 401) {
@@ -343,6 +352,8 @@ export default function DashboardPage() {
         rugcheck_filters_enabled: settings.rugcheck_filters_enabled,
         min_market_cap_usd: settings.min_market_cap_usd ?? null,
         max_market_cap_usd: settings.max_market_cap_usd ?? null,
+        min_liquidity_usd: settings.min_liquidity_usd ?? null,
+        max_liquidity_usd: settings.max_liquidity_usd ?? null,
         min_token_age_seconds: settings.min_token_age_seconds ?? null,
         max_token_age_seconds: settings.max_token_age_seconds ?? null,
         min_holders: settings.min_holders ?? null,
@@ -352,6 +363,7 @@ export default function DashboardPage() {
         spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
         spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
         spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
+        spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? settings.spike_entry_require_unsold_mirror : false,
         coin_type: selectedCoin
       }
       console.log('the selected coin is', selectedCoin)
@@ -1238,71 +1250,91 @@ export default function DashboardPage() {
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
-                      className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-lg border border-molten-gold/10 bg-black/20 p-4"
+                      className="space-y-3 rounded-lg border border-molten-gold/10 bg-black/20 p-4"
                     >
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
-                          Pullback %
-                          <span className="group relative">
-                            <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">The buy level above mirror entry after a valid spike. Example: 5 means buy when price returns to entry +5%.</span>
-                          </span>
-                        </label>
-                        <input
-                          type="number"
-                          value={settings.spike_entry_pullback_percentage}
-                          onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_pullback_percentage: parseFloat(e.target.value) || 0 }))}
-                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                        />
-                      </div>
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
-                          Margin %
-                          <span className="group relative">
-                            <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Extra spike confirmation above the pullback. Pullback 5 and margin 1 requires a 6% spike, then a pullback to 5%.</span>
-                          </span>
-                        </label>
-                        <input
-                          type="number"
-                          value={settings.spike_entry_margin_percentage}
-                          onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_margin_percentage: parseFloat(e.target.value) || 0 }))}
-                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                        />
-                      </div>
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
-                          Timeout Seconds
-                          <span className="group relative">
-                            <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">How long the bot waits for the spike and pullback before cancelling. Indefinite stores -1.</span>
-                          </span>
-                        </label>
-                        <input
-                          type="number"
-                          value={settings.spike_entry_timeout_seconds === -1 ? '' : settings.spike_entry_timeout_seconds}
-                          onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_timeout_seconds: parseInt(e.target.value, 10) || 0 }))}
-                          disabled={settings.spike_entry_timeout_seconds === -1}
-                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300 disabled:opacity-50"
-                          min="0"
-                          step="1"
-                          placeholder="Indefinite"
-                        />
-                        <label className="mt-2 flex items-center gap-2 text-[11px] text-white/50 font-space-grotesk">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                            Pullback %
+                            <span className="group relative">
+                              <Info size={12} className="text-molten-gold cursor-help" />
+                              <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">The buy level above mirror entry after a valid spike. Example: 5 means buy when price returns to entry +5%.</span>
+                            </span>
+                          </label>
                           <input
-                            type="checkbox"
-                            checked={settings.spike_entry_timeout_seconds === -1}
-                            onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_timeout_seconds: e.target.checked ? -1 : 300 }))}
-                            className="h-4 w-4 accent-molten-gold"
+                            type="number"
+                            value={settings.spike_entry_pullback_percentage}
+                            onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_pullback_percentage: parseFloat(e.target.value) || 0 }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="0"
+                            max="100"
+                            step="0.1"
                           />
-                          Indefinite timeout
-                        </label>
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                            Margin %
+                            <span className="group relative">
+                              <Info size={12} className="text-molten-gold cursor-help" />
+                              <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Extra spike confirmation above the pullback. Pullback 5 and margin 1 requires a 6% spike, then a pullback to 5%.</span>
+                            </span>
+                          </label>
+                          <input
+                            type="number"
+                            value={settings.spike_entry_margin_percentage}
+                            onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_margin_percentage: parseFloat(e.target.value) || 0 }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                            Timeout Seconds
+                            <span className="group relative">
+                              <Info size={12} className="text-molten-gold cursor-help" />
+                              <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">How long the bot waits for the spike and pullback before cancelling. Indefinite stores -1.</span>
+                            </span>
+                          </label>
+                          <input
+                            type="number"
+                            value={settings.spike_entry_timeout_seconds === -1 ? '' : settings.spike_entry_timeout_seconds}
+                            onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_timeout_seconds: parseInt(e.target.value, 10) || 0 }))}
+                            disabled={settings.spike_entry_timeout_seconds === -1}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300 disabled:opacity-50"
+                            min="0"
+                            step="1"
+                            placeholder="Indefinite"
+                          />
+                          <label className="mt-2 flex items-center gap-2 text-[11px] text-white/50 font-space-grotesk">
+                            <input
+                              type="checkbox"
+                              checked={settings.spike_entry_timeout_seconds === -1}
+                              onChange={(e) => setSettings(prev => ({ ...prev, spike_entry_timeout_seconds: e.target.checked ? -1 : 300 }))}
+                              className="h-4 w-4 accent-molten-gold"
+                            />
+                            Indefinite timeout
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 border-t border-white/10 pt-3">
+                        <div>
+                          <h5 className="text-xs font-orbitron font-semibold text-white mb-1">Only If Mirror Still Holds</h5>
+                          <p className="text-white/40 font-space-grotesk text-[11px]">Before buying the pullback, check the mirror wallet still has this token.</p>
+                        </div>
+                        <motion.button
+                          type="button"
+                          onClick={() => setSettings(prev => ({ ...prev, spike_entry_require_unsold_mirror: !prev.spike_entry_require_unsold_mirror }))}
+                          className={`w-10 h-5 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.spike_entry_require_unsold_mirror ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <motion.div
+                            className="w-3 h-3 bg-white rounded-full"
+                            animate={{ x: settings.spike_entry_require_unsold_mirror ? 20 : 0 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          />
+                        </motion.button>
                       </div>
                     </motion.div>
                   )}
@@ -1364,7 +1396,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-3">
                       <div>
                         <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Token Filters</h4>
-                        <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Filter copied {selectedCoin.toUpperCase()} buys by market cap, holder count, and token age</p>
+                        <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Filter copied {selectedCoin.toUpperCase()} buys by market cap, liquidity, holder count, and token age</p>
                       </div>
                       <div className="group relative">
                         <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
@@ -1424,6 +1456,42 @@ export default function DashboardPage() {
                           type="number"
                           value={settings.max_market_cap_usd ?? ''}
                           onChange={(e) => setSettings(prev => ({ ...prev, max_market_cap_usd: optionalFloatFromInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No maximum"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Min Liquidity USD
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens below this liquidity.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.min_liquidity_usd ?? ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, min_liquidity_usd: optionalFloatFromInput(e.target.value) }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="0"
+                          step="1"
+                          placeholder="No minimum"
+                        />
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Max Liquidity USD
+                          <span className="group relative">
+                            <Info size={12} className="text-molten-gold cursor-help" />
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens above this liquidity.</span>
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.max_liquidity_usd ?? ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, max_liquidity_usd: optionalFloatFromInput(e.target.value) }))}
                           className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
                           min="0"
                           step="1"
