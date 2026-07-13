@@ -62,6 +62,10 @@ export interface UserProfile {
   stable_symbol?: string;
   usdt_trade_amount?: number | null;
   usdc_trade_amount?: number | null;
+  sol_priority_fee_level?: SolPriorityFeeLevel;
+  sol_priority_fee_scopes?: SolPriorityFeeScope[];
+  sol_priority_fee_enabled?: boolean;
+  sol_priority_fee_dynamic?: boolean;
   total_trades: number;
   win_rate: number;
   active_trades: number;
@@ -81,6 +85,9 @@ export interface CreateWalletRequest {
 export interface SelectWalletRequest {
   blockchain: 'solana' | 'bnb';
 }
+
+export type SolPriorityFeeLevel = 'auto' | 'low' | 'medium' | 'high' | 'very_high' | 'unsafe_max_fee';
+export type SolPriorityFeeScope = 'all' | 'copy_trade' | 'tp_sl' | 'dip_ladder' | 'buy_the_dip' | 'spike_entry';
 
 export interface TrackedWallet {
   id: number;

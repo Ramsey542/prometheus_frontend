@@ -42,7 +42,7 @@ import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileLayout from '../../components/ProfileLayout'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
-import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, DipLadder } from '../../store/types/auth'
+import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, DipLadder, SolPriorityFeeLevel, SolPriorityFeeScope } from '../../store/types/auth'
 import { authApi } from '@/services/authApi'
 import { config } from '../../lib/config'
 import CreateWalletModal from '../../components/CreateWalletModal'
@@ -215,6 +215,63 @@ const getStableTradeAmount = (profile: any, coin: 'sol' | 'bnb') => {
   return coin === 'sol' ? profile?.usdt_trade_amount : profile?.usdc_trade_amount
 }
 
+const SOL_PRIORITY_FEE_OPTIONS: Array<{
+  value: SolPriorityFeeLevel
+  label: string
+  badge?: string
+  approx: string
+  tooltip: string
+}> = [
+  { value: 'auto', label: 'Auto', approx: '~0.000005 SOL', tooltip: 'Fixed mode sends this amount. Dynamic mode asks Helius for the live Min estimate.' },
+  { value: 'low', label: 'Low', approx: '~0.00005 SOL', tooltip: 'Fixed mode sends this amount. Dynamic mode asks Helius for the live Low estimate.' },
+  { value: 'medium', label: 'Medium', badge: 'Recommended', approx: '~0.0001 SOL', tooltip: 'Fixed mode sends this amount. Dynamic mode asks Helius for the live Medium estimate.' },
+  { value: 'high', label: 'High', approx: '~0.00025 SOL', tooltip: 'Fixed mode sends this amount. Dynamic mode asks Helius for the live High estimate.' },
+  { value: 'very_high', label: 'VeryHigh', approx: '~0.0005 SOL', tooltip: 'Fixed mode sends this amount. Dynamic mode asks Helius for the live VeryHigh estimate.' },
+  { value: 'unsafe_max_fee', label: 'UnsafeMaxfee', approx: '~0.001 SOL', tooltip: 'Fixed mode sends this amount. Dynamic mode asks Helius for the live UnsafeMax estimate.' }
+]
+
+const SOL_PRIORITY_FEE_SCOPE_OPTIONS: Array<{
+  value: SolPriorityFeeScope
+  label: string
+}> = [
+  { value: 'all', label: 'All' },
+  { value: 'copy_trade', label: 'Copy Trade' },
+  { value: 'tp_sl', label: 'TP/SL Trades' },
+  { value: 'dip_ladder', label: 'Dip Ladder' },
+  { value: 'buy_the_dip', label: 'Buy The Dip' },
+  { value: 'spike_entry', label: 'Spike Entry' }
+]
+
+const SOL_PRIORITY_FEE_SCOPE_ORDER: SolPriorityFeeScope[] = ['all', 'copy_trade', 'tp_sl', 'dip_ladder', 'buy_the_dip', 'spike_entry']
+
+const getSolPriorityFeeLabel = (value: string | null | undefined) => {
+  return SOL_PRIORITY_FEE_OPTIONS.find(option => option.value === value)?.label || 'Medium'
+}
+
+const normalizeSolPriorityFeeScopes = (scopes: SolPriorityFeeScope[] | null | undefined): SolPriorityFeeScope[] => {
+  if (!scopes || scopes.length === 0 || scopes.includes('all')) return ['all']
+  const unique = scopes.filter((scope, index) => scope !== 'all' && SOL_PRIORITY_FEE_SCOPE_ORDER.includes(scope) && scopes.indexOf(scope) === index)
+  if (unique.length === 0) return ['all']
+  return SOL_PRIORITY_FEE_SCOPE_ORDER.filter(scope => unique.includes(scope) && scope !== 'all')
+}
+
+const getNextSolPriorityFeeScopes = (currentScopes: SolPriorityFeeScope[], scope: SolPriorityFeeScope): SolPriorityFeeScope[] => {
+  if (scope === 'all') return ['all']
+  const current = currentScopes.includes('all') ? [] : currentScopes
+  const next = current.includes(scope)
+    ? current.filter(item => item !== scope)
+    : [...current, scope]
+  return normalizeSolPriorityFeeScopes(next)
+}
+
+const getSolPriorityFeeScopeSummary = (scopes: SolPriorityFeeScope[]) => {
+  const normalized = normalizeSolPriorityFeeScopes(scopes)
+  if (normalized.includes('all')) return 'All SOL trades'
+  return normalized
+    .map(scope => SOL_PRIORITY_FEE_SCOPE_OPTIONS.find(option => option.value === scope)?.label || scope)
+    .join(', ')
+}
+
 const formatDate = (dateString: string, includeSeconds: boolean = false): string => {
   if (!dateString) return 'N/A'
 
@@ -333,6 +390,9 @@ function ProfilePageContent() {
   const [stableTradeAmountValue, setStableTradeAmountValue] = useState<string>('')
   const [isEditingStableTradeAmount, setIsEditingStableTradeAmount] = useState(false)
   const [stableTradeAmountError, setStableTradeAmountError] = useState<string | null>(null)
+  const [priorityFeeUpdating, setPriorityFeeUpdating] = useState(false)
+  const [priorityFeeError, setPriorityFeeError] = useState<string | null>(null)
+  const [isPriorityFeeOpen, setIsPriorityFeeOpen] = useState(false)
   const [walletSettings, setWalletSettings] = useState<{ [key: string]: any }>({})
   const [showWalletSettings, setShowWalletSettings] = useState<number | string | null>(null)
   const [walletSettingsLoading, setWalletSettingsLoading] = useState(false)
@@ -1362,6 +1422,53 @@ function ProfilePageContent() {
       }
     } finally {
       setStableTradeAmountUpdating(false)
+    }
+  }
+
+  const handleUpdateSolPriorityFee = async (next: { level?: SolPriorityFeeLevel; scopes?: SolPriorityFeeScope[]; enabled?: boolean; dynamic?: boolean }) => {
+    if (selectedCoin !== 'sol' || priorityFeeUpdating) return
+    try {
+      setPriorityFeeUpdating(true)
+      setPriorityFeeError(null)
+      setWalletTrackerError(null)
+      setWalletTrackerSuccess(null)
+      setTradeAmountSuccess(null)
+      const priorityFeeLevel = next.level || ((profile?.sol_priority_fee_level || 'medium') as SolPriorityFeeLevel)
+      const priorityFeeScopes = normalizeSolPriorityFeeScopes(next.scopes || profile?.sol_priority_fee_scopes)
+      const priorityFeeEnabled = next.enabled ?? Boolean(profile?.sol_priority_fee_enabled)
+      const priorityFeeDynamic = next.dynamic ?? Boolean(profile?.sol_priority_fee_dynamic)
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/sol-priority-fee`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          priority_fee_level: priorityFeeLevel,
+          priority_fee_scopes: priorityFeeScopes,
+          priority_fee_enabled: priorityFeeEnabled,
+          priority_fee_dynamic: priorityFeeDynamic
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      setTradeAmountSuccess(data.message || 'SOL priority fee updated')
+      await dispatch(getProfile(selectedCoin))
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to update SOL priority fee'
+      setPriorityFeeError(errorMessage)
+      setWalletTrackerError(errorMessage)
+
+      if (errorMessage.includes('Session expired') || errorMessage.includes('401')) {
+        router.push('/login')
+      }
+    } finally {
+      setPriorityFeeUpdating(false)
     }
   }
 
@@ -5142,6 +5249,10 @@ function ProfilePageContent() {
   }
 
   const renderProfileOverview = () => {
+    const currentSolPriorityFeeLevel = (profile?.sol_priority_fee_level || 'medium') as SolPriorityFeeLevel
+    const currentSolPriorityFeeScopes = normalizeSolPriorityFeeScopes(profile?.sol_priority_fee_scopes)
+    const currentSolPriorityFeeEnabled = Boolean(profile?.sol_priority_fee_enabled)
+    const currentSolPriorityFeeDynamic = Boolean(profile?.sol_priority_fee_dynamic)
     return (
       <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
         {/* Header */}
@@ -5347,6 +5458,172 @@ function ProfilePageContent() {
                   </div>
                 )}
               </div>
+
+              {selectedCoin === 'sol' && (
+                <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsPriorityFeeOpen(prev => !prev)}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                    aria-expanded={isPriorityFeeOpen}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Target size={16} className="flex-shrink-0 text-molten-gold" />
+                      <div className="min-w-0">
+                        <span className="block text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
+                          Priority Fee
+                        </span>
+                        <span className="mt-1 block truncate text-[10px] md:text-xs text-white/45 font-space-grotesk">
+                          {currentSolPriorityFeeEnabled
+                            ? `${getSolPriorityFeeLabel(currentSolPriorityFeeLevel)}, ${currentSolPriorityFeeDynamic ? 'dynamic' : 'fixed'}, ${getSolPriorityFeeScopeSummary(currentSolPriorityFeeScopes)}`
+                            : 'Off, Jupiter priority fee is not overridden'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      {priorityFeeUpdating && (
+                        <div className="w-4 h-4 border-2 border-molten-gold border-t-transparent rounded-full animate-spin" />
+                      )}
+                      <ChevronDown size={16} className={`text-molten-gold transition-transform duration-300 ${isPriorityFeeOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  </button>
+                  {isPriorityFeeOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="mt-4 overflow-visible"
+                    >
+                      <p className="mb-3 text-xs text-white/45 font-space-grotesk leading-relaxed">
+                        When disabled, no priority fee is sent to Jupiter. When enabled, fixed mode sends the selected tier directly with no extra RPC call.
+                      </p>
+                      <div className="mb-3 space-y-2">
+                        <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                          <div className="min-w-0">
+                            <p className="font-orbitron text-[11px] font-bold uppercase tracking-wider text-molten-gold/75">
+                              Use Priority Fee
+                            </p>
+                            <p className="mt-1 text-[10px] md:text-xs text-white/45 font-space-grotesk leading-relaxed">
+                              Off sends no priorityFeeLamports. On uses the tier below.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={priorityFeeUpdating}
+                            onClick={() => handleUpdateSolPriorityFee({ enabled: !currentSolPriorityFeeEnabled, dynamic: false })}
+                            className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${currentSolPriorityFeeEnabled ? 'border-molten-gold bg-molten-gold/80' : 'border-white/15 bg-white/10'}`}
+                            aria-pressed={currentSolPriorityFeeEnabled}
+                          >
+                            <span className={`absolute top-1 h-4 w-4 rounded-full transition-transform duration-300 ${currentSolPriorityFeeEnabled ? 'translate-x-5 bg-void-black' : 'translate-x-1 bg-white/55'}`} />
+                          </button>
+                        </div>
+                        <div className={`rounded-lg border p-3 transition-colors duration-300 ${currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic ? 'border-molten-gold/25 bg-molten-gold/[0.06]' : 'border-white/10 bg-white/[0.03]'}`}>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-orbitron text-[11px] font-bold uppercase tracking-wider text-molten-gold/75">
+                                Dynamic Calculation
+                              </p>
+                              <p className="mt-1 text-[10px] md:text-xs text-white/45 font-space-grotesk leading-relaxed">
+                                Automatically determine the priority fee based on network condition at the time of the swap. This adds one extra RPC call to every priority-fee transaction.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={priorityFeeUpdating || !currentSolPriorityFeeEnabled}
+                              onClick={() => handleUpdateSolPriorityFee({ dynamic: !currentSolPriorityFeeDynamic })}
+                              className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-40 ${currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic ? 'border-molten-gold bg-molten-gold/80' : 'border-white/15 bg-white/10'}`}
+                              aria-pressed={currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic}
+                            >
+                              <span className={`absolute top-1 h-4 w-4 rounded-full transition-transform duration-300 ${currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic ? 'translate-x-5 bg-void-black' : 'translate-x-1 bg-white/55'}`} />
+                            </button>
+                          </div>
+                          <div className="mt-3 flex items-start gap-2 rounded-md border border-molten-gold/15 bg-void-black/30 p-2">
+                            <AlertCircle size={13} className="mt-0.5 flex-shrink-0 text-molten-gold/70" />
+                            <p className="text-[10px] md:text-xs text-white/45 font-space-grotesk leading-relaxed">
+                              Dynamic mode improves fee freshness, but it adds a Helius RPC estimate call before each matching transaction.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {SOL_PRIORITY_FEE_OPTIONS.map((option) => {
+                          const isSelected = currentSolPriorityFeeLevel === option.value
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              title={option.tooltip}
+                              disabled={priorityFeeUpdating || !currentSolPriorityFeeEnabled}
+                              onClick={() => handleUpdateSolPriorityFee({ level: option.value })}
+                              className={`group relative min-h-[3rem] rounded-lg border px-2 py-2 text-left transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${isSelected
+                                ? 'bg-molten-gold text-void-black border-molten-gold shadow-[0_0_12px_rgba(255,184,0,0.18)]'
+                                : 'bg-void-black/40 text-white/55 border-white/10 hover:border-molten-gold/30 hover:text-white'
+                              }`}
+                            >
+                              <span className="block font-orbitron text-[11px] font-bold leading-tight">{option.label}</span>
+                              {option.badge && (
+                                <span className={`mt-1 block text-[9px] font-space-grotesk leading-tight ${isSelected ? 'text-void-black/70' : 'text-molten-gold/70'}`}>
+                                  {option.badge}
+                                </span>
+                              )}
+                              <span className="pointer-events-none absolute left-1/2 top-[calc(100%+0.45rem)] z-30 w-max max-w-[12rem] -translate-x-1/2 rounded-md border border-molten-gold/20 bg-void-black px-2 py-1.5 text-center text-[10px] font-space-grotesk leading-snug text-white/80 opacity-0 shadow-xl shadow-black/30 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+                                <span className="block font-orbitron text-molten-gold">{option.approx}</span>
+                                <span className="mt-1 block">{option.tooltip}</span>
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="mt-4">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-orbitron font-bold uppercase tracking-wider text-molten-gold/70">
+                            Apply To
+                          </span>
+                          <span className="text-[10px] font-space-grotesk text-white/35">
+                            {currentSolPriorityFeeScopes.includes('all') ? 'Default' : `${currentSolPriorityFeeScopes.length} selected`}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {SOL_PRIORITY_FEE_SCOPE_OPTIONS.map((option) => {
+                            const isSelected = currentSolPriorityFeeScopes.includes(option.value)
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                disabled={priorityFeeUpdating || !currentSolPriorityFeeEnabled}
+                                onClick={() => handleUpdateSolPriorityFee({ scopes: getNextSolPriorityFeeScopes(currentSolPriorityFeeScopes, option.value) })}
+                                className={`min-h-[2.5rem] rounded-lg border px-2 py-2 text-left font-orbitron text-[10px] font-bold leading-tight transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${isSelected
+                                  ? 'bg-molten-gold/90 text-void-black border-molten-gold shadow-[0_0_12px_rgba(255,184,0,0.14)]'
+                                  : 'bg-void-black/40 text-white/55 border-white/10 hover:border-molten-gold/30 hover:text-white'
+                                  }`}
+                              >
+                                {option.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                        <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-molten-gold/70" />
+                        <p className="text-[10px] md:text-xs text-white/45 font-space-grotesk leading-relaxed">
+                          Current setting: {currentSolPriorityFeeEnabled ? `${getSolPriorityFeeLabel(currentSolPriorityFeeLevel)} (${currentSolPriorityFeeDynamic ? 'dynamic with extra RPC call' : 'fixed, no extra RPC call'}), applied to ${getSolPriorityFeeScopeSummary(currentSolPriorityFeeScopes)}.` : 'Off. We pass no priorityFeeLamports to Jupiter.'}
+                        </p>
+                      </div>
+                      {priorityFeeError && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-3 p-3 bg-red-500/20 border border-red-500/50 rounded-lg"
+                        >
+                          <div className="flex items-center gap-2 text-red-400">
+                            <XCircle size={16} />
+                            <span className="text-sm font-orbitron font-bold">{priorityFeeError}</span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+                </div>
+              )}
 
               <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-3">
