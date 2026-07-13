@@ -5513,7 +5513,7 @@ function ProfilePageContent() {
                             className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${currentSolPriorityFeeEnabled ? 'border-molten-gold bg-molten-gold/80' : 'border-white/15 bg-white/10'}`}
                             aria-pressed={currentSolPriorityFeeEnabled}
                           >
-                            <span className={`absolute top-1 h-4 w-4 rounded-full transition-transform duration-300 ${currentSolPriorityFeeEnabled ? 'translate-x-5 bg-void-black' : 'translate-x-1 bg-white/55'}`} />
+                            <span className={`absolute left-1 top-1 h-4 w-4 rounded-full transition-transform duration-300 ${currentSolPriorityFeeEnabled ? 'translate-x-5 bg-void-black' : 'translate-x-0 bg-white/55'}`} />
                           </button>
                         </div>
                         <div className={`rounded-lg border p-3 transition-colors duration-300 ${currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic ? 'border-molten-gold/25 bg-molten-gold/[0.06]' : 'border-white/10 bg-white/[0.03]'}`}>
@@ -5533,7 +5533,7 @@ function ProfilePageContent() {
                               className={`relative h-6 w-11 flex-shrink-0 rounded-full border transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-40 ${currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic ? 'border-molten-gold bg-molten-gold/80' : 'border-white/15 bg-white/10'}`}
                               aria-pressed={currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic}
                             >
-                              <span className={`absolute top-1 h-4 w-4 rounded-full transition-transform duration-300 ${currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic ? 'translate-x-5 bg-void-black' : 'translate-x-1 bg-white/55'}`} />
+                              <span className={`absolute left-1 top-1 h-4 w-4 rounded-full transition-transform duration-300 ${currentSolPriorityFeeEnabled && currentSolPriorityFeeDynamic ? 'translate-x-5 bg-void-black' : 'translate-x-0 bg-white/55'}`} />
                             </button>
                           </div>
                           <div className="mt-3 flex items-start gap-2 rounded-md border border-molten-gold/15 bg-void-black/30 p-2">
