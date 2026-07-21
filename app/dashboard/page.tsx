@@ -67,7 +67,33 @@ interface WalletSettings {
   spike_entry_margin_percentage: number
   spike_entry_timeout_seconds: number
   spike_entry_require_unsold_mirror: boolean
+  jito_tip_enabled: boolean
+  jito_tip_sol: string
 }
+
+const DEFAULT_JITO_TIP_LAMPORTS = 10000
+const DEFAULT_JITO_TIP_SOL = '0.00001'
+const LAMPORTS_PER_SOL = 1_000_000_000
+
+const lamportsToSolInput = (lamports: number | null | undefined): string => {
+  const sol = Number(lamports ?? 0) / LAMPORTS_PER_SOL
+  if (!Number.isFinite(sol) || sol <= 0) return ''
+  return sol.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+const ToggleSwitch = ({ enabled, onClick, disabled = false }: { enabled: boolean; onClick: () => void; disabled?: boolean }) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    aria-pressed={enabled}
+    className={`relative inline-flex w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-50 ${enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+  >
+    <span
+      className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-300 ease-out ${enabled ? 'translate-x-6' : 'translate-x-0'}`}
+    />
+  </button>
+)
 
 const optionalFloatFromInput = (value: string): number | null => {
   if (value === '') return null
@@ -131,7 +157,9 @@ export default function DashboardPage() {
     spike_entry_pullback_percentage: 5,
     spike_entry_margin_percentage: 0,
     spike_entry_timeout_seconds: 300,
-    spike_entry_require_unsold_mirror: false
+    spike_entry_require_unsold_mirror: false,
+    jito_tip_enabled: false,
+    jito_tip_sol: DEFAULT_JITO_TIP_SOL
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -296,7 +324,11 @@ export default function DashboardPage() {
           spike_entry_pullback_percentage: data.spike_entry_pullback_percentage ?? 5,
           spike_entry_margin_percentage: data.spike_entry_margin_percentage ?? 0,
           spike_entry_timeout_seconds: data.spike_entry_timeout_seconds ?? 300,
-          spike_entry_require_unsold_mirror: data.spike_entry_require_unsold_mirror ?? false
+          spike_entry_require_unsold_mirror: data.spike_entry_require_unsold_mirror ?? false,
+          jito_tip_enabled: selectedCoin === 'sol' ? data.jito_tip_enabled ?? false : false,
+          jito_tip_sol: data.jito_tip_sol !== undefined && data.jito_tip_sol !== null
+            ? String(data.jito_tip_sol)
+            : lamportsToSolInput(data.jito_tip_lamports ?? DEFAULT_JITO_TIP_LAMPORTS)
         })
         setTpSlIsActive(data.tp_sl_is_active !== undefined ? data.tp_sl_is_active : true)
       } else if (response.status === 401) {
@@ -364,6 +396,8 @@ export default function DashboardPage() {
         spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
         spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
         spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? settings.spike_entry_require_unsold_mirror : false,
+        jito_tip_enabled: selectedCoin === 'sol' ? settings.jito_tip_enabled : false,
+        jito_tip_sol: selectedCoin === 'sol' ? Number(settings.jito_tip_sol || 0) : 0,
         coin_type: selectedCoin
       }
       console.log('the selected coin is', selectedCoin)
@@ -554,18 +588,10 @@ export default function DashboardPage() {
                 <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-1 md:mb-2">Buy the Dip</h3>
                 <p className="text-white/60 font-space-grotesk text-xs md:text-sm">Enable automatic dip buying strategy</p>
               </div>
-              <motion.button
+              <ToggleSwitch
+                enabled={Boolean(settings.buy_the_dip)}
                 onClick={() => setSettings(prev => ({ ...prev, buy_the_dip: !prev.buy_the_dip }))}
-                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${settings.buy_the_dip ? 'bg-molten-gold' : 'bg-gray-600'
-                  }`}
-                whileTap={{ scale: 0.95 }}
-              >
-                <motion.div
-                  className="w-5 h-5 bg-white rounded-full"
-                  animate={{ x: settings.buy_the_dip ? 20 : 0 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                />
-              </motion.button>
+              />
             </div>
 
             {settings.buy_the_dip && (
@@ -890,6 +916,51 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {selectedCoin === 'sol' && (
+            <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-base md:text-lg font-orbitron font-semibold text-white">Jito Bundle Tip</h3>
+                    <span className="group relative inline-flex">
+                      <Info size={14} className="text-molten-gold/75 cursor-help" />
+                      <span className="absolute bottom-full left-1/2 z-30 mb-2 w-72 -translate-x-1/2 rounded-lg border border-molten-gold/25 bg-void-black/95 p-3 text-xs leading-relaxed text-white/75 opacity-0 shadow-xl shadow-black/30 transition-opacity duration-200 pointer-events-none group-hover:opacity-100">
+                        Jito tips add a small SOL payment that can help validators prioritize bundled Solana transactions during busy periods. Enable it when faster inclusion matters.
+                      </span>
+                    </span>
+                  </div>
+                  <p className="text-white/45 font-space-grotesk text-xs md:text-sm">Add a SOL tip to copied buys and sells.</p>
+                </div>
+                <ToggleSwitch
+                  enabled={Boolean(settings.jito_tip_enabled)}
+                  onClick={() => setSettings(prev => ({
+                    ...prev,
+                    jito_tip_enabled: !prev.jito_tip_enabled,
+                    jito_tip_sol: !prev.jito_tip_enabled && Number(prev.jito_tip_sol || 0) <= 0 ? DEFAULT_JITO_TIP_SOL : prev.jito_tip_sol
+                  }))}
+                />
+              </div>
+              {settings.jito_tip_enabled && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Tip (SOL)</label>
+                  <input
+                    type="number"
+                    value={settings.jito_tip_sol}
+                    onChange={(e) => setSettings(prev => ({ ...prev, jito_tip_sol: e.target.value }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    step="0.000001"
+                    placeholder={DEFAULT_JITO_TIP_SOL}
+                  />
+                </motion.div>
+              )}
+            </div>
+          )}
+
           {/* TP/SL Control Switch */}
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
             <div className="flex items-center justify-between">
@@ -897,18 +968,10 @@ export default function DashboardPage() {
                 <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-1">Take Profit / Stop Loss</h3>
                 <p className="text-white/60 font-space-grotesk text-xs md:text-sm">Enable or disable TP/SL tracking</p>
               </div>
-              <motion.button
+              <ToggleSwitch
+                enabled={Boolean(tpSlIsActive)}
                 onClick={() => setTpSlIsActive(!tpSlIsActive)}
-                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${tpSlIsActive ? 'bg-molten-gold' : 'bg-gray-600'
-                  }`}
-                whileTap={{ scale: 0.95 }}
-              >
-                <motion.div
-                  className="w-5 h-5 bg-white rounded-full"
-                  animate={{ x: tpSlIsActive ? 20 : 0 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                />
-              </motion.button>
+              />
             </div>
           </div>
 

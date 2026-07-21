@@ -126,6 +126,8 @@ export interface TrackedWallet {
   spike_entry_margin_percentage?: number;
   spike_entry_timeout_seconds?: number;
   spike_entry_require_unsold_mirror?: boolean;
+  jito_tip_enabled?: boolean;
+  jito_tip_lamports?: number;
   mirror_sells_enabled?: boolean;
   swap_notifications_enabled?: boolean;
   swap_notification_sound?: string;

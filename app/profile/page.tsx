@@ -61,6 +61,30 @@ const DIP_LADDER_NATIVE_TOKENS = {
   }
 } as const
 
+const DEFAULT_JITO_TIP_LAMPORTS = 10000
+const DEFAULT_JITO_TIP_SOL = '0.00001'
+const LAMPORTS_PER_SOL = 1_000_000_000
+
+const lamportsToSolInput = (lamports: number | null | undefined): string => {
+  const sol = Number(lamports ?? 0) / LAMPORTS_PER_SOL
+  if (!Number.isFinite(sol) || sol <= 0) return ''
+  return sol.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+const ToggleSwitch = ({ enabled, onClick, disabled = false }: { enabled: boolean; onClick: () => void; disabled?: boolean }) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    aria-pressed={enabled}
+    className={`relative inline-flex w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-50 ${enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+  >
+    <span
+      className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-300 ease-out ${enabled ? 'translate-x-6' : 'translate-x-0'}`}
+    />
+  </button>
+)
+
 const formatAmount = (amount: string | null, coin: 'sol' | 'bnb', isToken: boolean = false, tokenDecimals?: number | null): string => {
   if (!amount) return 'N/A'
   try {
@@ -1510,7 +1534,11 @@ function ProfilePageContent() {
           spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
           spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
           spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
-          spike_entry_require_unsold_mirror: settings.spike_entry_require_unsold_mirror ?? false
+          spike_entry_require_unsold_mirror: settings.spike_entry_require_unsold_mirror ?? false,
+          jito_tip_enabled: selectedCoin === 'sol' ? settings.jito_tip_enabled ?? false : false,
+          jito_tip_sol: settings.jito_tip_sol !== undefined && settings.jito_tip_sol !== null
+            ? String(settings.jito_tip_sol)
+            : lamportsToSolInput(settings.jito_tip_lamports ?? DEFAULT_JITO_TIP_LAMPORTS)
         }
       }))
       setTpSlIsActive(prev => ({
@@ -1671,7 +1699,9 @@ function ProfilePageContent() {
         spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
         spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
         spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
-        spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? (settings.spike_entry_require_unsold_mirror ?? false) : false
+        spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? (settings.spike_entry_require_unsold_mirror ?? false) : false,
+        jito_tip_enabled: selectedCoin === 'sol' ? (settings.jito_tip_enabled ?? false) : false,
+        jito_tip_sol: selectedCoin === 'sol' ? Number(settings.jito_tip_sol || 0) : 0
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type, walletId)
 
@@ -2421,7 +2451,8 @@ function ProfilePageContent() {
                         <h4 className="text-lg font-orbitron font-semibold text-white mb-2">Buy the Dip</h4>
                         <p className="text-white/60 font-space-grotesk text-sm">Enable automatic dip buying strategy</p>
                       </div>
-                      <motion.button
+                      <ToggleSwitch
+                        enabled={Boolean(walletSettings[showWalletSettings].buy_the_dip)}
                         onClick={() => setWalletSettings(prev => ({
                           ...prev,
                           [showWalletSettings]: {
@@ -2429,16 +2460,7 @@ function ProfilePageContent() {
                             buy_the_dip: !prev[showWalletSettings].buy_the_dip
                           }
                         }))}
-                        className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${walletSettings[showWalletSettings].buy_the_dip ? 'bg-molten-gold' : 'bg-gray-600'
-                          }`}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <motion.div
-                          className="w-4 h-4 bg-white rounded-full"
-                          animate={{ x: walletSettings[showWalletSettings].buy_the_dip ? 18 : 0 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                      </motion.button>
+                      />
                     </div>
 
                     {walletSettings[showWalletSettings].buy_the_dip && (
@@ -2885,6 +2907,66 @@ function ProfilePageContent() {
                     </div>
                   </div>
 
+                  {selectedCoin === 'sol' && (
+                    <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-lg font-orbitron font-semibold text-white">Jito Bundle Tip</h4>
+                            <span className="group relative inline-flex">
+                              <Info size={14} className="text-molten-gold/75 cursor-help" />
+                              <span className="absolute bottom-full left-1/2 z-30 mb-2 w-72 -translate-x-1/2 rounded-lg border border-molten-gold/25 bg-void-black/95 p-3 text-xs leading-relaxed text-white/75 opacity-0 shadow-xl shadow-black/30 transition-opacity duration-200 pointer-events-none group-hover:opacity-100">
+                                Jito tips add a small SOL payment that can help validators prioritize bundled Solana transactions during busy periods. Enable it when faster inclusion matters.
+                              </span>
+                            </span>
+                          </div>
+                          <p className="text-white/45 font-space-grotesk text-xs">Add a SOL tip to this wallet&apos;s copied buys and sells.</p>
+                        </div>
+                        <ToggleSwitch
+                          enabled={Boolean(walletSettings[showWalletSettings].jito_tip_enabled)}
+                          onClick={() => setWalletSettings(prev => {
+                            const current = prev[showWalletSettings]
+                            const nextEnabled = !current.jito_tip_enabled
+                            return {
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...current,
+                                jito_tip_enabled: nextEnabled,
+                                jito_tip_sol: nextEnabled && Number(current.jito_tip_sol || 0) <= 0 ? DEFAULT_JITO_TIP_SOL : current.jito_tip_sol
+                              }
+                            }
+                          })}
+                        />
+                      </div>
+                      {walletSettings[showWalletSettings].jito_tip_enabled && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-4"
+                        >
+                          <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                            Tip (SOL)
+                          </label>
+                          <input
+                            type="number"
+                            value={walletSettings[showWalletSettings].jito_tip_sol ?? ''}
+                            onChange={(e) => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                jito_tip_sol: e.target.value
+                              }
+                            }))}
+                            className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                            min="0"
+                            step="0.000001"
+                            placeholder={DEFAULT_JITO_TIP_SOL}
+                          />
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+
                   {/* TP/SL Control Switch */}
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
                     <div className="flex items-center justify-between">
@@ -2892,21 +2974,13 @@ function ProfilePageContent() {
                         <h4 className="text-lg font-orbitron font-semibold text-white mb-1">Take Profit / Stop Loss</h4>
                         <p className="text-white/60 font-space-grotesk text-xs">Enable or disable TP/SL tracking</p>
                       </div>
-                      <motion.button
+                      <ToggleSwitch
+                        enabled={Boolean(tpSlIsActive[showWalletSettings] ?? true)}
                         onClick={() => setTpSlIsActive(prev => ({
                           ...prev,
                           [showWalletSettings]: !(prev[showWalletSettings] ?? true)
                         }))}
-                        className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${(tpSlIsActive[showWalletSettings] ?? true) ? 'bg-molten-gold' : 'bg-gray-600'
-                          }`}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <motion.div
-                          className="w-5 h-5 bg-white rounded-full"
-                          animate={{ x: (tpSlIsActive[showWalletSettings] ?? true) ? 20 : 0 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                      </motion.button>
+                      />
                     </div>
                   </div>
 
