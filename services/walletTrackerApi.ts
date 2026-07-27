@@ -615,6 +615,41 @@ export const walletTrackerApi = {
     });
   },
 
+  async getTelegramChannelDashboard(): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/telegram-channel/dashboard`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async updateTelegramChannelSubscription(isActive: boolean): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/telegram-channel/subscription`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_active: isActive }),
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
 
 };
 

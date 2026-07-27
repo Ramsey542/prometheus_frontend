@@ -21,7 +21,8 @@ import {
   ChevronDown,
   Coins,
   Banknote,
-  ShoppingCart
+  ShoppingCart,
+  RadioTower
 } from 'lucide-react'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { setCoin, updateProfileForCoin } from '../store/slices/authSlice'
@@ -50,6 +51,7 @@ const navigationSections: NavigationSection[] = [
       { id: 'tracker-logs', label: 'Tracker Logs', icon: MessageCircle },
       { id: 'controls', label: 'Controls', icon: BarChart3, isActive: true },
       { id: 'token-buys', label: 'Token Buys', icon: ShoppingCart, isActive: true },
+      { id: 'telegram-signals', label: 'Telegram Signals', icon: RadioTower, isActive: true },
       { id: 'custom-buys', label: 'Held Tokens', icon: Banknote, isActive: true },
     ]
   },
@@ -89,6 +91,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       setActiveItem('custom-buys')
     } else if (pathname === '/token-buys') {
       setActiveItem('token-buys')
+    } else if (pathname === '/telegram-signals') {
+      setActiveItem('telegram-signals')
     } else {
       setActiveItem('account-overview')
     }
@@ -195,6 +199,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
                       return '/dashboard'
                     case 'token-buys':
                       return '/token-buys'
+                    case 'telegram-signals':
+                      return '/telegram-signals'
                     case 'custom-buys':
                       return '/custom-buys'
                     default:

@@ -4707,6 +4707,8 @@ function ProfilePageContent() {
                         {log.event_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN EVENT'}
                       </span>
                       {(() => {
+                        const eData = parseLogEventData(log.event_data)
+                        if (eData.telegram_channel === true || eData.strategy === 'telegram_channel' || eData.mirror_wallet_address === 'telegram_channel' || log.copied_wallet === 'telegram_channel') return null
                         const trackedWalletAddr = log.event_type === 'tracked_wallet_activity'
                           ? log.wallet_address
                           : (log.tracked_wallet_address || log.copied_wallet)
@@ -4733,7 +4735,7 @@ function ProfilePageContent() {
                         )
                       })()
                       }
-                      {(log.event_type === 'user_sell' || log.event_type === 'user_purchase') && (() => {
+                      {(log.event_type === 'user_sell' || log.event_type === 'user_purchase' || log.event_type === 'copy_trade_filter') && (() => {
                         let eData: any = {};
                         try {
                           eData = log.event_data ? JSON.parse(log.event_data) : {};
@@ -4742,9 +4744,18 @@ function ProfilePageContent() {
                         }
 
                         const isManual = eData.mirror_wallet_address === 'manual_buy';
+                        const isTelegram = eData.telegram_channel === true || eData.strategy === 'telegram_channel' || eData.mirror_wallet_address === 'telegram_channel' || log.copied_wallet === 'telegram_channel';
                         const isTpSl = eData.tp_sl_sell === true || log.is_tp_sl_sell;
                         const isDipLadder = eData.strategy === 'dip_ladder' || eData.dip_ladder === true || eData.dip_ladder_buy === true || eData.dip_ladder_sell === true;
                         const isSpikeEntry = isSpikeEntryLog(log, eData);
+
+                        if (isTelegram) {
+                          return (
+                            <span className="px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide text-sky-200 border border-sky-400/40 rounded-full bg-sky-500/10 shadow-[0_0_12px_rgba(56,189,248,0.35)]">
+                              Telegram Signal
+                            </span>
+                          );
+                        }
 
                         if (isTpSl) {
                           const triggerType = eData.tp_sl_trigger_type || log.tp_sl_trigger_type;
