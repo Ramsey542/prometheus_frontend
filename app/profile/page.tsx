@@ -214,6 +214,15 @@ const getBundleMetrics = (eventData: any) => {
   }
 }
 
+const getArmedTrailingTargets = (targets: any[] | null | undefined) => {
+  if (!Array.isArray(targets)) return []
+  return targets.filter(target => (
+    target &&
+    (target.type === 'trailing_tp' || target.type === 'trailing_sl') &&
+    target.activated === true
+  ))
+}
+
 const formatSpikeEntryBalance = (value: unknown): string => {
   const num = toFiniteNumber(value)
   if (num === null) return 'N/A'
@@ -5283,6 +5292,12 @@ function ProfilePageContent() {
                               : 'text-red-200 border border-red-400/40 bg-red-500/10 shadow-[0_0_12px_rgba(239,68,68,0.5)]';
                           const triggerTextColor = isTakeProfit ? 'text-green-400' : isTimeLimit || isTrailingTakeProfit ? 'text-orange-300' : 'text-red-400';
                           const triggerPrefix = isTakeProfit || isTimeLimit || isTrailingTakeProfit ? '+' : '-';
+                          const timeLimitSeconds = toFiniteNumber(eData.time_limit_seconds);
+                          const timeLimitElapsedSeconds = toFiniteNumber(eData.time_limit_elapsed_seconds);
+                          const trailingDistance = toFiniteNumber(eData.trailing_distance_pct);
+                          const trailingHighestPrice = toFiniteNumber(eData.trailing_highest_price);
+                          const trailingTriggerPrice = toFiniteNumber(eData.trailing_trigger_price);
+                          const trailingSellPct = toFiniteNumber(eData.trailing_sell_pct);
                           return (
                             <div className="group relative">
                               <span className={`px-2 py-1 text-[10px] md:text-xs font-orbitron font-semibold tracking-wide rounded-full ${triggerTone}`}>
@@ -5308,6 +5323,50 @@ function ProfilePageContent() {
                                   <div className="flex justify-between">
                                     <span className="text-white/60">Target:</span>
                                     <span className={triggerTextColor}>{triggerPrefix}{triggerValue}%</span>
+                                  </div>
+                                )}
+                                {isTimeLimit && (timeLimitSeconds !== null || timeLimitElapsedSeconds !== null) && (
+                                  <div className="space-y-1 border-t border-white/10 pt-2">
+                                    {timeLimitSeconds !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-white/60">Time Limit:</span>
+                                        <span className="text-orange-300">{formatDurationTooltip(timeLimitSeconds)}</span>
+                                      </div>
+                                    )}
+                                    {timeLimitElapsedSeconds !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-white/60">Elapsed:</span>
+                                        <span className="text-orange-300">{formatDurationTooltip(timeLimitElapsedSeconds)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {(isTrailingTakeProfit || isTrailingStopLoss) && (
+                                  <div className="space-y-1 border-t border-white/10 pt-2">
+                                    {trailingDistance !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-white/60">Trail Distance:</span>
+                                        <span className={triggerTextColor}>{trailingDistance}%</span>
+                                      </div>
+                                    )}
+                                    {trailingHighestPrice !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-white/60">Highest Price:</span>
+                                        <span className="text-molten-gold">{formatUsdPrice(trailingHighestPrice)}</span>
+                                      </div>
+                                    )}
+                                    {trailingTriggerPrice !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-white/60">Trailing Trigger:</span>
+                                        <span className={triggerTextColor}>{formatUsdPrice(trailingTriggerPrice)}</span>
+                                      </div>
+                                    )}
+                                    {trailingSellPct !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-white/60">Sell Amount:</span>
+                                        <span className={triggerTextColor}>{trailingSellPct}%</span>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -5404,15 +5463,63 @@ function ProfilePageContent() {
                           </div>
                         );
                       })()}
-                      {log.tp_sl_is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (
+                      {log.tp_sl_is_active && (log.event_type === 'user_purchase' || log.event_type === 'user_sell') && (() => {
+                        const tokenKey = log.target_token?.toLowerCase()
+                        const positionTargets = tokenKey ? trackedPositions[tokenKey]?.targets : null
+                        const armedTrailingTargets = getArmedTrailingTargets(positionTargets)
+                        const hasArmedTtp = armedTrailingTargets.some(target => target.type === 'trailing_tp')
+                        const hasArmedTsl = armedTrailingTargets.some(target => target.type === 'trailing_sl')
+                        const badgeLabel = hasArmedTtp && hasArmedTsl ? '(TTP/TSL ARMED)' : hasArmedTtp ? '(TTP ARMED)' : hasArmedTsl ? '(TSL ARMED)' : '(TP/SL)'
+                        const badgeTone = hasArmedTtp && hasArmedTsl
+                          ? { dot: 'bg-violet-300 shadow-violet-300/60', text: 'text-violet-300', border: 'border-violet-400/35' }
+                          : hasArmedTtp
+                            ? { dot: 'bg-cyan-300 shadow-cyan-300/60', text: 'text-cyan-300', border: 'border-cyan-400/35' }
+                            : hasArmedTsl
+                              ? { dot: 'bg-rose-300 shadow-rose-300/60', text: 'text-rose-300', border: 'border-rose-400/35' }
+                              : { dot: 'bg-green-400 shadow-green-400/50', text: 'text-green-400 glow-green', border: 'border-molten-gold/30' }
+                        return (
                         <div className="group relative">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-lg shadow-green-400/50" />
-                            <span className="text-xs font-orbitron font-semibold text-green-400 glow-green">(TP/SL)</span>
+                            <div className={`w-2 h-2 rounded-full animate-pulse shadow-lg ${badgeTone.dot}`} />
+                            <span className={`text-xs font-orbitron font-semibold ${badgeTone.text}`}>{badgeLabel}</span>
                           </div>
-                          <div className="absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl">
+                          <div className={`absolute bottom-full left-0 mb-2 w-80 bg-void-black/95 border ${badgeTone.border} rounded-lg p-4 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 shadow-2xl`}>
                             <div className="space-y-3">
-                              <p className="text-molten-gold font-orbitron font-semibold mb-2">TP/SL is active for this trade</p>
+                              <p className="text-molten-gold font-orbitron font-semibold mb-2">
+                                {armedTrailingTargets.length > 0 ? 'Trailing TP/SL is armed for this token' : 'TP/SL is active for this trade'}
+                              </p>
+                              {armedTrailingTargets.length > 0 && (
+                                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-2">
+                                  <p className="text-white/60 font-space-grotesk leading-relaxed">Armed means the activation threshold has been reached. The trailing trigger now follows the highest tracked price and sells if price falls back to the trigger.</p>
+                                  {armedTrailingTargets.map((target, idx) => {
+                                    const isTtp = target.type === 'trailing_tp'
+                                    return (
+                                      <div key={idx} className="space-y-1 border-t border-white/10 pt-2 first:border-t-0 first:pt-0">
+                                        <div className="flex justify-between gap-3">
+                                          <span className={isTtp ? 'text-cyan-300 font-orbitron' : 'text-rose-300 font-orbitron'}>{isTtp ? 'Trailing TP' : 'Trailing SL'}</span>
+                                          <span className="text-white/70">{target.percentage}% activation</span>
+                                        </div>
+                                        <div className="flex justify-between gap-3">
+                                          <span className="text-white/50">High</span>
+                                          <span className="text-molten-gold">{formatUsdPrice(target.highest_price)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-3">
+                                          <span className="text-white/50">Trigger</span>
+                                          <span className={isTtp ? 'text-cyan-300' : 'text-rose-300'}>{formatUsdPrice(target.trigger_price)}</span>
+                                        </div>
+                                        <div className="flex justify-between gap-3">
+                                          <span className="text-white/50">Trail</span>
+                                          <span className="text-white/70">{target.trail_distance_percentage}% below high</span>
+                                        </div>
+                                        <div className="flex justify-between gap-3">
+                                          <span className="text-white/50">Sell Amount</span>
+                                          <span className="text-white/70">{target.sell_percentage}%</span>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
                               {log.current_price !== null && log.current_price !== undefined && (
                                 <div>
                                   <p className="text-molten-gold font-orbitron font-semibold mb-1">Current Price</p>
@@ -5446,7 +5553,8 @@ function ProfilePageContent() {
                             </div>
                           </div>
                         </div>
-                      )}
+                        )
+                      })()}
                       {(() => {
                         const eData = parseLogEventData(log.event_data);
                         if (!isSpikeEntryLog(log, eData)) return null;
