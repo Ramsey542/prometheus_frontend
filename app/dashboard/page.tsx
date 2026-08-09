@@ -1990,7 +1990,7 @@ export default function DashboardPage() {
                             )}
                             <div className="flex items-start gap-2 rounded-lg border border-white/10 bg-void-black/35 px-3 py-2">
                               <Info size={14} className="text-molten-gold mt-0.5 flex-shrink-0" />
-                              <p className="text-xs text-white/55 font-space-grotesk leading-relaxed">Connected accounts are grouped into coordinated clusters. Each cluster's token amount is divided by total supply, and the filter compares your threshold to the largest cluster. Total clustered supply is kept for context in logs.</p>
+                              <p className="text-xs text-white/55 font-space-grotesk leading-relaxed">Connected accounts are grouped into coordinated clusters. Token amount for each cluster is divided by total supply, and the filter compares your threshold to the largest cluster. Total clustered supply is kept for context in logs.</p>
                             </div>
                           </div>
                         </>

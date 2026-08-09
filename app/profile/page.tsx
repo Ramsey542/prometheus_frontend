@@ -41,6 +41,7 @@ import { logout, getProfile, setCoin } from '../../store/slices/authSlice'
 import { useState, useEffect, Suspense, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import ProfileLayout from '../../components/ProfileLayout'
 import { walletTrackerApi } from '../../services/walletTrackerApi'
 import { TrackedWallet, TrackedWalletCreate, CopyTradingLog, CopyTradingStats, DipLadder, SolPriorityFeeLevel, SolPriorityFeeScope } from '../../store/types/auth'
@@ -423,6 +424,9 @@ function ProfilePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, wallet, profile, isLoading, error, selectedCoin } = useAppSelector((state) => state.auth)
+  const profileTradeAmount = profile?.trade_amount
+  const profileUsdtTradeAmount = profile?.usdt_trade_amount
+  const profileUsdcTradeAmount = profile?.usdc_trade_amount
   const [showPrivateKey, setShowPrivateKey] = useState(false)
   const [isAddWalletOpen, setIsAddWalletOpen] = useState(false)
   const [trackedWallets, setTrackedWallets] = useState<TrackedWallet[]>([])
@@ -620,16 +624,15 @@ function ProfilePageContent() {
   }, [user, profile, currentSection])
 
   useEffect(() => {
-    if (profile?.trade_amount !== undefined) {
-
-      setTradeAmountValue(profile.trade_amount.toString())
+    if (profileTradeAmount !== undefined) {
+      setTradeAmountValue(profileTradeAmount.toString())
     }
-  }, [profile?.trade_amount])
+  }, [profileTradeAmount])
 
   useEffect(() => {
-    const stableAmount = getStableTradeAmount(profile, selectedCoin)
+    const stableAmount = selectedCoin === 'sol' ? profileUsdtTradeAmount : profileUsdcTradeAmount
     setStableTradeAmountValue(stableAmount !== null && stableAmount !== undefined ? stableAmount.toString() : '')
-  }, [profile?.usdt_trade_amount, profile?.usdc_trade_amount, selectedCoin])
+  }, [profileUsdtTradeAmount, profileUsdcTradeAmount, selectedCoin])
 
   useEffect(() => {
     if (tradeAmountSuccess) {
@@ -4193,7 +4196,7 @@ function ProfilePageContent() {
                                     )}
                                     <div className="flex items-start gap-2 rounded-lg border border-white/10 bg-void-black/35 px-3 py-2">
                                       <Info size={13} className="text-molten-gold mt-0.5 flex-shrink-0" />
-                                      <p className="text-[10px] md:text-xs text-white/55 font-space-grotesk leading-relaxed">Connected accounts are grouped into coordinated clusters. Each cluster's token amount is divided by total supply, and the filter compares your threshold to the largest cluster. Total clustered supply is kept for context in logs.</p>
+                                      <p className="text-[10px] md:text-xs text-white/55 font-space-grotesk leading-relaxed">Connected accounts are grouped into coordinated clusters. Token amount for each cluster is divided by total supply, and the filter compares your threshold to the largest cluster. Total clustered supply is kept for context in logs.</p>
                                     </div>
                                   </div>
                                 </>
@@ -4820,9 +4823,12 @@ function ProfilePageContent() {
                                 <div className="flex items-start justify-between gap-3 mb-4">
                                   <div className="flex items-center gap-2 min-w-0">
                                     {tokenLogo ? (
-                                      <img
+                                      <Image
                                         src={tokenLogo}
                                         alt={tokenSymbol || 'token'}
+                                        width={40}
+                                        height={40}
+                                        unoptimized
                                         className="w-10 h-10 rounded-full border border-blue-400/20 object-cover flex-shrink-0"
                                         onError={(e) => {
                                           (e.target as HTMLImageElement).style.display = 'none';
@@ -5457,7 +5463,7 @@ function ProfilePageContent() {
                                   <span className="text-white/55">Threshold</span>
                                   <span className="text-white">{thresholdText}</span>
                                 </div>
-                                <p className="border-t border-white/10 pt-2 text-white/55 leading-relaxed">Accounts are grouped into connected clusters. Percentages use each cluster's token amount divided by total token supply; filtering compares the largest cluster.</p>
+                                <p className="border-t border-white/10 pt-2 text-white/55 leading-relaxed">Accounts are grouped into connected clusters. Percentages use token amount for each cluster divided by total token supply; filtering compares the largest cluster.</p>
                               </div>
                             </div>
                           </div>
