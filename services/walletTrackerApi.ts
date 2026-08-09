@@ -385,7 +385,7 @@ export const walletTrackerApi = {
     });
   },
 
-  async getTrackedPositions(coin: string = 'sol'): Promise<Record<string, { tp_sl_active: boolean; buy_price: number; remaining_amount: number; targets: Array<{ type: string; percentage: number; sell_percentage: number; target_price: number }>; decimals_adjusted: boolean; mirror_address: string | null }>> {
+  async getTrackedPositions(coin: string = 'sol'): Promise<Record<string, { tp_sl_active: boolean; buy_price: number; remaining_amount: number; targets: Array<{ type: string; percentage: number; sell_percentage: number; target_price: number; timeout_seconds?: number; activation_price?: number; trail_distance_percentage?: number; activated?: boolean; highest_price?: number | null; trigger_price?: number | null }>; decimals_adjusted: boolean; mirror_address: string | null }>> {
     return tokenInterceptor.makeAuthenticatedRequest(async () => {
       const accessToken = localStorage.getItem('access_token');
       if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);

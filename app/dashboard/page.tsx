@@ -41,6 +41,17 @@ interface WalletSettings {
   max_buys_per_token_per_day?: number
   take_profit_levels?: TakeProfitLevel[]
   stop_loss_levels?: StopLossLevel[]
+  time_limit_sells_enabled: boolean
+  time_limit_profit_pct: number | null
+  time_limit_seconds: number | null
+  trailing_take_profit_enabled: boolean
+  trailing_take_profit_activation_pct: number | null
+  trailing_take_profit_distance_pct: number | null
+  trailing_take_profit_sell_pct: number | null
+  trailing_stop_loss_enabled: boolean
+  trailing_stop_loss_activation_pct: number | null
+  trailing_stop_loss_distance_pct: number | null
+  trailing_stop_loss_sell_pct: number | null
   trailing_stop_percentage?: number
   trailing_stop_sell_percentage?: number
   entry_on_first_swap: boolean
@@ -57,6 +68,10 @@ interface WalletSettings {
   max_market_cap_usd: number | null
   min_liquidity_usd: number | null
   max_liquidity_usd: number | null
+  require_locked_liquidity: boolean
+  min_lp_locked_pct: number | null
+  bundler_tracking_enabled: boolean
+  max_bundle_supply_pct: number | null
   min_token_age_seconds: number | null
   max_token_age_seconds: number | null
   min_holders: number | null
@@ -112,6 +127,12 @@ const secondsToMinutesInput = (seconds: number | null | undefined): string | num
   return Math.floor(seconds / 60)
 }
 
+const secondsToPreciseMinutesInput = (seconds: number | null | undefined): string | number => {
+  if (seconds === null || seconds === undefined) return ''
+  const minutes = seconds / 60
+  return Number.isInteger(minutes) ? minutes : Number(minutes.toFixed(2))
+}
+
 const minutesToSecondsInput = (value: string): number | null => {
   const minutes = optionalFloatFromInput(value)
   return minutes === null ? null : Math.floor(minutes * 60)
@@ -134,6 +155,17 @@ export default function DashboardPage() {
     max_buys_per_mirror_per_hour: 1,
     max_buys_per_mirror_per_day: 1,
     max_buys_per_token_per_day: 1,
+    time_limit_sells_enabled: false,
+    time_limit_profit_pct: null,
+    time_limit_seconds: null,
+    trailing_take_profit_enabled: false,
+    trailing_take_profit_activation_pct: null,
+    trailing_take_profit_distance_pct: null,
+    trailing_take_profit_sell_pct: null,
+    trailing_stop_loss_enabled: false,
+    trailing_stop_loss_activation_pct: null,
+    trailing_stop_loss_distance_pct: null,
+    trailing_stop_loss_sell_pct: null,
     entry_on_first_swap: false,
     buy_once_per_token: false,
     mirror_sells_enabled: true,
@@ -148,6 +180,10 @@ export default function DashboardPage() {
     max_market_cap_usd: null,
     min_liquidity_usd: null,
     max_liquidity_usd: null,
+    require_locked_liquidity: false,
+    min_lp_locked_pct: null,
+    bundler_tracking_enabled: false,
+    max_bundle_supply_pct: null,
     min_token_age_seconds: null,
     max_token_age_seconds: null,
     min_holders: null,
@@ -309,12 +345,27 @@ export default function DashboardPage() {
           stop_loss_levels: data.stop_loss_levels && data.stop_loss_levels.length > 0
             ? data.stop_loss_levels
             : [{ loss_percentage: 0, sell_percentage: 0 }],
+          time_limit_sells_enabled: data.time_limit_sells_enabled ?? false,
+          time_limit_profit_pct: data.time_limit_profit_pct ?? null,
+          time_limit_seconds: data.time_limit_seconds ?? null,
+          trailing_take_profit_enabled: data.trailing_take_profit_enabled ?? false,
+          trailing_take_profit_activation_pct: data.trailing_take_profit_activation_pct ?? null,
+          trailing_take_profit_distance_pct: data.trailing_take_profit_distance_pct ?? null,
+          trailing_take_profit_sell_pct: data.trailing_take_profit_sell_pct ?? null,
+          trailing_stop_loss_enabled: data.trailing_stop_loss_enabled ?? false,
+          trailing_stop_loss_activation_pct: data.trailing_stop_loss_activation_pct ?? null,
+          trailing_stop_loss_distance_pct: data.trailing_stop_loss_distance_pct ?? null,
+          trailing_stop_loss_sell_pct: data.trailing_stop_loss_sell_pct ?? null,
           tracking_type: typeof data.tracking_type === 'object' ? data.tracking_type : { type: data.tracking_type || 'both' },
           rugcheck_filters_enabled: data.rugcheck_filters_enabled ?? false,
           min_market_cap_usd: data.min_market_cap_usd ?? null,
           max_market_cap_usd: data.max_market_cap_usd ?? null,
           min_liquidity_usd: data.min_liquidity_usd ?? null,
           max_liquidity_usd: data.max_liquidity_usd ?? null,
+          require_locked_liquidity: selectedCoin === 'sol' ? data.require_locked_liquidity ?? false : false,
+          min_lp_locked_pct: selectedCoin === 'sol' ? data.min_lp_locked_pct ?? null : null,
+          bundler_tracking_enabled: selectedCoin === 'sol' ? data.bundler_tracking_enabled ?? false : false,
+          max_bundle_supply_pct: selectedCoin === 'sol' ? data.max_bundle_supply_pct ?? null : null,
           min_token_age_seconds: data.min_token_age_seconds ?? null,
           max_token_age_seconds: data.max_token_age_seconds ?? null,
           min_holders: data.min_holders ?? null,
@@ -375,6 +426,17 @@ export default function DashboardPage() {
         take_profit_levels: settings.take_profit_levels,
         stop_loss_levels: settings.stop_loss_levels,
         tp_sl_is_active: tpSlIsActive,
+        time_limit_sells_enabled: settings.time_limit_sells_enabled,
+        time_limit_profit_pct: settings.time_limit_profit_pct ?? null,
+        time_limit_seconds: settings.time_limit_seconds ?? null,
+        trailing_take_profit_enabled: settings.trailing_take_profit_enabled,
+        trailing_take_profit_activation_pct: settings.trailing_take_profit_activation_pct ?? null,
+        trailing_take_profit_distance_pct: settings.trailing_take_profit_distance_pct ?? null,
+        trailing_take_profit_sell_pct: settings.trailing_take_profit_sell_pct ?? null,
+        trailing_stop_loss_enabled: settings.trailing_stop_loss_enabled,
+        trailing_stop_loss_activation_pct: settings.trailing_stop_loss_activation_pct ?? null,
+        trailing_stop_loss_distance_pct: settings.trailing_stop_loss_distance_pct ?? null,
+        trailing_stop_loss_sell_pct: settings.trailing_stop_loss_sell_pct ?? null,
         entry_on_first_swap: settings.entry_on_first_swap,
         buy_once_per_token: settings.buy_once_per_token,
         mirror_sells_enabled: settings.mirror_sells_enabled,
@@ -386,6 +448,10 @@ export default function DashboardPage() {
         max_market_cap_usd: settings.max_market_cap_usd ?? null,
         min_liquidity_usd: settings.min_liquidity_usd ?? null,
         max_liquidity_usd: settings.max_liquidity_usd ?? null,
+        require_locked_liquidity: selectedCoin === 'sol' ? settings.require_locked_liquidity : false,
+        min_lp_locked_pct: selectedCoin === 'sol' ? settings.min_lp_locked_pct ?? null : null,
+        bundler_tracking_enabled: selectedCoin === 'sol' ? settings.bundler_tracking_enabled : false,
+        max_bundle_supply_pct: selectedCoin === 'sol' ? settings.max_bundle_supply_pct ?? null : null,
         min_token_age_seconds: settings.min_token_age_seconds ?? null,
         max_token_age_seconds: settings.max_token_age_seconds ?? null,
         min_holders: settings.min_holders ?? null,
@@ -973,7 +1039,17 @@ export default function DashboardPage() {
                 onClick={() => setTpSlIsActive(!tpSlIsActive)}
               />
             </div>
-          </div>
+
+            {tpSlIsActive && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-5 space-y-4 border-t border-molten-gold/10 pt-5"
+              >
+                <div>
+                  <p className="text-[11px] font-orbitron uppercase tracking-[0.18em] text-molten-gold/70">TP/SL Exit Rules</p>
+                  <p className="mt-1 text-xs md:text-sm text-white/45 font-space-grotesk">Fixed targets, trailing exits, and time-based failsafes are managed by the same TP/SL monitor.</p>
+                </div>
 
           {/* Auto Take Profit */}
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
@@ -1135,6 +1211,203 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-base md:text-lg font-orbitron font-semibold text-white">Trailing Take Profit</h3>
+                  <span className="group relative inline-flex">
+                    <Info size={14} className="text-molten-gold/75 cursor-help" />
+                    <span className="absolute bottom-full left-1/2 z-30 mb-2 w-80 -translate-x-1/2 rounded-lg border border-molten-gold/30 bg-void-black/95 p-3 text-xs leading-relaxed text-white/75 opacity-0 shadow-xl shadow-black/30 transition-opacity duration-200 pointer-events-none group-hover:opacity-100">
+                      Activates only after the token reaches your profit threshold. From that point, Prometheus tracks the highest token price and sells the configured percentage of the original position if price falls by the trailing distance.
+                    </span>
+                  </span>
+                </div>
+                <p className="text-white/45 font-space-grotesk text-xs md:text-sm">Let winners run while protecting the move after activation.</p>
+              </div>
+              <ToggleSwitch
+                enabled={Boolean(settings.trailing_take_profit_enabled)}
+                disabled={!tpSlIsActive}
+                onClick={() => setSettings(prev => ({ ...prev, trailing_take_profit_enabled: !prev.trailing_take_profit_enabled }))}
+              />
+            </div>
+
+            {settings.trailing_take_profit_enabled && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 ${!tpSlIsActive ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Activation Profit %</label>
+                  <input
+                    type="number"
+                    value={settings.trailing_take_profit_activation_pct ?? ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, trailing_take_profit_activation_pct: optionalFloatFromInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    step="0.1"
+                    placeholder="50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Trailing Distance %</label>
+                  <input
+                    type="number"
+                    value={settings.trailing_take_profit_distance_pct ?? ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, trailing_take_profit_distance_pct: optionalFloatFromInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Sell Amount %</label>
+                  <input
+                    type="number"
+                    value={settings.trailing_take_profit_sell_pct ?? ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, trailing_take_profit_sell_pct: optionalFloatFromInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="100"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-base md:text-lg font-orbitron font-semibold text-white">Trailing Stop Loss</h3>
+                  <span className="group relative inline-flex">
+                    <Info size={14} className="text-molten-gold/75 cursor-help" />
+                    <span className="absolute bottom-full left-1/2 z-30 mb-2 w-80 -translate-x-1/2 rounded-lg border border-molten-gold/30 bg-void-black/95 p-3 text-xs leading-relaxed text-white/75 opacity-0 shadow-xl shadow-black/30 transition-opacity duration-200 pointer-events-none group-hover:opacity-100">
+                      Activates only after the token reaches your loss threshold. From that point, Prometheus tracks the highest token price after activation and sells the configured percentage of the original position if price falls by the trailing distance.
+                    </span>
+                  </span>
+                </div>
+                <p className="text-white/45 font-space-grotesk text-xs md:text-sm">Add a dynamic downside exit while keeping fixed SL available.</p>
+              </div>
+              <ToggleSwitch
+                enabled={Boolean(settings.trailing_stop_loss_enabled)}
+                disabled={!tpSlIsActive}
+                onClick={() => setSettings(prev => ({ ...prev, trailing_stop_loss_enabled: !prev.trailing_stop_loss_enabled }))}
+              />
+            </div>
+
+            {settings.trailing_stop_loss_enabled && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 ${!tpSlIsActive ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Activation Loss %</label>
+                  <input
+                    type="number"
+                    value={settings.trailing_stop_loss_activation_pct ?? ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, trailing_stop_loss_activation_pct: optionalFloatFromInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    step="0.1"
+                    placeholder="10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Trailing Distance %</label>
+                  <input
+                    type="number"
+                    value={settings.trailing_stop_loss_distance_pct ?? ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, trailing_stop_loss_distance_pct: optionalFloatFromInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Sell Amount %</label>
+                  <input
+                    type="number"
+                    value={settings.trailing_stop_loss_sell_pct ?? ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, trailing_stop_loss_sell_pct: optionalFloatFromInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="100"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-base md:text-lg font-orbitron font-semibold text-white">Time Limit Sells</h3>
+                  <span className="group relative inline-flex">
+                    <Info size={14} className="text-molten-gold/75 cursor-help" />
+                    <span className="absolute bottom-full left-1/2 z-30 mb-2 w-80 -translate-x-1/2 rounded-lg border border-molten-gold/30 bg-void-black/95 p-3 text-xs leading-relaxed text-white/75 opacity-0 shadow-xl shadow-black/30 transition-opacity duration-200 pointer-events-none group-hover:opacity-100">
+                      Sell the remaining position if the token has not reached your profit target before the timer expires. The timer starts when Prometheus enters the trade; reaching the target in time cancels this fallback for that position.
+                    </span>
+                  </span>
+                </div>
+                <p className="text-white/45 font-space-grotesk text-xs md:text-sm">Close slow trades that fail to reach the target fast enough.</p>
+              </div>
+              <ToggleSwitch
+                enabled={Boolean(settings.time_limit_sells_enabled)}
+                disabled={!tpSlIsActive}
+                onClick={() => setSettings(prev => ({ ...prev, time_limit_sells_enabled: !prev.time_limit_sells_enabled }))}
+              />
+            </div>
+
+            {settings.time_limit_sells_enabled && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 ${!tpSlIsActive ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Target Profit %</label>
+                  <input
+                    type="number"
+                    value={settings.time_limit_profit_pct ?? ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, time_limit_profit_pct: optionalFloatFromInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    step="0.1"
+                    placeholder="100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-orbitron text-molten-gold font-semibold mb-2">Time Limit Minutes</label>
+                  <input
+                    type="number"
+                    value={secondsToPreciseMinutesInput(settings.time_limit_seconds)}
+                    onChange={(e) => setSettings(prev => ({ ...prev, time_limit_seconds: minutesToSecondsInput(e.target.value) }))}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                    min="0"
+                    step="0.1"
+                    placeholder="2"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+              </motion.div>
+            )}
+          </div>
+
           {/* Advanced Filters - Collapsable */}
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
             <button
@@ -1213,15 +1486,15 @@ export default function DashboardPage() {
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
             <h3 className="text-base md:text-lg font-orbitron font-semibold text-white mb-4">Trading Filters</h3>
             <div className="space-y-6">
-              <div className="flex items-start gap-3 rounded-lg border border-molten-gold/15 bg-molten-gold/[0.06] p-3">
-                <Info size={15} className="mt-0.5 flex-shrink-0 text-molten-gold/80" />
-                <p className="text-xs md:text-sm text-white/55 font-space-grotesk leading-relaxed">
-                  When enabled, each mirror wallet can trigger one copied buy per token. If that wallet already bought the same token in your successful logs, the new buy is skipped; other tokens can still be copied.
-                </p>
-              </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">First Purchase Only</h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="text-sm md:text-base font-orbitron font-semibold text-white">First Purchase Only</h4>
+                    <span className="group relative">
+                      <Info size={12} className="text-molten-gold cursor-help" />
+                      <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">When enabled, each mirror wallet can trigger one copied buy per token. If that wallet already bought the same token in your successful logs, the new buy is skipped; other tokens can still be copied.</span>
+                    </span>
+                  </div>
                   <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Only copy the first purchase per token for each mirror wallet</p>
                 </div>
                 <motion.button
@@ -1466,14 +1739,6 @@ export default function DashboardPage() {
                         <h4 className="text-sm md:text-base font-orbitron font-semibold text-white mb-1">Token Filters</h4>
                         <p className="text-white/40 font-space-grotesk text-xs md:text-sm">Filter copied {selectedCoin.toUpperCase()} buys by market cap, liquidity, holder count, and token age</p>
                       </div>
-                      <div className="group relative">
-                        <div className="w-5 h-5 bg-molten-gold/20 rounded-full flex items-center justify-center cursor-help">
-                          <Info size={12} className="text-molten-gold" />
-                        </div>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-void-black/95 border border-molten-gold/30 rounded-lg p-3 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                          SOL uses RugCheck data. BNB uses GeckoTerminal token info, with holder last_updated used as the token age reference. Blank min or max values are ignored.
-                        </div>
-                      </div>
                     </div>
                     <motion.button
                       onClick={() => setSettings(prev => ({ ...prev, rugcheck_filters_enabled: !prev.rugcheck_filters_enabled }))}
@@ -1607,7 +1872,7 @@ export default function DashboardPage() {
                           Min Token Age Minutes
                           <span className="group relative">
                             <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens younger than this age. BNB uses GeckoTerminal holders.last_updated.</span>
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens younger than this age using the available token metadata timestamp.</span>
                           </span>
                         </label>
                         <input
@@ -1625,7 +1890,7 @@ export default function DashboardPage() {
                           Max Token Age Minutes
                           <span className="group relative">
                             <Info size={12} className="text-molten-gold cursor-help" />
-                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens older than this age. BNB uses GeckoTerminal holders.last_updated.</span>
+                            <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Skip tokens older than this age using the available token metadata timestamp.</span>
                           </span>
                         </label>
                         <input
@@ -1638,6 +1903,98 @@ export default function DashboardPage() {
                           placeholder="No maximum"
                         />
                       </div>
+                      {selectedCoin === 'sol' && (
+                        <>
+                          <div className="md:col-span-2 rounded-lg border border-molten-gold/20 bg-molten-gold/5 p-3 space-y-3">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <h5 className="text-xs font-orbitron text-molten-gold tracking-wide mb-1">Locked Liquidity</h5>
+                                <p className="text-xs text-white/50 font-space-grotesk">Skip SOL tokens that do not show locked LP liquidity.</p>
+                              </div>
+                              <motion.button
+                                onClick={() => setSettings(prev => ({ ...prev, require_locked_liquidity: !prev.require_locked_liquidity }))}
+                                className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.require_locked_liquidity ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                <motion.div
+                                  className="w-4 h-4 bg-white rounded-full"
+                                  animate={{ x: settings.require_locked_liquidity ? 24 : 0 }}
+                                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                              </motion.button>
+                            </div>
+                            {settings.require_locked_liquidity && (
+                              <div>
+                                <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                                  Min Locked LP %
+                                  <span className="group relative">
+                                    <Info size={12} className="text-molten-gold cursor-help" />
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Optional. Leave blank to require any locked LP, or set a minimum weighted locked percentage.</span>
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  value={settings.min_lp_locked_pct ?? ''}
+                                  onChange={(e) => setSettings(prev => ({ ...prev, min_lp_locked_pct: optionalFloatFromInput(e.target.value) }))}
+                                  className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  placeholder="Any locked LP"
+                                />
+                              </div>
+                            )}
+                            <div className="flex items-start gap-2 rounded-lg border border-white/10 bg-void-black/35 px-3 py-2">
+                              <Info size={14} className="text-molten-gold mt-0.5 flex-shrink-0" />
+                              <p className="text-xs text-white/55 font-space-grotesk leading-relaxed">Prometheus calculates locked LP as a USD-weighted percentage across lockable markets. Markets with no LP supply model are ignored, so tiny secondary pools do not turn a locked primary pool into an automatic fail.</p>
+                            </div>
+                          </div>
+                          <div className="md:col-span-2 rounded-lg border border-molten-gold/20 bg-molten-gold/5 p-3 space-y-3">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <h5 className="text-xs font-orbitron text-molten-gold tracking-wide mb-1">Bundler Tracking</h5>
+                                <p className="text-xs text-white/50 font-space-grotesk">Skip SOL tokens where connected wallet clusters control more supply than you allow.</p>
+                              </div>
+                              <motion.button
+                                onClick={() => setSettings(prev => ({ ...prev, bundler_tracking_enabled: !prev.bundler_tracking_enabled }))}
+                                className={`w-12 h-6 rounded-full p-1 transition-all duration-300 flex-shrink-0 ${settings.bundler_tracking_enabled ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                <motion.div
+                                  className="w-4 h-4 bg-white rounded-full"
+                                  animate={{ x: settings.bundler_tracking_enabled ? 24 : 0 }}
+                                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                              </motion.button>
+                            </div>
+                            {settings.bundler_tracking_enabled && (
+                              <div>
+                                <label className="flex items-center gap-2 text-xs font-orbitron text-molten-gold mb-2 tracking-wide">
+                                  Max Cluster Supply %
+                                  <span className="group relative">
+                                    <Info size={12} className="text-molten-gold cursor-help" />
+                                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-void-black/95 border border-molten-gold/30 rounded-lg p-2 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">Optional. Leave blank to skip any detected connected cluster, or set the largest cluster percentage you still allow.</span>
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  value={settings.max_bundle_supply_pct ?? ''}
+                                  onChange={(e) => setSettings(prev => ({ ...prev, max_bundle_supply_pct: optionalFloatFromInput(e.target.value) }))}
+                                  className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  placeholder="Any detected cluster"
+                                />
+                              </div>
+                            )}
+                            <div className="flex items-start gap-2 rounded-lg border border-white/10 bg-void-black/35 px-3 py-2">
+                              <Info size={14} className="text-molten-gold mt-0.5 flex-shrink-0" />
+                              <p className="text-xs text-white/55 font-space-grotesk leading-relaxed">Connected accounts are grouped into coordinated clusters. Each cluster's token amount is divided by total supply, and the filter compares your threshold to the largest cluster. Total clustered supply is kept for context in logs.</p>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </motion.div>
                   )}
                   <p className="text-xs text-molten-gold/70 font-space-grotesk">Applying these filters adds a metadata check before each copied {selectedCoin.toUpperCase()} buy.</p>
