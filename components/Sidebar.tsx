@@ -27,6 +27,7 @@ import {
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { setCoin, updateProfileForCoin } from '../store/slices/authSlice'
 import Link from 'next/link'
+import { config } from '../lib/config'
 
 interface NavigationItem {
   id: string
@@ -68,6 +69,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { isAuthenticated, user, selectedCoin } = useAppSelector((state) => state.auth)
+  const hasTelegramSignalAccess = Boolean(user && config.telegramSignalUsernames.includes(user.username))
 
   useEffect(() => {
     if (pathname === '/profile') {
@@ -181,7 +183,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
               {section.title}
             </h3>
             <div className="space-y-1">
-              {section.items.map((item) => {
+              {section.items.filter((item) => item.id !== 'telegram-signals' || hasTelegramSignalAccess).map((item) => {
                 const Icon = item.icon
                 const isActive = activeItem === item.id
                 
