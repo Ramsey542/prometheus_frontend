@@ -157,6 +157,13 @@ const formatProfileBalance = (value: string | number | null | undefined, maxDeci
   })
 }
 
+const formatPnlUsd = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A'
+  const amount = Number(value)
+  const sign = amount > 0 ? '+' : amount < 0 ? '-' : ''
+  return `${sign}$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
 const parseLogEventData = (eventData: string | null | undefined): any => {
   try {
     return eventData ? JSON.parse(eventData) : {}
@@ -6028,6 +6035,9 @@ function ProfilePageContent() {
     const currentSolPriorityFeeScopes = normalizeSolPriorityFeeScopes(profile?.sol_priority_fee_scopes)
     const currentSolPriorityFeeEnabled = Boolean(profile?.sol_priority_fee_enabled)
     const currentSolPriorityFeeDynamic = Boolean(profile?.sol_priority_fee_dynamic)
+    const profilePnlTotal = Number((profile as any)?.pnl_total ?? 0)
+    const profilePnl24h = Number((profile as any)?.pnl_24h ?? 0)
+    const profilePnl7d = Number((profile as any)?.pnl_7d ?? 0)
     return (
       <div className="max-w-4xl mx-auto space-y-4 md:space-y-8">
         {/* Header */}
@@ -6701,20 +6711,20 @@ function ProfilePageContent() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <p className="text-xs font-orbitron text-molten-gold/80 tracking-wider uppercase mb-1">Total PnL</p>
-              <p className={`text-xl md:text-2xl font-orbitron font-bold ${((profile as any)?.pnl_total || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {isLoading ? '...' : ((profile as any)?.pnl_total ?? 0)}
+              <p className={`text-xl md:text-2xl font-orbitron font-bold ${profilePnlTotal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {isLoading ? '...' : formatPnlUsd(profilePnlTotal)}
               </p>
             </div>
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <p className="text-xs font-orbitron text-molten-gold/80 tracking-wider uppercase mb-1">PnL (24h)</p>
-              <p className={`text-xl md:text-2xl font-orbitron font-bold ${((profile as any)?.pnl_24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {isLoading ? '...' : ((profile as any)?.pnl_24h ?? 0)}
+              <p className={`text-xl md:text-2xl font-orbitron font-bold ${profilePnl24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {isLoading ? '...' : formatPnlUsd(profilePnl24h)}
               </p>
             </div>
             <div className="bg-void-black/50 border border-molten-gold/10 rounded-lg p-3 md:p-4 text-center">
               <p className="text-xs font-orbitron text-molten-gold/80 tracking-wider uppercase mb-1">PnL (7d)</p>
-              <p className={`text-xl md:text-2xl font-orbitron font-bold ${((profile as any)?.pnl_7d || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {isLoading ? '...' : ((profile as any)?.pnl_7d ?? 0)}
+              <p className={`text-xl md:text-2xl font-orbitron font-bold ${profilePnl7d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {isLoading ? '...' : formatPnlUsd(profilePnl7d)}
               </p>
             </div>
           </div>

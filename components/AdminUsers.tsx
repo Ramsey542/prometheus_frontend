@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, ChevronRight, AlertCircle, X, User as UserIcon, BarChart2, Briefcase, TrendingUp, History } from 'lucide-react'
+import { Search, ChevronRight, AlertCircle, X, User as UserIcon, BarChart2, Briefcase, TrendingUp, History, Target } from 'lucide-react'
 import { walletTrackerApi } from '../services/walletTrackerApi'
 
 interface UserListItem {
@@ -18,6 +18,8 @@ interface UserStats {
     username: string
     email: string
     total_pnl: number
+    dip_ladder_pnl: number
+    coin_type: string
     total_trades: number
     active_trades: number
     created_at: string
@@ -80,11 +82,12 @@ export default function AdminUsers() {
         }
     }
 
-    const formatPnL = (pnl: number) => {
-        const isPositive = pnl >= 0
+    const formatPnL = (pnl: number | null | undefined) => {
+        const value = Number(pnl || 0)
+        const isPositive = value >= 0
         return (
             <span className={isPositive ? 'text-green-400' : 'text-red-400'}>
-                {isPositive ? '+' : ''}{pnl.toFixed(6)} SOL
+                {isPositive ? '+' : ''}${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
         )
     }
@@ -252,7 +255,7 @@ export default function AdminUsers() {
                             {/* Modal Content */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-8">
                                 {/* Stats Cards */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="bg-molten-gold/5 border border-molten-gold/10 p-4 rounded-xl">
                                         <div className="flex items-center gap-3 mb-2 text-molten-gold">
                                             <TrendingUp size={18} />
@@ -260,6 +263,15 @@ export default function AdminUsers() {
                                         </div>
                                         <div className="text-2xl font-orbitron font-bold">
                                             {formatPnL(selectedUser.total_pnl)}
+                                        </div>
+                                    </div>
+                                    <div className="bg-molten-gold/5 border border-molten-gold/10 p-4 rounded-xl">
+                                        <div className="flex items-center gap-3 mb-2 text-green-400">
+                                            <Target size={18} />
+                                            <span className="text-xs font-orbitron font-bold uppercase tracking-widest opacity-60">Dip Ladder PnL</span>
+                                        </div>
+                                        <div className="text-2xl font-orbitron font-bold">
+                                            {formatPnL(selectedUser.dip_ladder_pnl)}
                                         </div>
                                     </div>
                                     <div className="bg-molten-gold/5 border border-molten-gold/10 p-4 rounded-xl">
