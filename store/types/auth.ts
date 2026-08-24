@@ -133,6 +133,8 @@ export interface TrackedWallet {
   dip_recovery_timeout?: number;
   is_default?: boolean;
   slippage?: number;
+  time_filter_enabled?: boolean;
+  time_filter_seconds?: number | null;
   entry_on_first_swap?: boolean;
   buy_once_per_token?: boolean;
   copy_only_new_positions?: boolean;

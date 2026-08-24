@@ -1565,6 +1565,8 @@ function ProfilePageContent() {
           time_limit_sells_enabled: settings.time_limit_sells_enabled ?? false,
           time_limit_profit_pct: settings.time_limit_profit_pct ?? null,
           time_limit_seconds: settings.time_limit_seconds ?? null,
+          time_filter_enabled: settings.time_filter_enabled ?? false,
+          time_filter_seconds: settings.time_filter_seconds ?? null,
           trailing_take_profit_enabled: settings.trailing_take_profit_enabled ?? false,
           trailing_take_profit_activation_pct: settings.trailing_take_profit_activation_pct ?? null,
           trailing_take_profit_distance_pct: settings.trailing_take_profit_distance_pct ?? null,
@@ -1730,11 +1732,17 @@ function ProfilePageContent() {
 
       const key = walletId || walletAddress;
       const settings = settingsOverride || walletSettings[key]
+      if (settings.time_filter_enabled && (!settings.time_filter_seconds || settings.time_filter_seconds <= 0)) {
+        setWalletTrackerError('Time filter seconds is required when time filter is enabled')
+        return false
+      }
       const normalized = {
         ...settings,
         swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : (settings.swap_strategy || 'fixed_buys'),
         custom_name: settings.custom_name || '',
         slippage: settings.slippage === '' ? 0 : settings.slippage,
+        time_filter_enabled: settings.time_filter_enabled ?? false,
+        time_filter_seconds: settings.time_filter_enabled ? settings.time_filter_seconds : null,
         max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
         max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day,
         max_buys_per_token_per_day: settings.max_buys_per_token_per_day,
@@ -1832,11 +1840,17 @@ function ProfilePageContent() {
       setWalletTrackerError(null)
 
       const settings = walletSettings[key] || {}
+      if (settings.time_filter_enabled && (!settings.time_filter_seconds || settings.time_filter_seconds <= 0)) {
+        setWalletTrackerError('Time filter seconds is required when time filter is enabled')
+        return
+      }
       const normalized = {
         ...settings,
         swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : (settings.swap_strategy || 'fixed_buys'),
         custom_name: customNameValue.trim() || '',
         slippage: settings.slippage === '' ? 0 : settings.slippage,
+        time_filter_enabled: settings.time_filter_enabled ?? false,
+        time_filter_seconds: settings.time_filter_enabled ? settings.time_filter_seconds : null,
         max_buys_per_mirror_per_hour: settings.max_buys_per_mirror_per_hour,
         max_buys_per_mirror_per_day: settings.max_buys_per_mirror_per_day,
         max_buys_per_token_per_day: settings.max_buys_per_token_per_day,
@@ -3002,6 +3016,61 @@ function ProfilePageContent() {
                         step="0.1"
                       />
                     </div>
+                  </div>
+
+                  <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-lg font-orbitron font-semibold text-white">Time Filter</h4>
+                          <span className="group relative inline-flex">
+                            <Info size={14} className="text-molten-gold/75 cursor-help" />
+                            <span className="absolute bottom-full left-1/2 z-30 mb-2 w-72 -translate-x-1/2 rounded-lg border border-molten-gold/25 bg-void-black/95 p-3 text-xs leading-relaxed text-white/75 opacity-0 shadow-xl shadow-black/30 transition-opacity duration-200 pointer-events-none group-hover:opacity-100">
+                              Used for copy trades and Telegram buys. When enabled, Prometheus waits this many seconds after the target wallet or signal before buying.
+                            </span>
+                          </span>
+                        </div>
+                        <p className="text-white/45 font-space-grotesk text-xs">Delay this wallet&apos;s copied buys by a required number of seconds.</p>
+                      </div>
+                      <ToggleSwitch
+                        enabled={Boolean(walletSettings[showWalletSettings].time_filter_enabled)}
+                        onClick={() => setWalletSettings(prev => ({
+                          ...prev,
+                          [showWalletSettings]: {
+                            ...prev[showWalletSettings],
+                            time_filter_enabled: !prev[showWalletSettings].time_filter_enabled,
+                            time_filter_seconds: prev[showWalletSettings].time_filter_enabled ? null : prev[showWalletSettings].time_filter_seconds
+                          }
+                        }))}
+                      />
+                    </div>
+                    {walletSettings[showWalletSettings].time_filter_enabled && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-4"
+                      >
+                        <label className="block text-sm font-orbitron text-molten-gold mb-2 tracking-wide">
+                          Delay Seconds
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={walletSettings[showWalletSettings].time_filter_seconds ?? ''}
+                          onChange={(e) => setWalletSettings(prev => ({
+                            ...prev,
+                            [showWalletSettings]: {
+                              ...prev[showWalletSettings],
+                              time_filter_seconds: optionalIntFromInput(e.target.value)
+                            }
+                          }))}
+                          className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk focus:border-molten-gold focus:outline-none transition-colors duration-300"
+                          min="1"
+                          step="1"
+                          placeholder="4"
+                        />
+                      </motion.div>
+                    )}
                   </div>
 
                   {selectedCoin === 'sol' && (
