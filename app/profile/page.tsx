@@ -172,6 +172,25 @@ const parseLogEventData = (eventData: string | null | undefined): any => {
   }
 }
 
+const getSkippedEventReason = (log: CopyTradingLog): string => {
+  const eventData = parseLogEventData(log.event_data)
+  if (typeof eventData?.reason === 'string' && eventData.reason.trim()) {
+    return eventData.reason
+  }
+  return log.error_message || 'Trade skipped'
+}
+
+const formatTrackedEventAmount = (amount: string | null): string => {
+  if (!amount) return 'N/A'
+  const numericAmount = Number(amount)
+  if (!Number.isFinite(numericAmount)) return amount
+  return numericAmount.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 9,
+    useGrouping: false
+  })
+}
+
 const SPIKE_ENTRY_ACTIVE_STATUSES = new Set(['waiting_spike', 'waiting_pullback'])
 
 const toFiniteNumber = (value: unknown): number | null => {
@@ -1790,8 +1809,13 @@ function ProfilePageContent() {
         spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
         spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
         spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? (settings.spike_entry_require_unsold_mirror ?? false) : false,
-        jito_tip_enabled: selectedCoin === 'sol' ? (settings.jito_tip_enabled ?? false) : false,
-        jito_tip_sol: selectedCoin === 'sol' ? Number(settings.jito_tip_sol || 0) : 0
+         jito_tip_enabled: selectedCoin === 'sol' ? (settings.jito_tip_enabled ?? false) : false,
+         jito_tip_sol: selectedCoin === 'sol' ? Number(settings.jito_tip_sol || 0) : 0,
+         copy_buy_size_filter_enabled: selectedCoin === 'sol' ? (settings.copy_buy_size_filter_enabled ?? false) : false,
+         copy_buy_size_min_sol: selectedCoin === 'sol' ? (settings.copy_buy_size_min_sol ?? null) : null,
+         copy_buy_size_max_sol: selectedCoin === 'sol' ? (settings.copy_buy_size_max_sol ?? null) : null,
+         mirror_buy_size_enabled: selectedCoin === 'sol' ? (settings.mirror_buy_size_enabled ?? false) : false,
+         mirror_buy_size_rules: selectedCoin === 'sol' ? (settings.mirror_buy_size_rules ?? []) : []
       }
       await walletTrackerApi.updateTrackedWalletSettings(walletAddress, normalized, selectedCoin, settings.tracking_type, walletId)
 
@@ -1895,9 +1919,14 @@ function ProfilePageContent() {
         copy_only_new_positions: selectedCoin === 'sol' ? (settings.copy_only_new_positions ?? false) : false,
         spike_entry_enabled: selectedCoin === 'sol' ? (settings.spike_entry_enabled ?? false) : false,
         spike_entry_pullback_percentage: settings.spike_entry_pullback_percentage ?? 5,
-        spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
-        spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
-        spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? (settings.spike_entry_require_unsold_mirror ?? false) : false
+         spike_entry_margin_percentage: settings.spike_entry_margin_percentage ?? 0,
+         spike_entry_timeout_seconds: settings.spike_entry_timeout_seconds ?? 300,
+         spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? (settings.spike_entry_require_unsold_mirror ?? false) : false,
+         copy_buy_size_filter_enabled: selectedCoin === 'sol' ? (settings.copy_buy_size_filter_enabled ?? false) : false,
+         copy_buy_size_min_sol: selectedCoin === 'sol' ? (settings.copy_buy_size_min_sol ?? null) : null,
+         copy_buy_size_max_sol: selectedCoin === 'sol' ? (settings.copy_buy_size_max_sol ?? null) : null,
+         mirror_buy_size_enabled: selectedCoin === 'sol' ? (settings.mirror_buy_size_enabled ?? false) : false,
+         mirror_buy_size_rules: selectedCoin === 'sol' ? (settings.mirror_buy_size_rules ?? []) : []
       }
 
       const foundId = trackedWallets.find(w => w.wallet_address === walletAddress)?.id
@@ -2416,8 +2445,8 @@ function ProfilePageContent() {
                       <span className="text-sm font-orbitron font-semibold">
                         {walletSettings[wallet.id] &&
                           walletSettings[wallet.id].is_default === false
-                          ? 'Custom Controls'
-                          : 'Default Controls'
+                          ? 'Custom Wallet Controls'
+                          : 'Wallet Tracking Defaults'
                         }
                       </span>
                     </motion.button>
@@ -2991,6 +3020,202 @@ function ProfilePageContent() {
                       </p>
                     </div>
                   </div>
+
+                  {selectedCoin === 'sol' && (
+                    <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 space-y-5">
+                      <div>
+                        <h4 className="text-lg font-orbitron font-semibold text-white">Copy wallet BUY sizing</h4>
+                        <p className="text-xs text-white/45 font-space-grotesk mt-1">These controls apply only to this wallet&apos;s copied SOL BUYs.</p>
+                      </div>
+                      <div className="border border-white/10 rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h5 className="text-sm font-orbitron text-white">Filter mirror BUY size</h5>
+                            <p className="text-xs text-white/40 font-space-grotesk mt-1">Skip the trade unless the copied wallet spent inside this SOL range.</p>
+                          </div>
+                          <ToggleSwitch
+                            enabled={Boolean(walletSettings[showWalletSettings].copy_buy_size_filter_enabled)}
+                            onClick={() => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                copy_buy_size_filter_enabled: !prev[showWalletSettings].copy_buy_size_filter_enabled
+                              }
+                            }))}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <label className="text-xs text-white/60 font-space-grotesk">
+                            Minimum mirror BUY (SOL)
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              disabled={!walletSettings[showWalletSettings].copy_buy_size_filter_enabled}
+                              value={walletSettings[showWalletSettings].copy_buy_size_min_sol ?? ''}
+                              onChange={(event) => setWalletSettings(prev => ({
+                                ...prev,
+                                [showWalletSettings]: {
+                                  ...prev[showWalletSettings],
+                                  copy_buy_size_min_sol: event.target.value === '' ? null : parseFloat(event.target.value)
+                                }
+                              }))}
+                              className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white disabled:text-white/40 disabled:cursor-not-allowed focus:border-molten-gold focus:outline-none"
+                            />
+                          </label>
+                          <label className="text-xs text-white/60 font-space-grotesk">
+                            Maximum mirror BUY (SOL)
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              disabled={!walletSettings[showWalletSettings].copy_buy_size_filter_enabled}
+                              value={walletSettings[showWalletSettings].copy_buy_size_max_sol ?? ''}
+                              onChange={(event) => setWalletSettings(prev => ({
+                                ...prev,
+                                [showWalletSettings]: {
+                                  ...prev[showWalletSettings],
+                                  copy_buy_size_max_sol: event.target.value === '' ? null : parseFloat(event.target.value)
+                                }
+                              }))}
+                              className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white disabled:text-white/40 disabled:cursor-not-allowed focus:border-molten-gold focus:outline-none"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="border border-white/10 rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h5 className="text-sm font-orbitron text-white">Mirror the mirror-wallet BUY size</h5>
+                          </div>
+                          <ToggleSwitch
+                            enabled={Boolean(walletSettings[showWalletSettings].mirror_buy_size_enabled)}
+                            onClick={() => setWalletSettings(prev => ({
+                              ...prev,
+                              [showWalletSettings]: {
+                                ...prev[showWalletSettings],
+                                mirror_buy_size_enabled: !prev[showWalletSettings].mirror_buy_size_enabled
+                              }
+                            }))}
+                          />
+                        </div>
+                        <div className="rounded-lg border border-molten-gold/20 bg-molten-gold/5 px-3 py-3 text-xs text-white/65 font-space-grotesk leading-relaxed">
+                          <p className="text-molten-gold font-semibold">How matching works</p>
+                          <p className="mt-1">Each rule checks how much SOL the copied wallet spent on its BUY. The starting amount is included, but the ending amount is not. If the amount matches, “Buy actual size” uses that same SOL amount in your wallet.</p>
+                          <p className="mt-1">Example: a rule from 0 to 0.002 SOL copies buys below 0.002 SOL. A copied BUY of 0.0968 SOL will not match it. Leave “Before SOL” empty to match every larger amount.</p>
+                          <p className="mt-1">Rules are checked from top to bottom, and the first matching rule is used.</p>
+                        </div>
+                        {walletSettings[showWalletSettings].mirror_buy_size_enabled && (
+                          <div className="space-y-3">
+                            {(walletSettings[showWalletSettings].mirror_buy_size_rules || []).map((rule: any, index: number) => (
+                              <div key={`${index}-${rule.mode}`} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.2fr_1fr_auto] gap-3 items-end border border-white/10 rounded-lg p-3">
+                                <label className="text-xs text-white/60 font-space-grotesk">
+                                  From SOL (inclusive)
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={rule.min_sol ?? 0}
+                                    onChange={(event) => setWalletSettings(prev => ({
+                                      ...prev,
+                                      [showWalletSettings]: {
+                                        ...prev[showWalletSettings],
+                                        mirror_buy_size_rules: (prev[showWalletSettings].mirror_buy_size_rules || []).map((item: any, itemIndex: number) => itemIndex === index ? { ...item, min_sol: parseFloat(event.target.value) || 0 } : item)
+                                      }
+                                    }))}
+                                    className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white focus:border-molten-gold focus:outline-none"
+                                  />
+                                </label>
+                                <label className="text-xs text-white/60 font-space-grotesk">
+                                  Before SOL (exclusive)
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="No limit"
+                                    value={rule.max_sol ?? ''}
+                                    onChange={(event) => setWalletSettings(prev => ({
+                                      ...prev,
+                                      [showWalletSettings]: {
+                                        ...prev[showWalletSettings],
+                                        mirror_buy_size_rules: (prev[showWalletSettings].mirror_buy_size_rules || []).map((item: any, itemIndex: number) => itemIndex === index ? { ...item, max_sol: event.target.value === '' ? null : parseFloat(event.target.value) } : item)
+                                      }
+                                    }))}
+                                    className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white focus:border-molten-gold focus:outline-none"
+                                  />
+                                </label>
+                                <label className="text-xs text-white/60 font-space-grotesk">
+                                  Action
+                                  <select
+                                    value={rule.mode || 'actual'}
+                                    onChange={(event) => setWalletSettings(prev => ({
+                                      ...prev,
+                                      [showWalletSettings]: {
+                                        ...prev[showWalletSettings],
+                                        mirror_buy_size_rules: (prev[showWalletSettings].mirror_buy_size_rules || []).map((item: any, itemIndex: number) => itemIndex === index ? { ...item, mode: event.target.value, value: event.target.value === 'actual' ? null : item.value || 1 } : item)
+                                      }
+                                    }))}
+                                    className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white focus:border-molten-gold focus:outline-none"
+                                  >
+                                    <option value="actual">Buy actual size</option>
+                                    <option value="multiplier">Multiply by</option>
+                                    <option value="divider">Divide by</option>
+                                  </select>
+                                </label>
+                                <label className={`text-xs text-white/60 font-space-grotesk ${rule.mode === 'actual' ? 'opacity-40' : ''}`}>
+                                  Value
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    disabled={rule.mode === 'actual'}
+                                    value={rule.mode === 'actual' ? '' : rule.value ?? ''}
+                                    onChange={(event) => setWalletSettings(prev => ({
+                                      ...prev,
+                                      [showWalletSettings]: {
+                                        ...prev[showWalletSettings],
+                                        mirror_buy_size_rules: (prev[showWalletSettings].mirror_buy_size_rules || []).map((item: any, itemIndex: number) => itemIndex === index ? { ...item, value: event.target.value === '' ? null : parseFloat(event.target.value) } : item)
+                                      }
+                                    }))}
+                                    className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white disabled:text-white/40 disabled:cursor-not-allowed focus:border-molten-gold focus:outline-none"
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => setWalletSettings(prev => ({
+                                    ...prev,
+                                    [showWalletSettings]: {
+                                      ...prev[showWalletSettings],
+                                      mirror_buy_size_rules: (prev[showWalletSettings].mirror_buy_size_rules || []).filter((_: any, itemIndex: number) => itemIndex !== index)
+                                    }
+                                  }))}
+                                  aria-label={`Remove mirror BUY size rule ${index + 1}`}
+                                  className="h-10 px-3 rounded-lg border border-red-400/30 text-red-300 hover:bg-red-400/10"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setWalletSettings(prev => ({
+                                ...prev,
+                                [showWalletSettings]: {
+                                  ...prev[showWalletSettings],
+                                  mirror_buy_size_rules: [...(prev[showWalletSettings].mirror_buy_size_rules || []), { min_sol: 0, max_sol: null, mode: 'actual', value: null }]
+                                }
+                              }))}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-molten-gold/30 text-molten-gold hover:bg-molten-gold/10 font-space-grotesk text-sm"
+                            >
+                              <Plus size={15} />
+                              Add size rule
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Slippage Settings */}
                   <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4">
@@ -5238,6 +5463,7 @@ function ProfilePageContent() {
                   <option value="success">Success</option>
                   <option value="failed">Failed</option>
                   <option value="pending">Pending</option>
+                  <option value="skipped">Skipped</option>
                 </select>
               </div>
 
@@ -5768,6 +5994,26 @@ function ProfilePageContent() {
                           <p className={`font-orbitron font-bold ${log.status === 'success' ? 'text-green-400' : log.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>
                             {log.status?.toUpperCase() || 'UNKNOWN'}
                           </p>
+                          {log.status === 'skipped' && (() => {
+                            const eventData = parseLogEventData(log.event_data)
+                            const reason = getSkippedEventReason(log)
+                            const filter = typeof eventData?.filter === 'string'
+                              ? eventData.filter.replace(/_/g, ' ')
+                              : null
+                            return (
+                              <span
+                                className="group/skip relative inline-flex cursor-help"
+                                aria-label={`Skip reason: ${reason}`}
+                              >
+                                <Info size={14} className="text-yellow-300" />
+                                <span className="absolute bottom-full left-1/2 z-[100] mb-2 w-80 -translate-x-1/2 rounded-lg border border-yellow-400/30 bg-void-black/95 p-3 text-[11px] font-space-grotesk normal-case text-yellow-50 opacity-0 shadow-2xl transition-opacity duration-300 pointer-events-none group-hover/skip:opacity-100">
+                                  <span className="block font-orbitron font-semibold text-yellow-300">Trade skipped</span>
+                                  {filter && <span className="mt-1 block text-white/55">Filter: {filter}</span>}
+                                  <span className="mt-1 block leading-relaxed text-white/85">{reason}</span>
+                                </span>
+                              </span>
+                            )
+                          })()}
                           {log.status === 'failed' && log.error_message && (
                             <span className="group/status relative inline-flex">
                               <Info size={14} className="text-red-300 cursor-help" />
@@ -5913,7 +6159,8 @@ function ProfilePageContent() {
                     {/* Amounts */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {log.amount_in && (() => {
-                        if (log.event_type === 'tracked_wallet_activity') {
+                        if (log.event_type === 'tracked_wallet_activity' || log.event_type === 'copy_trade_filter') {
+                          const isCopyFilterEvent = log.event_type === 'copy_trade_filter'
                           const isBuy = log.side === 'BUY'
                           let targetToken: string | null | undefined
                           let baseToken: string | null | undefined
@@ -5932,20 +6179,20 @@ function ProfilePageContent() {
                               <div>
                                 <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
                                 <p className="text-white font-space-grotesk font-mono text-sm">
-                                  {formatAmount(log.amount_in, selectedCoin, isToken, log.token_decimals)}
+                                  {isCopyFilterEvent ? formatTrackedEventAmount(log.amount_in) : formatAmount(log.amount_in, selectedCoin, isToken, log.token_decimals)}
                                   {` ${tokenName}`}
                                 </p>
                               </div>
                             )
                           } else {
-                            const isToken = false
-                            const currencyName = log.base_token_name || selectedCoin.toUpperCase()
+                            const isToken = true
+                            const tokenName = log.token_name || selectedCoin.toUpperCase()
                             return (
                               <div>
-                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
                                 <p className="text-white font-space-grotesk font-mono text-sm">
-                                  {formatAmount(log.amount_in, selectedCoin, isToken, null)}
-                                  {` ${currencyName}`}
+                                  {isCopyFilterEvent ? formatTrackedEventAmount(log.amount_in) : formatAmount(log.amount_in, selectedCoin, isToken, log.token_decimals)}
+                                  {` ${tokenName}`}
                                 </p>
                               </div>
                             )
@@ -5968,7 +6215,8 @@ function ProfilePageContent() {
                       })()}
 
                       {log.amount_out && (() => {
-                        if (log.event_type === 'tracked_wallet_activity') {
+                        if (log.event_type === 'tracked_wallet_activity' || log.event_type === 'copy_trade_filter') {
+                          const isCopyFilterEvent = log.event_type === 'copy_trade_filter'
                           const isBuy = log.side === 'BUY'
                           let targetToken: string | null | undefined
                           let baseToken: string | null | undefined
@@ -5988,20 +6236,20 @@ function ProfilePageContent() {
                               <div>
                                 <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
                                 <p className="text-white font-space-grotesk font-mono text-sm">
-                                  {formatAmount(log.amount_out, selectedCoin, isToken, null)}
+                                  {isCopyFilterEvent ? formatTrackedEventAmount(log.amount_out) : formatAmount(log.amount_out, selectedCoin, isToken, null)}
                                   {` ${currencyName}`}
                                 </p>
                               </div>
                             )
                           } else {
-                            const isToken = true
-                            const tokenName = log.token_name || selectedCoin.toUpperCase()
+                            const isToken = false
+                            const currencyName = log.base_token_name || selectedCoin.toUpperCase()
                             return (
                               <div>
-                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Sent</p>
+                                <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Received</p>
                                 <p className="text-white font-space-grotesk font-mono text-sm">
-                                  {formatAmount(log.amount_out, selectedCoin, isToken, log.token_decimals)}
-                                  {` ${tokenName}`}
+                                  {isCopyFilterEvent ? formatTrackedEventAmount(log.amount_out) : formatAmount(log.amount_out, selectedCoin, isToken, null)}
+                                  {` ${currencyName}`}
                                 </p>
                               </div>
                             )
@@ -6031,20 +6279,9 @@ function ProfilePageContent() {
                       )}
                     </div>
 
-                    {/* Event Data - Only show for non-user purchase/sell events */}
-                    {log.event_data && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && !isSpikeEntryLog(log) && (
-                      <div>
-                        <p className="text-molten-gold/60 font-orbitron text-xs tracking-wider uppercase mb-1">Event Data</p>
-                        <div className="bg-void-black/30 border border-molten-gold/10 rounded-lg p-3">
-                          <p className="text-white/80 font-space-grotesk text-sm font-mono break-all">
-                            {log.event_data}
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                  {log.error_message && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
+                  {log.error_message && log.status === 'failed' && log.event_type !== 'user_purchase' && log.event_type !== 'user_sell' && (
                     <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                       <p className="text-red-400 font-orbitron text-xs tracking-wider uppercase mb-1">Error Message</p>
                       <p className="text-red-300 font-space-grotesk text-sm">{log.error_message}</p>
@@ -6564,7 +6801,7 @@ function ProfilePageContent() {
                   <div className="flex items-center gap-3 mb-3">
                     <Activity size={16} className="text-molten-gold" />
                     <span className="text-sm font-orbitron font-medium text-molten-gold/80 tracking-wider uppercase">
-                      Default Tracking Type
+                      Wallet Tracking Default Type
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">

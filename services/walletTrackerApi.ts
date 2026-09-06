@@ -18,6 +18,8 @@ class WalletTrackerApiError extends Error {
   }
 }
 
+export type SettingsModule = 'wallet_tracking' | 'dip_ladder' | 'telegram';
+
 const getErrorMessage = (errorData: any, status: number) => {
   const detail = errorData?.detail;
   if (typeof detail === 'string' && detail.trim()) {
@@ -258,6 +260,38 @@ export const walletTrackerApi = {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async getModuleSettings(module: SettingsModule, coin: string = 'sol'): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/module-settings/${module}?coin_type=${coin}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+
+      return await handleResponse(response);
+    });
+  },
+
+  async updateModuleSettings(module: SettingsModule, coin: string, payload: any): Promise<any> {
+    return tokenInterceptor.makeAuthenticatedRequest(async () => {
+      const accessToken = localStorage.getItem('access_token');
+      if (!accessToken) throw new WalletTrackerApiError('No access token found', 401);
+
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/module-settings/${module}?coin_type=${coin}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
 
       return await handleResponse(response);

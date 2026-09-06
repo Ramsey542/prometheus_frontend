@@ -8,6 +8,7 @@ import { config } from '../../lib/config'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store/index'
 import { useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { createWallet, selectWallet, getProfile } from '../../store/slices/authSlice'
 import { AppDispatch } from '../../store/index'
@@ -23,7 +24,16 @@ interface StopLossLevel {
   sell_percentage: number
 }
 
+interface MirrorBuySizeRule {
+  min_sol: number
+  max_sol: number | null
+  mode: 'multiplier' | 'divider' | 'actual'
+  value: number | null
+}
+
 interface WalletSettings {
+  module?: SettingsModule
+  coin_type?: string
   swap_strategy: string
   dip_ladder_drop_percentage: number
   dip_ladder_profit_percentage: number
@@ -86,6 +96,23 @@ interface WalletSettings {
   spike_entry_require_unsold_mirror: boolean
   jito_tip_enabled: boolean
   jito_tip_sol: string
+  trade_amount_overrides?: TradeAmountValues
+  effective_trade_amounts?: TradeAmountValues
+  copy_buy_size_filter_enabled: boolean
+  copy_buy_size_min_sol: number | null
+  copy_buy_size_max_sol: number | null
+  mirror_buy_size_enabled: boolean
+  mirror_buy_size_rules: MirrorBuySizeRule[]
+}
+
+type SettingsModule = 'wallet_tracking' | 'dip_ladder' | 'telegram'
+type TradeAmountField = 'sol_trade_amount' | 'bnb_trade_amount' | 'usdt_trade_amount' | 'usdc_trade_amount'
+type TradeAmountValues = Record<TradeAmountField, number | null>
+
+const MODULE_LABELS: Record<SettingsModule, { label: string; description: string }> = {
+  wallet_tracking: { label: 'Wallet Tracking', description: 'Defaults inherited by wallets unless a wallet has custom controls.' },
+  dip_ladder: { label: 'Dip Ladder', description: 'Execution and safety defaults for ladder entries and exits.' },
+  telegram: { label: 'Telegram', description: 'Execution and safety defaults for Telegram signal trades.' },
 }
 
 const DEFAULT_JITO_TIP_LAMPORTS = 10000
@@ -141,6 +168,8 @@ const minutesToSecondsInput = (value: string): number | null => {
 }
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams()
+  const requestedModule = searchParams.get('module') as SettingsModule | null
   const [settings, setSettings] = useState<WalletSettings>({
     swap_strategy: 'fixed_buys',
     dip_ladder_drop_percentage: 5,
@@ -199,8 +228,15 @@ export default function DashboardPage() {
     spike_entry_timeout_seconds: 300,
     spike_entry_require_unsold_mirror: false,
     jito_tip_enabled: false,
-    jito_tip_sol: DEFAULT_JITO_TIP_SOL
+    jito_tip_sol: DEFAULT_JITO_TIP_SOL,
+    copy_buy_size_filter_enabled: false,
+    copy_buy_size_min_sol: null,
+    copy_buy_size_max_sol: null,
+    mirror_buy_size_enabled: false,
+    mirror_buy_size_rules: []
   })
+  const [activeModule, setActiveModule] = useState<SettingsModule>(requestedModule && requestedModule in MODULE_LABELS ? requestedModule : 'wallet_tracking')
+  const [savedSettings, setSavedSettings] = useState<WalletSettings | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -329,64 +365,86 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const fetchSettings = useCallback(async () => {
+  const normalizeSettings = useCallback((data: any): WalletSettings => ({
+    ...data,
+    module: data.module,
+    coin_type: data.coin_type,
+    swap_strategy: data.swap_strategy === 'none' ? 'fixed_buys' : (data.swap_strategy || 'fixed_buys'),
+    dip_ladder_drop_percentage: data.dip_ladder_drop_percentage ?? 5,
+    dip_ladder_profit_percentage: data.dip_ladder_profit_percentage ?? 5,
+    take_profit_levels: data.take_profit_levels && data.take_profit_levels.length > 0 ? data.take_profit_levels : [{ profit_percentage: 0, sell_percentage: 0 }],
+    stop_loss_levels: data.stop_loss_levels && data.stop_loss_levels.length > 0 ? data.stop_loss_levels : [{ loss_percentage: 0, sell_percentage: 0 }],
+    time_limit_sells_enabled: data.time_limit_sells_enabled ?? false,
+    time_limit_profit_pct: data.time_limit_profit_pct ?? null,
+    time_limit_seconds: data.time_limit_seconds ?? null,
+    time_filter_enabled: data.time_filter_enabled ?? false,
+    time_filter_seconds: data.time_filter_seconds ?? null,
+    trailing_take_profit_enabled: data.trailing_take_profit_enabled ?? false,
+    trailing_take_profit_activation_pct: data.trailing_take_profit_activation_pct ?? null,
+    trailing_take_profit_distance_pct: data.trailing_take_profit_distance_pct ?? null,
+    trailing_take_profit_sell_pct: data.trailing_take_profit_sell_pct ?? null,
+    trailing_stop_loss_enabled: data.trailing_stop_loss_enabled ?? false,
+    trailing_stop_loss_activation_pct: data.trailing_stop_loss_activation_pct ?? null,
+    trailing_stop_loss_distance_pct: data.trailing_stop_loss_distance_pct ?? null,
+    trailing_stop_loss_sell_pct: data.trailing_stop_loss_sell_pct ?? null,
+    tracking_type: typeof data.tracking_type === 'object' ? data.tracking_type : { type: data.tracking_type || 'both' },
+    rugcheck_filters_enabled: data.rugcheck_filters_enabled ?? false,
+    min_market_cap_usd: data.min_market_cap_usd ?? null,
+    max_market_cap_usd: data.max_market_cap_usd ?? null,
+    min_liquidity_usd: data.min_liquidity_usd ?? null,
+    max_liquidity_usd: data.max_liquidity_usd ?? null,
+    require_locked_liquidity: selectedCoin === 'sol' ? data.require_locked_liquidity ?? false : false,
+    min_lp_locked_pct: selectedCoin === 'sol' ? data.min_lp_locked_pct ?? null : null,
+    bundler_tracking_enabled: selectedCoin === 'sol' ? data.bundler_tracking_enabled ?? false : false,
+    max_bundle_supply_pct: selectedCoin === 'sol' ? data.max_bundle_supply_pct ?? null : null,
+    min_token_age_seconds: data.min_token_age_seconds ?? null,
+    max_token_age_seconds: data.max_token_age_seconds ?? null,
+    min_holders: data.min_holders ?? null,
+    max_holders: data.max_holders ?? null,
+    copy_only_new_positions: data.copy_only_new_positions ?? false,
+    spike_entry_enabled: data.spike_entry_enabled ?? false,
+    spike_entry_pullback_percentage: data.spike_entry_pullback_percentage ?? 5,
+    spike_entry_margin_percentage: data.spike_entry_margin_percentage ?? 0,
+    spike_entry_timeout_seconds: data.spike_entry_timeout_seconds ?? 300,
+    spike_entry_require_unsold_mirror: data.spike_entry_require_unsold_mirror ?? false,
+    jito_tip_enabled: selectedCoin === 'sol' ? data.jito_tip_enabled ?? false : false,
+    jito_tip_sol: data.jito_tip_sol !== undefined && data.jito_tip_sol !== null ? String(data.jito_tip_sol) : lamportsToSolInput(data.jito_tip_lamports ?? DEFAULT_JITO_TIP_LAMPORTS),
+    copy_buy_size_filter_enabled: data.copy_buy_size_filter_enabled ?? false,
+    copy_buy_size_min_sol: data.copy_buy_size_min_sol ?? null,
+    copy_buy_size_max_sol: data.copy_buy_size_max_sol ?? null,
+    mirror_buy_size_enabled: data.mirror_buy_size_enabled ?? false,
+    mirror_buy_size_rules: Array.isArray(data.mirror_buy_size_rules) ? data.mirror_buy_size_rules.map((rule: Partial<MirrorBuySizeRule>) => ({
+      min_sol: Number(rule.min_sol ?? 0),
+      max_sol: rule.max_sol === null || rule.max_sol === undefined ? null : Number(rule.max_sol),
+      mode: rule.mode === 'multiplier' || rule.mode === 'divider' ? rule.mode : 'actual',
+      value: rule.value === null || rule.value === undefined ? null : Number(rule.value)
+    })) : [],
+    trade_amount_overrides: {
+      sol_trade_amount: data.trade_amount_overrides?.sol_trade_amount ?? null,
+      bnb_trade_amount: data.trade_amount_overrides?.bnb_trade_amount ?? null,
+      usdt_trade_amount: data.trade_amount_overrides?.usdt_trade_amount ?? null,
+      usdc_trade_amount: data.trade_amount_overrides?.usdc_trade_amount ?? null,
+    },
+    effective_trade_amounts: {
+      sol_trade_amount: data.effective_trade_amounts?.sol_trade_amount ?? null,
+      bnb_trade_amount: data.effective_trade_amounts?.bnb_trade_amount ?? null,
+      usdt_trade_amount: data.effective_trade_amounts?.usdt_trade_amount ?? null,
+      usdc_trade_amount: data.effective_trade_amounts?.usdc_trade_amount ?? null,
+    },
+  }), [selectedCoin])
+
+  const fetchSettings = useCallback(async (module: SettingsModule = activeModule) => {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/module-settings/${module}?coin_type=${selectedCoin}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         },
       })
       if (response.ok) {
         const data = await response.json()
-        setSettings({
-          ...data,
-          swap_strategy: data.swap_strategy === 'none' ? 'fixed_buys' : (data.swap_strategy || 'fixed_buys'),
-          dip_ladder_drop_percentage: data.dip_ladder_drop_percentage ?? 5,
-          dip_ladder_profit_percentage: data.dip_ladder_profit_percentage ?? 5,
-          take_profit_levels: data.take_profit_levels && data.take_profit_levels.length > 0
-            ? data.take_profit_levels
-            : [{ profit_percentage: 0, sell_percentage: 0 }],
-          stop_loss_levels: data.stop_loss_levels && data.stop_loss_levels.length > 0
-            ? data.stop_loss_levels
-            : [{ loss_percentage: 0, sell_percentage: 0 }],
-          time_limit_sells_enabled: data.time_limit_sells_enabled ?? false,
-          time_limit_profit_pct: data.time_limit_profit_pct ?? null,
-          time_limit_seconds: data.time_limit_seconds ?? null,
-          time_filter_enabled: data.time_filter_enabled ?? false,
-          time_filter_seconds: data.time_filter_seconds ?? null,
-          trailing_take_profit_enabled: data.trailing_take_profit_enabled ?? false,
-          trailing_take_profit_activation_pct: data.trailing_take_profit_activation_pct ?? null,
-          trailing_take_profit_distance_pct: data.trailing_take_profit_distance_pct ?? null,
-          trailing_take_profit_sell_pct: data.trailing_take_profit_sell_pct ?? null,
-          trailing_stop_loss_enabled: data.trailing_stop_loss_enabled ?? false,
-          trailing_stop_loss_activation_pct: data.trailing_stop_loss_activation_pct ?? null,
-          trailing_stop_loss_distance_pct: data.trailing_stop_loss_distance_pct ?? null,
-          trailing_stop_loss_sell_pct: data.trailing_stop_loss_sell_pct ?? null,
-          tracking_type: typeof data.tracking_type === 'object' ? data.tracking_type : { type: data.tracking_type || 'both' },
-          rugcheck_filters_enabled: data.rugcheck_filters_enabled ?? false,
-          min_market_cap_usd: data.min_market_cap_usd ?? null,
-          max_market_cap_usd: data.max_market_cap_usd ?? null,
-          min_liquidity_usd: data.min_liquidity_usd ?? null,
-          max_liquidity_usd: data.max_liquidity_usd ?? null,
-          require_locked_liquidity: selectedCoin === 'sol' ? data.require_locked_liquidity ?? false : false,
-          min_lp_locked_pct: selectedCoin === 'sol' ? data.min_lp_locked_pct ?? null : null,
-          bundler_tracking_enabled: selectedCoin === 'sol' ? data.bundler_tracking_enabled ?? false : false,
-          max_bundle_supply_pct: selectedCoin === 'sol' ? data.max_bundle_supply_pct ?? null : null,
-          min_token_age_seconds: data.min_token_age_seconds ?? null,
-          max_token_age_seconds: data.max_token_age_seconds ?? null,
-          min_holders: data.min_holders ?? null,
-          max_holders: data.max_holders ?? null,
-          copy_only_new_positions: data.copy_only_new_positions ?? false,
-          spike_entry_enabled: data.spike_entry_enabled ?? false,
-          spike_entry_pullback_percentage: data.spike_entry_pullback_percentage ?? 5,
-          spike_entry_margin_percentage: data.spike_entry_margin_percentage ?? 0,
-          spike_entry_timeout_seconds: data.spike_entry_timeout_seconds ?? 300,
-          spike_entry_require_unsold_mirror: data.spike_entry_require_unsold_mirror ?? false,
-          jito_tip_enabled: selectedCoin === 'sol' ? data.jito_tip_enabled ?? false : false,
-          jito_tip_sol: data.jito_tip_sol !== undefined && data.jito_tip_sol !== null
-            ? String(data.jito_tip_sol)
-            : lamportsToSolInput(data.jito_tip_lamports ?? DEFAULT_JITO_TIP_LAMPORTS)
-        })
+        const normalized = normalizeSettings(data)
+        setSettings(normalized)
+        setSavedSettings(normalized)
         setTpSlIsActive(data.tp_sl_is_active !== undefined ? data.tp_sl_is_active : true)
       } else if (response.status === 401) {
         router.push('/login')
@@ -396,14 +454,14 @@ export default function DashboardPage() {
     } finally {
       setInitialLoading(false)
     }
-  }, [router, selectedCoin])
+  }, [activeModule, normalizeSettings, router, selectedCoin])
 
   useEffect(() => {
     if (profile) {
-      fetchSettings()
+      fetchSettings(activeModule)
       fetchAvailableSounds()
     }
-  }, [profile, fetchSettings, fetchAvailableSounds])
+  }, [profile, activeModule, fetchSettings, fetchAvailableSounds])
 
   const testHearSound = (soundFile: string) => {
     if (playingSound) return
@@ -424,9 +482,28 @@ export default function DashboardPage() {
         setError('Time filter seconds is required when time filter is enabled')
         return
       }
+      if (activeModule === 'wallet_tracking' && selectedCoin === 'sol') {
+        if (settings.copy_buy_size_filter_enabled && settings.copy_buy_size_min_sol === null && settings.copy_buy_size_max_sol === null) {
+          setError('Set a minimum or maximum mirror BUY size before enabling the filter')
+          return
+        }
+        if (settings.copy_buy_size_min_sol !== null && settings.copy_buy_size_max_sol !== null && settings.copy_buy_size_min_sol > settings.copy_buy_size_max_sol) {
+          setError('Minimum mirror BUY size cannot exceed the maximum')
+          return
+        }
+        if (settings.mirror_buy_size_enabled && settings.mirror_buy_size_rules.length === 0) {
+          setError('Add at least one mirror BUY size rule before enabling size mirroring')
+          return
+        }
+      }
 
       const payload = {
         ...settings,
+        module: activeModule,
+        sol_trade_amount: settings.trade_amount_overrides?.sol_trade_amount ?? null,
+        bnb_trade_amount: settings.trade_amount_overrides?.bnb_trade_amount ?? null,
+        usdt_trade_amount: settings.trade_amount_overrides?.usdt_trade_amount ?? null,
+        usdc_trade_amount: settings.trade_amount_overrides?.usdc_trade_amount ?? null,
         swap_strategy: settings.swap_strategy === 'none' ? 'fixed_buys' : settings.swap_strategy,
         dip_ladder_drop_percentage: settings.dip_ladder_drop_percentage ?? 5,
         dip_ladder_profit_percentage: settings.dip_ladder_profit_percentage ?? 5,
@@ -477,10 +554,14 @@ export default function DashboardPage() {
         spike_entry_require_unsold_mirror: selectedCoin === 'sol' ? settings.spike_entry_require_unsold_mirror : false,
         jito_tip_enabled: selectedCoin === 'sol' ? settings.jito_tip_enabled : false,
         jito_tip_sol: selectedCoin === 'sol' ? Number(settings.jito_tip_sol || 0) : 0,
+        copy_buy_size_filter_enabled: activeModule === 'wallet_tracking' && selectedCoin === 'sol' ? settings.copy_buy_size_filter_enabled : false,
+        copy_buy_size_min_sol: activeModule === 'wallet_tracking' && selectedCoin === 'sol' ? settings.copy_buy_size_min_sol : null,
+        copy_buy_size_max_sol: activeModule === 'wallet_tracking' && selectedCoin === 'sol' ? settings.copy_buy_size_max_sol : null,
+        mirror_buy_size_enabled: activeModule === 'wallet_tracking' && selectedCoin === 'sol' ? settings.mirror_buy_size_enabled : false,
+        mirror_buy_size_rules: activeModule === 'wallet_tracking' && selectedCoin === 'sol' ? settings.mirror_buy_size_rules : [],
         coin_type: selectedCoin
       }
-      console.log('the selected coin is', selectedCoin)
-      const response = await fetch(`${config.apiBaseUrl}/copy-trading/wallet-settings?coin_type=${selectedCoin}`, {
+      const response = await fetch(`${config.apiBaseUrl}/copy-trading/module-settings/${activeModule}?coin_type=${selectedCoin}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -492,6 +573,9 @@ export default function DashboardPage() {
       if (response.ok) {
         const data = await response.json()
         setSuccess(data.message)
+        const normalized = normalizeSettings(data.default_settings ? { ...data.default_settings, ...data } : data)
+        setSettings(normalized)
+        setSavedSettings(normalized)
         setTimeout(() => setSuccess(null), 5000)
       } else {
         const errorData = await response.json()
@@ -502,6 +586,63 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const isDirty = Boolean(savedSettings && JSON.stringify(settings) !== JSON.stringify(savedSettings))
+
+  const handleModuleChange = (module: SettingsModule) => {
+    if (module === activeModule) return
+    setActiveModule(module)
+    setInitialLoading(true)
+    setSuccess(null)
+    setError(null)
+  }
+
+  const updateTradeAmountOverride = (field: TradeAmountField, enabled: boolean, value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      trade_amount_overrides: {
+        sol_trade_amount: prev.trade_amount_overrides?.sol_trade_amount ?? null,
+        bnb_trade_amount: prev.trade_amount_overrides?.bnb_trade_amount ?? null,
+        usdt_trade_amount: prev.trade_amount_overrides?.usdt_trade_amount ?? null,
+        usdc_trade_amount: prev.trade_amount_overrides?.usdc_trade_amount ?? null,
+        [field]: enabled ? (Number(value) || 0) : null,
+      },
+    }))
+  }
+
+  const tradeAmountFields: Array<{ field: TradeAmountField; label: string; unit: string }> = selectedCoin === 'sol'
+    ? [
+      { field: 'sol_trade_amount', label: 'SOL trade amount', unit: 'SOL' },
+      { field: 'usdt_trade_amount', label: 'USDT trade amount', unit: 'USDT' },
+    ]
+    : [
+      { field: 'bnb_trade_amount', label: 'BNB trade amount', unit: 'BNB' },
+      { field: 'usdc_trade_amount', label: 'USDC trade amount', unit: 'USDC' },
+    ]
+
+  const updateMirrorBuyRule = (index: number, patch: Partial<MirrorBuySizeRule>) => {
+    setSettings(prev => ({
+      ...prev,
+      mirror_buy_size_rules: prev.mirror_buy_size_rules.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, ...patch } : rule)
+    }))
+  }
+
+  const addMirrorBuyRule = () => {
+    setSettings(prev => ({
+      ...prev,
+      mirror_buy_size_rules: [
+        ...prev.mirror_buy_size_rules,
+        { min_sol: 0, max_sol: null, mode: 'actual', value: null }
+      ]
+    }))
+  }
+
+  const removeMirrorBuyRule = (index: number) => {
+    setSettings(prev => ({
+      ...prev,
+      mirror_buy_size_rules: prev.mirror_buy_size_rules.filter((_, ruleIndex) => ruleIndex !== index)
+    }))
   }
 
 
@@ -536,9 +677,41 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="max-w-4xl ml-4 md:ml-8 -mt-2 md:-mt-4 space-y-4 md:space-y-6">
         <h1 className="text-xl md:text-3xl font-orbitron font-bold text-molten-gold mb-4 md:mb-6">
-          Wallet Settings
+          {MODULE_LABELS[activeModule].label} Settings
         </h1>
 
+        <div className="border border-molten-gold/20 rounded-lg bg-void-black/50 p-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="tablist" aria-label="Settings modules">
+            {(Object.keys(MODULE_LABELS) as SettingsModule[]).map((module) => (
+              <button
+                key={module}
+                type="button"
+                role="tab"
+                aria-selected={activeModule === module}
+                onClick={() => handleModuleChange(module)}
+                className={`rounded-md px-4 py-3 text-left transition-colors ${activeModule === module ? 'bg-molten-gold text-void-black' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+              >
+                <span className="block text-xs font-orbitron font-bold uppercase tracking-wide">{MODULE_LABELS[module].label}</span>
+                <span className={`block mt-1 text-xs font-space-grotesk ${activeModule === module ? 'text-void-black/70' : 'text-white/40'}`}>{MODULE_LABELS[module].description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeModule === 'dip_ladder' && (
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-molten-gold/20 bg-molten-gold/5 px-4 py-3">
+            <p className="text-xs md:text-sm text-white/60 font-space-grotesk">Manage active per-token ladder entries from the Dip Ladder workspace.</p>
+            <button
+              type="button"
+              onClick={() => router.push('/profile/dip-ladder')}
+              className="shrink-0 text-xs font-orbitron font-bold text-molten-gold hover:text-white transition-colors"
+            >
+              Open manager
+            </button>
+          </div>
+        )}
+
+        {activeModule === 'wallet_tracking' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Active Wallet Card */}
           <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-6 relative group min-h-[180px] flex flex-col justify-between z-20">
@@ -633,6 +806,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        )}
 
         {success && (
           <motion.div
@@ -658,6 +832,187 @@ export default function DashboardPage() {
               <span className="font-orbitron font-bold">{error}</span>
             </div>
           </motion.div>
+        )}
+
+        <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2 mb-5">
+            <div>
+              <h3 className="text-base md:text-lg font-orbitron font-semibold text-white">Trade amount overrides</h3>
+              <p className="text-xs md:text-sm text-white/50 font-space-grotesk mt-1">Use the profile default or override it for {MODULE_LABELS[activeModule].label}.</p>
+            </div>
+            {isDirty && <span className="text-xs font-orbitron text-molten-gold uppercase tracking-wide">Unsaved changes</span>}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {tradeAmountFields.map(({ field, label, unit }) => {
+              const isOverridden = settings.trade_amount_overrides?.[field] !== null && settings.trade_amount_overrides?.[field] !== undefined
+              const effectiveValue = settings.effective_trade_amounts?.[field]
+              return (
+                <div key={field} className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <label className="text-sm font-orbitron text-white">{label}</label>
+                    <button
+                      type="button"
+                      onClick={() => updateTradeAmountOverride(field, !isOverridden, String(effectiveValue ?? ''))}
+                      className={`relative inline-flex w-10 h-5 rounded-full p-1 transition-colors ${isOverridden ? 'bg-molten-gold' : 'bg-gray-600'}`}
+                      aria-pressed={isOverridden}
+                      aria-label={`${isOverridden ? 'Disable' : 'Enable'} ${label} override`}
+                    >
+                      <span className={`h-3 w-3 rounded-full bg-white transition-transform ${isOverridden ? 'translate-x-5' : ''}`} />
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={isOverridden ? settings.trade_amount_overrides?.[field] ?? '' : effectiveValue ?? ''}
+                    disabled={!isOverridden}
+                    onChange={(event) => updateTradeAmountOverride(field, true, event.target.value)}
+                    className="w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white font-space-grotesk disabled:text-white/50 disabled:cursor-not-allowed focus:border-molten-gold focus:outline-none"
+                  />
+                  <p className="mt-2 text-xs font-space-grotesk text-white/40">{isOverridden ? `Module override in ${unit}` : `Profile default: ${effectiveValue ?? 'Not set'} ${unit}`}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {activeModule === 'wallet_tracking' && selectedCoin === 'sol' && (
+          <div className="bg-void-black/50 border border-molten-gold/20 rounded-lg p-4 md:p-6 space-y-6">
+            <div>
+              <h3 className="text-base md:text-lg font-orbitron font-semibold text-white">Copy wallet BUY sizing</h3>
+              <p className="text-xs md:text-sm text-white/50 font-space-grotesk mt-1">Mirror-wallet purchases are measured in SOL, including USDC or USDT buys converted with the cached SOL price.</p>
+            </div>
+
+            <div className="border border-white/10 rounded-lg p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-orbitron text-white">Filter copied BUY size</h4>
+                  <p className="text-xs text-white/40 font-space-grotesk mt-1">Only execute when the mirror wallet spend is inside this SOL range.</p>
+                </div>
+                <ToggleSwitch
+                  enabled={settings.copy_buy_size_filter_enabled}
+                  onClick={() => setSettings(prev => ({ ...prev, copy_buy_size_filter_enabled: !prev.copy_buy_size_filter_enabled }))}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="text-xs font-space-grotesk text-white/60">
+                  Minimum mirror BUY (SOL)
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={settings.copy_buy_size_min_sol ?? ''}
+                    disabled={!settings.copy_buy_size_filter_enabled}
+                    onChange={(event) => setSettings(prev => ({ ...prev, copy_buy_size_min_sol: optionalFloatFromInput(event.target.value) }))}
+                    className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white disabled:text-white/40 disabled:cursor-not-allowed focus:border-molten-gold focus:outline-none"
+                  />
+                </label>
+                <label className="text-xs font-space-grotesk text-white/60">
+                  Maximum mirror BUY (SOL)
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={settings.copy_buy_size_max_sol ?? ''}
+                    disabled={!settings.copy_buy_size_filter_enabled}
+                    onChange={(event) => setSettings(prev => ({ ...prev, copy_buy_size_max_sol: optionalFloatFromInput(event.target.value) }))}
+                    className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white disabled:text-white/40 disabled:cursor-not-allowed focus:border-molten-gold focus:outline-none"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="border border-white/10 rounded-lg p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-orbitron text-white">Mirror the mirror-wallet BUY size</h4>
+                </div>
+                <ToggleSwitch
+                  enabled={settings.mirror_buy_size_enabled}
+                  onClick={() => setSettings(prev => ({ ...prev, mirror_buy_size_enabled: !prev.mirror_buy_size_enabled }))}
+                />
+              </div>
+
+              <div className="rounded-lg border border-molten-gold/20 bg-molten-gold/5 px-3 py-3 text-xs text-white/65 font-space-grotesk leading-relaxed">
+                <p className="text-molten-gold font-semibold">How matching works</p>
+                <p className="mt-1">Each rule checks how much SOL the copied wallet spent on its BUY. The starting amount is included, but the ending amount is not. If the amount matches, “Buy actual size” uses that same SOL amount in your wallet.</p>
+                <p className="mt-1">Example: a rule from 0 to 0.002 SOL copies buys below 0.002 SOL. A copied BUY of 0.0968 SOL will not match it. Leave “Before SOL” empty to match every larger amount.</p>
+                <p className="mt-1">Rules are checked from top to bottom, and the first matching rule is used.</p>
+              </div>
+
+              {settings.mirror_buy_size_enabled && (
+                <div className="space-y-3">
+                  {settings.mirror_buy_size_rules.map((rule, index) => (
+                    <div key={`${index}-${rule.mode}`} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.2fr_1fr_auto] gap-3 items-end border border-white/10 rounded-lg p-3">
+                      <label className="text-xs font-space-grotesk text-white/60">
+                        From SOL (inclusive)
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={rule.min_sol}
+                          onChange={(event) => updateMirrorBuyRule(index, { min_sol: Number(event.target.value) || 0 })}
+                          className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white focus:border-molten-gold focus:outline-none"
+                        />
+                      </label>
+                      <label className="text-xs font-space-grotesk text-white/60">
+                        Before SOL (exclusive)
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          placeholder="No limit"
+                          value={rule.max_sol ?? ''}
+                          onChange={(event) => updateMirrorBuyRule(index, { max_sol: optionalFloatFromInput(event.target.value) })}
+                          className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white focus:border-molten-gold focus:outline-none"
+                        />
+                      </label>
+                      <label className="text-xs font-space-grotesk text-white/60">
+                        Action
+                        <select
+                          value={rule.mode}
+                          onChange={(event) => updateMirrorBuyRule(index, { mode: event.target.value as MirrorBuySizeRule['mode'], value: event.target.value === 'actual' ? null : rule.value ?? 1 })}
+                          className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white focus:border-molten-gold focus:outline-none"
+                        >
+                          <option value="actual">Buy actual size</option>
+                          <option value="multiplier">Multiply by</option>
+                          <option value="divider">Divide by</option>
+                        </select>
+                      </label>
+                      <label className={`text-xs font-space-grotesk text-white/60 ${rule.mode === 'actual' ? 'opacity-40' : ''}`}>
+                        Value
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          disabled={rule.mode === 'actual'}
+                          value={rule.mode === 'actual' ? '' : rule.value ?? ''}
+                          onChange={(event) => updateMirrorBuyRule(index, { value: optionalFloatFromInput(event.target.value) })}
+                          className="mt-2 w-full bg-void-black/50 border border-molten-gold/20 rounded-lg px-3 py-2 text-white disabled:text-white/40 disabled:cursor-not-allowed focus:border-molten-gold focus:outline-none"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => removeMirrorBuyRule(index)}
+                        aria-label={`Remove mirror BUY size rule ${index + 1}`}
+                        className="h-10 px-3 rounded-lg border border-red-400/30 text-red-300 hover:bg-red-400/10"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addMirrorBuyRule}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-molten-gold/30 text-molten-gold hover:bg-molten-gold/10 font-space-grotesk text-sm"
+                  >
+                    <Plus size={15} />
+                    Add size rule
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="space-y-4 md:space-y-6">

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Activity, AlertTriangle, CheckCircle, Clock, Power, RadioTower, RefreshCw, ShieldCheck, Signal, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle, Clock, Power, RadioTower, RefreshCw, Settings, ShieldCheck, Signal, XCircle } from 'lucide-react'
 import { walletTrackerApi } from '../services/walletTrackerApi'
+import { useRouter } from 'next/navigation'
 
 interface TelegramDashboard {
   subscription: {
@@ -52,6 +53,7 @@ const statTone: Record<string, string> = {
 }
 
 export default function TelegramSignalsPanel() {
+  const router = useRouter()
   const [dashboard, setDashboard] = useState<TelegramDashboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -151,6 +153,15 @@ export default function TelegramSignalsPanel() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
+            <motion.button
+              onClick={() => router.push('/dashboard?module=telegram')}
+              className="px-4 py-3 rounded-lg border border-sky-400/25 bg-sky-500/10 text-sky-200 font-orbitron font-bold text-xs tracking-wide flex items-center justify-center gap-2 hover:bg-sky-500/20 transition-colors"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Settings size={16} />
+              Settings
+            </motion.button>
             <motion.button
               onClick={() => loadDashboard(true)}
               disabled={refreshing || saving}
