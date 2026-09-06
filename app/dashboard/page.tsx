@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle, XCircle, ChevronDown, ChevronUp, Plus, Trash2, Copy, Shield, Info, Check, Wallet } from 'lucide-react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { config } from '../../lib/config'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store/index'
-import { useRouter } from 'next/navigation'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { createWallet, selectWallet, getProfile } from '../../store/slices/authSlice'
 import { AppDispatch } from '../../store/index'
@@ -167,7 +166,7 @@ const minutesToSecondsInput = (value: string): number | null => {
   return minutes === null ? null : Math.floor(minutes * 60)
 }
 
-export default function DashboardPage() {
+function DashboardPageContent() {
   const searchParams = useSearchParams()
   const requestedModule = searchParams.get('module') as SettingsModule | null
   const [settings, setSettings] = useState<WalletSettings>({
@@ -2636,5 +2635,13 @@ export default function DashboardPage() {
         />
       </div>
     </DashboardLayout>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-void-black" />}>
+      <DashboardPageContent />
+    </Suspense>
   )
 }
